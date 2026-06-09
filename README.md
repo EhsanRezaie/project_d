@@ -48,7 +48,7 @@ Make sure you have these installed before starting:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/dating-app.git
+git clone https://github.com/EhsanRezaie/dating-app.git
 cd dating-app
 
 # 2. Create and activate virtual environment
@@ -101,7 +101,7 @@ uvicorn app.main:app --reload
 brew install python@3.11
 
 # 3. Clone the repository
-git clone https://github.com/YOUR_USERNAME/dating-app.git
+git clone https://github.com/EhsanRezaie/dating-app.git
 cd dating-app
 
 # 4. Create and activate virtual environment
@@ -145,7 +145,7 @@ uvicorn app.main:app --reload
 # 2. Install Git from https://git-scm.com
 
 # 3. Clone the repository (in PowerShell or Git Bash)
-git clone https://github.com/YOUR_USERNAME/dating-app.git
+git clone https://github.com/EhsanRezaie/dating-app.git
 cd dating-app
 
 # 4. Create and activate virtual environment
