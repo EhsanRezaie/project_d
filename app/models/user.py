@@ -27,6 +27,10 @@ class User(Base):
 
     is_premium = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+
+    # False only for Google OAuth users until they set real age + gender
+    is_profile_complete = Column(Boolean, default=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
 

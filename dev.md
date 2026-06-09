@@ -6,8 +6,8 @@
 ---
 
 ## Project Status
-- **Session:** 3
-- **Current Phase:** Auth system complete (register / login / Google OAuth / refresh) ✅
+- **Session:** 4
+- **Current Phase:** Auth system fully hardened ✅
 - **Next Phase:** pytest setup + auth unit tests
 
 ---
@@ -39,7 +39,7 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 |------|------|
 | FastAPI | Main framework — async-native, WebSocket support built-in |
 | PostgreSQL + PostGIS | Primary database + geospatial queries |
-| Redis | Realtime chat pub/sub + session store + online presence |
+| Redis | Realtime chat pub/sub + session store + online presence + rate limit storage + refresh token store |
 | WebSocket (FastAPI native) | Realtime chat and notifications |
 | Celery + Redis | Async task queue (match detection, push notifications) |
 | SQLAlchemy (async) | ORM |
@@ -76,13 +76,29 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - Verified badge: Users who verify phone get a "Verified" badge
 - JWT: access token (7 days) + refresh token (30 days)
 - Token type field in JWT payload to distinguish access vs refresh
+- Refresh tokens stored in Redis with 30-day TTL — enables instant revocation
+- Refresh token rotation: every /refresh call revokes old token and issues a new one
+- Logout: refresh token immediately revoked in Redis
+
+### Rate Limiting
+- Implemented via slowapi + Redis backend (shared across workers)
+- Limits per IP per minute:
+  - POST /register → 5/min
+  - POST /login → 10/min
+  - POST /google → 10/min
+  - POST /refresh → 20/min
+  - POST /logout → 20/min
+  - POST /complete-profile → 10/min
+- 429 response includes Retry-After header
 
 ### Google OAuth — Profile Completion Flow
 - Google does not return age or gender
-- On first Google login, user is created with placeholder age=18 and gender='male'
-- ⚠️ Frontend must detect this and redirect new Google users to a profile completion screen
-- Profile completion: user sets real age and gender before accessing the app
-- This is **not yet implemented** — needed before Google auth is production-ready
+- On first Google login, user created with is_profile_complete=False, age=18 (placeholder), gender='male' (placeholder)
+- Frontend checks is_profile_complete in TokenResponse.user
+- If false → redirect to profile completion screen
+- User calls POST /api/v1/auth/complete-profile with real age + gender
+- is_profile_complete set to True, fresh token pair returned
+- Existing email users who link Google get is_profile_complete=True (their data is already real)
 
 ### User Profile Fields
 - Name, age, gender (male/female), bio
@@ -182,36 +198,37 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 
 ### Table: `users`
 ```sql
-id               UUID PRIMARY KEY DEFAULT gen_random_uuid()
-email            VARCHAR(255) UNIQUE NOT NULL
-password_hash    VARCHAR(255)                        -- null if Google OAuth only
-google_id        VARCHAR(255) UNIQUE                 -- null if email login
-phone            VARCHAR(20)
-phone_verified   BOOLEAN DEFAULT FALSE
-name             VARCHAR(100) NOT NULL
-age              SMALLINT NOT NULL
-gender           VARCHAR(10) NOT NULL                -- 'male' | 'female'
-bio              TEXT
-height           SMALLINT                            -- cm
-weight           SMALLINT                            -- kg
-lat              DOUBLE PRECISION
-lng              DOUBLE PRECISION
-is_premium       BOOLEAN DEFAULT FALSE
-is_active        BOOLEAN DEFAULT TRUE
-created_at       TIMESTAMPTZ DEFAULT NOW()
-last_seen_at     TIMESTAMPTZ
+id                   UUID PRIMARY KEY DEFAULT gen_random_uuid()
+email                VARCHAR(255) UNIQUE NOT NULL
+password_hash        VARCHAR(255)                        -- null if Google OAuth only
+google_id            VARCHAR(255) UNIQUE                 -- null if email login
+phone                VARCHAR(20)
+phone_verified       BOOLEAN DEFAULT FALSE
+name                 VARCHAR(100) NOT NULL
+age                  SMALLINT NOT NULL
+gender               VARCHAR(10) NOT NULL                -- 'male' | 'female'
+bio                  TEXT
+height               SMALLINT                            -- cm
+weight               SMALLINT                            -- kg
+lat                  DOUBLE PRECISION
+lng                  DOUBLE PRECISION
+is_premium           BOOLEAN DEFAULT FALSE
+is_active            BOOLEAN DEFAULT TRUE
+is_profile_complete  BOOLEAN DEFAULT TRUE                -- False for new Google OAuth users
+created_at           TIMESTAMPTZ DEFAULT NOW()
+last_seen_at         TIMESTAMPTZ
 ```
 
 ### Table: `photos`
 ```sql
-id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-url          TEXT NOT NULL
-order        SMALLINT NOT NULL DEFAULT 0
-is_main      BOOLEAN DEFAULT FALSE
-status       VARCHAR(20) DEFAULT 'pending'    -- 'pending' | 'approved' | 'rejected'
-reject_reason TEXT                            -- populated if rejected
-face_verified BOOLEAN DEFAULT FALSE           -- passed face similarity check
+id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
+user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+url           TEXT NOT NULL
+order         SMALLINT NOT NULL DEFAULT 0
+is_main       BOOLEAN DEFAULT FALSE
+status        VARCHAR(20) DEFAULT 'pending'    -- 'pending' | 'approved' | 'rejected'
+reject_reason TEXT                             -- populated if rejected
+face_verified BOOLEAN DEFAULT FALSE            -- passed face similarity check
 ```
 
 ### Table: `swipes`
@@ -290,6 +307,11 @@ days_granted SMALLINT DEFAULT 3
 UNIQUE (user_id, platform)
 ```
 
+### Redis Keys
+```
+refresh_token:{token}  →  user_id string  (TTL: 30 days)
+```
+
 ### Open Questions
 - [ ] Do we need a separate `blocks` table or handle inside `reports`?
 - [ ] Should `last_seen_at` live in Redis (realtime) or only Postgres?
@@ -312,13 +334,15 @@ dating-app/
 │   │   └── reports.py
 │   ├── core/
 │   │   ├── config.py        ✅ done
-│   │   └── security.py      ✅ done
+│   │   ├── security.py      ✅ done
+│   │   ├── redis.py         ✅ done
+│   │   └── limiter.py       ✅ done
 │   ├── db/
 │   │   ├── base.py          ✅ done
 │   │   └── session.py       ✅ done  (get_session + get_db alias)
 │   ├── models/
 │   │   ├── __init__.py      ✅ done  (all models imported)
-│   │   ├── user.py          ✅ done
+│   │   ├── user.py          ✅ done  (is_profile_complete added)
 │   │   ├── photo.py         ✅ done
 │   │   ├── swipe.py         ✅ done
 │   │   ├── match.py         ✅ done
@@ -328,11 +352,11 @@ dating-app/
 │   │   ├── daily_limit.py   ✅ done
 │   │   └── review_reward.py ✅ done
 │   ├── schemas/
-│   │   └── auth.py          ✅ done
+│   │   └── auth.py          ✅ done  (CompleteProfileRequest added)
 │   ├── services/
 │   ├── tasks/
-│   └── main.py              ✅ done  (auth router included)
-├── alembic/                 ✅ done — 2 migrations applied
+│   └── main.py              ✅ done  (limiter + auth router)
+├── alembic/                 ✅ done — 3 migrations applied
 ├── tests/                   (not started)
 ├── docker-compose.yml       ✅ done
 ├── .env                     ✅ done
@@ -347,11 +371,13 @@ dating-app/
 
 ## API Endpoints Plan
 
-### Auth ✅ implemented
+### Auth ✅ fully implemented
 - `POST /api/v1/auth/register` — email + password → JWT ✅
 - `POST /api/v1/auth/login` — email + password → JWT ✅
 - `POST /api/v1/auth/google` — Google OAuth ID token → JWT ✅
-- `POST /api/v1/auth/refresh` — refresh token → new JWT pair ✅
+- `POST /api/v1/auth/refresh` — refresh token → new JWT pair (rotation) ✅
+- `POST /api/v1/auth/logout` — revoke refresh token ✅
+- `POST /api/v1/auth/complete-profile` — Google users set real age + gender ✅
 - `POST /api/v1/auth/verify-phone` — send OTP (not started)
 - `POST /api/v1/auth/verify-phone/confirm` — confirm OTP (not started)
 
@@ -388,11 +414,17 @@ dating-app/
 
 ---
 
-## Installed Packages (requirements.txt additions this session)
-- `python-jose[cryptography]` — JWT signing/verification
-- `passlib[bcrypt]` — password hashing
+## Installed Packages
+- `fastapi` + `uvicorn`
+- `sqlalchemy[asyncio]` + `asyncpg`
+- `alembic`
+- `pydantic-settings`
+- `pydantic[email]`
+- `python-jose[cryptography]` — JWT
+- `passlib[bcrypt]` + `bcrypt==4.0.1` — password hashing (pinned due to Python 3.13 compat)
 - `google-auth` — Google OAuth ID token verification
-- `pydantic[email]` — EmailStr support in schemas
+- `redis` — async Redis client
+- `slowapi` — rate limiting
 
 ---
 
@@ -412,26 +444,26 @@ dating-app/
 
 ### Session 3
 **Completed:**
-- Updated models: `photo.py` (status, reject_reason, face_verified), `message.py` (receiver_id, is_accepted, match_id now nullable)
-- Added new models: `daily_limit.py`, `review_reward.py`
-- Updated `models/__init__.py` to import all 9 models
-- Updated `user.py` relationships (daily_limits, review_rewards)
-- Second Alembic migration applied for all model changes
-- `app/core/security.py` — password hashing (bcrypt) + JWT create/verify (access + refresh)
-- `app/schemas/auth.py` — RegisterRequest, LoginRequest, GoogleAuthRequest, RefreshRequest, TokenResponse, UserResponse
-- `app/api/v1/endpoints/auth.py` — register, login, Google OAuth, refresh endpoints
-- `app/db/session.py` — renamed get_db → get_session (get_db kept as alias)
-- `app/main.py` — auth router included at /api/v1
-- Server running and verified at /docs ✅
+- Updated models: photo.py, message.py
+- Added models: daily_limit.py, review_reward.py
+- security.py, schemas/auth.py, endpoints/auth.py (register/login/google/refresh)
+- session.py renamed to get_session, main.py updated
 
-**Known issue / TODO:**
-- Google OAuth creates users with placeholder age=18 and gender='male'
-- Frontend must prompt new Google users for age + gender before entering app
-- Backend profile completion endpoint needed (PUT /api/v1/users/me/complete) — next session
+### Session 4
+**Completed:**
+- `app/core/redis.py` — Redis connection + refresh token store/get/revoke helpers
+- `app/core/limiter.py` — slowapi limiter with Redis backend
+- `app/core/security.py` — updated (storage separated from token creation)
+- `app/schemas/auth.py` — added CompleteProfileRequest, is_profile_complete to UserResponse
+- `app/models/user.py` — added is_profile_complete field (default True, False for new Google users)
+- `app/api/v1/endpoints/auth.py` — added rotation on /refresh, /logout, /complete-profile
+- `app/main.py` — limiter attached, exception handler registered
+- Migration 3 applied: is_profile_complete column added to users table
+- bcrypt pinned to 4.0.1 (Python 3.13 compatibility fix)
+- Rate limiting verified working (429 after limit exceeded) ✅
 
 **Next session goals:**
-- [ ] Set up pytest + pytest-asyncio + isolated test DB (.env.test, conftest.py)
-- [ ] Write auth unit tests: register, login, duplicate email, wrong password, refresh
-- [ ] Write `GET /api/v1/users/me` endpoint (requires auth dependency — get_current_user)
-- [ ] Write `PUT /api/v1/users/me` endpoint
-- [ ] Write `PUT /api/v1/users/me/complete` — profile completion for Google OAuth users
+- [ ] Set up pytest + pytest-asyncio + isolated test DB (conftest.py + .env.test)
+- [ ] Write auth unit tests: register, login, duplicate email, wrong password, refresh, rotation, logout, complete-profile
+- [ ] Write `GET /api/v1/users/me` + `PUT /api/v1/users/me` endpoints
+- [ ] Extract `get_current_user` into `app/core/deps.py` (shared dependency for all future endpoints)

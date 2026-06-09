@@ -37,6 +37,13 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class CompleteProfileRequest(BaseModel):
+    """Sent by Google OAuth users after first login to set real age + gender."""
+    age: int = Field(ge=18, le=100)
+    gender: str = Field(pattern="^(male|female)$")
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+
+
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
@@ -52,6 +59,7 @@ class UserResponse(BaseModel):
     weight: Optional[int] = None
     phone_verified: bool
     is_premium: bool
+    is_profile_complete: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
