@@ -6,9 +6,9 @@
 ---
 
 ## Project Status
-- **Session:** 1
-- **Current Phase:** Database design (in progress)
-- **Next Phase:** Finalize ERD → Project structure → Start coding
+- **Session:** 2
+- **Current Phase:** Project bootstrapped, models created, DB migrated ✅
+- **Next Phase:** Auth system (register/login with email + Google OAuth)
 
 ---
 
@@ -23,12 +23,12 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 ---
 
 ## Team
-- **Developer:** Solo (project owner)
-- **Backend expertise:** Senior — FastAPI & Django (FastAPI preferred)
-- **Mobile:** Learning Flutter from scratch (beginner)
+- **Developer:** Solo (project owner) — Ehsan
+- **Backend expertise:** Senior — FastAPI & Django (FastAPI chosen)
+- **Mobile:** Learning Flutter from scratch
 - **Daily availability:** 2–3 hours/day
 - **Estimated MVP timeline:** 3–4 months (with Claude assistance)
-- **Collaboration model:** Developer codes with Claude as a pair programmer every session
+- **Collaboration model:** Claude as pair programmer every session. Pass this file at the start of each session.
 
 ---
 
@@ -38,10 +38,10 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 | Tool | Role |
 |------|------|
 | FastAPI | Main framework — async-native, WebSocket support built-in |
-| PostgreSQL + PostGIS | Primary database + geospatial queries for location-based matching |
-| Redis | Realtime chat pub/sub + session store + online presence tracking |
+| PostgreSQL + PostGIS | Primary database + geospatial queries |
+| Redis | Realtime chat pub/sub + session store + online presence |
 | WebSocket (FastAPI native) | Realtime chat and notifications |
-| Celery + Redis | Async task queue (e.g. match detection, push notifications) |
+| Celery + Redis | Async task queue (match detection, push notifications) |
 | SQLAlchemy (async) | ORM |
 | Alembic | Database migrations |
 
@@ -54,27 +54,26 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 | Tool | Role |
 |------|------|
 | Docker + Docker Compose | Containerization for all services |
-| Hetzner VPS | Primary hosting (affordable, payable from Iran) |
+| Hetzner VPS | Primary hosting |
 | ArvanCloud / Liara | Iranian cloud alternative if needed |
 
 ### Ads & Payments
 | Tool | Role | Status |
 |------|------|--------|
 | AdMob | In-app ads every 10 min | ⚠️ Needs foreign account for payouts |
-| Yektanet / MediaAd | Iranian ad network fallback | To be decided |
+| Yektanet / MediaAd | Iranian ad network fallback | TBD |
 | ZarinPal / PayPing | Iranian payment gateway for subscriptions | To be integrated |
-| Cafe Bazaar + Myket | Primary app distribution (replaces Play Store) | To be integrated |
+| Cafe Bazaar + Myket | Primary app distribution | To be integrated |
 
 ---
 
 ## Key Decisions & Reasoning
 
 ### Authentication
-- **Login method:** Email or Google OAuth (required)
-- **Phone number:** Optional — used only for identity verification badge
-- **No mandatory phone login** — reduces friction on signup
-- **Verified badge:** Users who verify their phone number get a "Verified" badge on their profile
-- **Reasoning:** Lower signup friction + still have a trust/verification mechanism
+- Login method: Email or Google OAuth (required)
+- Phone number: Optional — used only for identity verification badge
+- No mandatory phone login — reduces signup friction
+- Verified badge: Users who verify phone get a "Verified" badge
 
 ### User Profile Fields
 - Name, age, gender (male/female), bio
@@ -86,26 +85,91 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 ### Matching Model
 - Heterosexual only: males see females, females see males
 - Swipe-based: like or pass
-- Match created when both users like each other
-- No algorithm complexity for MVP — recency + distance only
+- Match = both users liked each other
+- MVP algorithm: recency + distance only
 
 ### Monetization
 - All features free for all users
 - Ad shown every 10 minutes (full-screen interstitial)
-- Premium subscription = no ads
+- Premium subscription = no ads + unlimited likes/chats
 - Subscription managed via Iranian payment gateway (not Google Play Billing)
 
 ### Iranian Market Constraints
 | Challenge | Status | Solution |
 |-----------|--------|----------|
 | AdMob payouts | ⚠️ Blocked for Iranian accounts | Use foreign partner account |
-| Google Play Billing | ❌ Not available in Iran | Use ZarinPal/PayPing directly |
+| Google Play Billing | ❌ Not available | Use ZarinPal/PayPing directly |
 | Play Store publishing | ⚠️ Restricted | Publish on Cafe Bazaar + Myket |
-| Server latency | ⚠️ Must be fast for Iranian users | Hetzner EU or ArvanCloud |
+| Server latency | ⚠️ Must be fast | Hetzner EU or ArvanCloud |
 
 ---
 
-## Database Design (Session 1 Draft)
+## Business Rules & Policies
+> These must be implemented as features develop. Do not forget them.
+
+### 1. Daily Like Limit (Free Users)
+- Free users can send **50 likes per day**
+- Resets at midnight (Tehran time)
+- Premium users: unlimited likes
+
+### 2. Daily Chat Limit Without Match (Free Users)
+- Free users can **start 10 chats per day without being matched**
+- Resets at midnight (Tehran time)
+- Premium users: unlimited
+
+### 3. Ad Reward System
+- When a free user hits their daily like or chat limit, they can watch a rewarded ad
+- Each rewarded ad gives: **+5 likes** and **+1 new chat**
+- Implemented via AdMob Rewarded Ads (or Iranian equivalent)
+- Must be tracked server-side to prevent abuse (not just client-side)
+
+### 4. Unmatched Chat Limit
+- Without a match, a user can send max **2 messages** to another user
+- After 2 messages, the recipient must accept the conversation to continue
+- This prevents spam and harassment
+- Acceptance = explicit button tap ("Allow messages from this person")
+
+### 5. Photo Moderation System
+- All uploaded photos must pass automated moderation before going live
+- Block: nudity, explicit content, text-heavy images (watermarks, ads), faces of other people
+- Use a moderation API (e.g. AWS Rekognition, Google Vision API, or SightEngine)
+- Flow: upload → pending → auto-review → approved / rejected
+- Rejected photos notify the user with reason
+- Photos stay in "pending" state and are not shown until approved
+- Human review queue for borderline cases (admin panel — later phase)
+
+### 6. Face Verification (Selfie Match)
+- To verify that profile photos actually show the user (not someone else)
+- Flow: user takes a live selfie in-app → compared against their uploaded photos using face similarity
+- Use AWS Rekognition Face Comparison or similar
+- Verified users get a "Photo Verified" badge (different from phone verified badge)
+- Not mandatory for signup, but encouraged with UI nudges
+- Implementation phase: after MVP core is stable
+
+### 7. Unit Testing Strategy
+- Every feature must have unit tests before being considered done
+- Test environment must be fully isolated:
+  - Separate test database (spun up fresh for each test run)
+  - Seed data loaded automatically
+  - All tables dropped and recreated after test run
+- Use pytest + pytest-asyncio
+- Use a separate .env.test file for test config
+- Test DB: use Docker to spin up a dedicated PostgreSQL container for tests
+- No mocking of the database — test against real DB
+- CI: tests run automatically on every git push (GitHub Actions — later)
+- Structure: tests/ folder mirrors app/ folder structure
+
+### 8. Review Reward System
+- If a user leaves a review on Google Play, Cafe Bazaar, or Myket → they receive **3 days of free premium**
+- Implementation: user submits proof (screenshot or in-app deep link callback)
+- Manual verification for MVP, automated later
+- One reward per user, per platform (max 3 platforms = max 9 days)
+- Anti-abuse: reward only given after review is confirmed live on store
+- Track in a `review_rewards` table
+
+---
+
+## Database Design
 
 ### Table: `users`
 ```sql
@@ -113,16 +177,16 @@ id               UUID PRIMARY KEY DEFAULT gen_random_uuid()
 email            VARCHAR(255) UNIQUE NOT NULL
 password_hash    VARCHAR(255)                        -- null if Google OAuth only
 google_id        VARCHAR(255) UNIQUE                 -- null if email login
-phone            VARCHAR(20)                         -- optional, for verification only
+phone            VARCHAR(20)
 phone_verified   BOOLEAN DEFAULT FALSE
 name             VARCHAR(100) NOT NULL
 age              SMALLINT NOT NULL
 gender           VARCHAR(10) NOT NULL                -- 'male' | 'female'
 bio              TEXT
-height           SMALLINT                            -- cm, optional
-weight           SMALLINT                            -- kg, optional
-lat              DOUBLE PRECISION                    -- updated on app open
-lng              DOUBLE PRECISION                    -- updated on app open
+height           SMALLINT                            -- cm
+weight           SMALLINT                            -- kg
+lat              DOUBLE PRECISION
+lng              DOUBLE PRECISION
 is_premium       BOOLEAN DEFAULT FALSE
 is_active        BOOLEAN DEFAULT TRUE
 created_at       TIMESTAMPTZ DEFAULT NOW()
@@ -131,11 +195,14 @@ last_seen_at     TIMESTAMPTZ
 
 ### Table: `photos`
 ```sql
-id        UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-url       TEXT NOT NULL
-order     SMALLINT NOT NULL DEFAULT 0
-is_main   BOOLEAN DEFAULT FALSE
+id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
+user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+url          TEXT NOT NULL
+order        SMALLINT NOT NULL DEFAULT 0
+is_main      BOOLEAN DEFAULT FALSE
+status       VARCHAR(20) DEFAULT 'pending'    -- 'pending' | 'approved' | 'rejected'
+reject_reason TEXT                            -- populated if rejected
+face_verified BOOLEAN DEFAULT FALSE           -- passed face similarity check
 ```
 
 ### Table: `swipes`
@@ -147,7 +214,6 @@ direction   VARCHAR(10) NOT NULL                    -- 'like' | 'pass'
 created_at  TIMESTAMPTZ DEFAULT NOW()
 UNIQUE (from_user, to_user)
 ```
-> When both users swipe 'like' on each other → a `matches` record is created (via Celery task or DB trigger)
 
 ### Table: `matches`
 ```sql
@@ -162,10 +228,12 @@ UNIQUE (user1_id, user2_id)
 ### Table: `messages`
 ```sql
 id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
-match_id    UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE
+match_id    UUID REFERENCES matches(id) ON DELETE CASCADE   -- null if unmatched chat
 sender_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 content     TEXT NOT NULL
 is_read     BOOLEAN DEFAULT FALSE
+is_accepted BOOLEAN DEFAULT FALSE   -- receiver accepted unmatched conversation
 sent_at     TIMESTAMPTZ DEFAULT NOW()
 ```
 
@@ -174,10 +242,23 @@ sent_at     TIMESTAMPTZ DEFAULT NOW()
 id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
 user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 status      VARCHAR(20) NOT NULL                    -- 'active' | 'expired' | 'cancelled'
+plan        VARCHAR(50) NOT NULL                    -- 'monthly' | 'quarterly' | 'free_trial'
 started_at  TIMESTAMPTZ NOT NULL
 expires_at  TIMESTAMPTZ NOT NULL
+source      VARCHAR(50)                             -- 'zarinpal' | 'review_reward' | 'admin'
 ```
-> Kept separate so multiple plans can be added later without changing `users` table
+
+### Table: `daily_limits`
+```sql
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
+user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+date            DATE NOT NULL
+likes_used      SMALLINT DEFAULT 0
+chats_used      SMALLINT DEFAULT 0
+ad_likes_bonus  SMALLINT DEFAULT 0      -- bonus likes from watching ads
+ad_chats_bonus  SMALLINT DEFAULT 0      -- bonus chats from watching ads
+UNIQUE (user_id, date)
+```
 
 ### Table: `reports`
 ```sql
@@ -188,51 +269,150 @@ reason       TEXT NOT NULL
 created_at   TIMESTAMPTZ DEFAULT NOW()
 ```
 
-### Open Questions (to decide next session)
-- [ ] Do we need a separate `blocks` table, or handle it inside `reports`?
-- [ ] Should `last_seen_at` be stored in Redis (for real-time online status) or only in Postgres?
-- [ ] Do we add PostGIS `GEOGRAPHY` column now or add it in a later migration?
+### Table: `review_rewards`
+```sql
+id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
+user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+platform     VARCHAR(20) NOT NULL        -- 'google_play' | 'bazaar' | 'myket'
+submitted_at TIMESTAMPTZ DEFAULT NOW()
+verified_at  TIMESTAMPTZ                 -- when admin confirmed
+status       VARCHAR(20) DEFAULT 'pending'  -- 'pending' | 'approved' | 'rejected'
+days_granted SMALLINT DEFAULT 3
+UNIQUE (user_id, platform)
+```
+
+### Open Questions
+- [ ] Do we need a separate `blocks` table or handle inside `reports`?
+- [ ] Should `last_seen_at` live in Redis (realtime) or only Postgres?
+- [ ] PostGIS GEOGRAPHY column — add now or in a later migration?
 
 ---
 
-## API Endpoints Plan (not started yet)
-> Will be designed next session
-
-### Planned endpoint groups:
-- `POST /auth/register`
-- `POST /auth/login`
-- `POST /auth/google`
-- `GET/PUT /users/me`
-- `POST /users/me/photos`
-- `GET /discover` — returns candidate profiles based on location + filters
-- `POST /swipes`
-- `GET /matches`
-- `WS /ws/chat/{match_id}` — WebSocket for realtime chat
-- `GET/POST /messages/{match_id}`
-- `POST /subscriptions`
-- `POST /reports`
+## Project Structure (as built)
+```
+dating-app/
+├── app/
+│   ├── api/v1/endpoints/
+│   │   ├── auth.py
+│   │   ├── users.py
+│   │   ├── discover.py
+│   │   ├── swipes.py
+│   │   ├── matches.py
+│   │   ├── messages.py
+│   │   ├── subscriptions.py
+│   │   └── reports.py
+│   ├── core/
+│   │   ├── config.py        ✅ done
+│   │   └── security.py
+│   ├── db/
+│   │   ├── base.py          ✅ done
+│   │   └── session.py       ✅ done
+│   ├── models/
+│   │   ├── user.py          ✅ done
+│   │   ├── photo.py         ✅ done
+│   │   ├── swipe.py         ✅ done
+│   │   ├── match.py         ✅ done
+│   │   ├── message.py       ✅ done
+│   │   ├── subscription.py  ✅ done
+│   │   └── report.py        ✅ done
+│   ├── schemas/
+│   ├── services/
+│   ├── tasks/
+│   └── main.py              ✅ done
+├── alembic/                 ✅ done — initial migration applied
+├── tests/                   (not started)
+├── docker-compose.yml       ✅ done
+├── .env                     ✅ done
+├── .env.example             ✅ done
+├── .gitignore               ✅ done
+├── requirements.txt         ✅ done
+├── dev.md                   ✅ this file
+└── README.md                ✅ done
+```
 
 ---
 
-## Code Written So Far
-> Nothing yet — Session 1 was planning and architecture only.
+## API Endpoints Plan
+
+### Auth
+- `POST /api/v1/auth/register` — email + password
+- `POST /api/v1/auth/login` — email + password → JWT
+- `POST /api/v1/auth/google` — Google OAuth token → JWT
+- `POST /api/v1/auth/refresh` — refresh JWT
+- `POST /api/v1/auth/verify-phone` — send OTP
+- `POST /api/v1/auth/verify-phone/confirm` — confirm OTP
+
+### Users
+- `GET /api/v1/users/me` — get my profile
+- `PUT /api/v1/users/me` — update my profile
+- `POST /api/v1/users/me/photos` — upload photo
+- `DELETE /api/v1/users/me/photos/{id}` — delete photo
+- `PUT /api/v1/users/me/location` — update lat/lng
+
+### Discover
+- `GET /api/v1/discover` — get candidate profiles (location + age filter)
+
+### Swipes
+- `POST /api/v1/swipes` — send like or pass
+
+### Matches
+- `GET /api/v1/matches` — list my matches
+
+### Messages
+- `GET /api/v1/messages/{match_id}` — get chat history
+- `WS /ws/chat/{match_id}` — realtime WebSocket chat
+
+### Subscriptions
+- `POST /api/v1/subscriptions` — initiate purchase
+- `POST /api/v1/subscriptions/verify` — verify payment with ZarinPal
+
+### Reports
+- `POST /api/v1/reports` — report a user
+
+### Rewards
+- `POST /api/v1/rewards/review` — submit store review proof
+- `POST /api/v1/rewards/ad-watched` — claim ad reward (server-side)
+
+---
+
+## Code Written — Session 2
+
+### ✅ Completed
+- Full project folder structure created
+- `app/core/config.py` — Settings with pydantic-settings
+- `app/db/session.py` — Async SQLAlchemy engine + session
+- `app/db/base.py` — DeclarativeBase + TimestampMixin
+- `app/models/` — All 7 models: User, Photo, Swipe, Match, Message, Subscription, Report
+- `app/main.py` — FastAPI app with CORS + /health endpoint
+- `alembic/` — Configured with include_object filter to exclude PostGIS tables
+- Initial migration applied successfully
+- Docker Compose running (PostgreSQL with PostGIS + Redis)
+
+### ⚠️ Known Issue Solved
+- Alembic autogenerate was picking up PostGIS internal tables (place_lookup etc.)
+- Fixed by adding `include_object()` filter in `alembic/env.py`
 
 ---
 
 ## Session Log
 
-### Session 1 — [Date: TBD]
-**Decisions made:**
-- Chose FastAPI over Django for better async/WebSocket support
-- Chose Flutter for cross-platform (Android + iOS)
-- Defined monetization model (free + ads + premium)
-- Defined auth model (email/Google + optional phone verification)
-- Added height + weight fields to user profile
-- Designed initial ERD (7 tables)
-- Identified Iranian market constraints (AdMob payouts, Play Store, payment gateway)
+### Session 1
+**Decisions made:** Stack, monetization model, auth model, ERD design, Iranian market constraints identified.
+
+### Session 2
+**Completed:**
+- Full project bootstrapped on Ubuntu/Linux
+- Python venv, all dependencies installed
+- Docker Compose with PostGIS + Redis
+- All SQLAlchemy models written
+- Alembic configured and initial migration applied
+- FastAPI app running with /health and /docs
 
 **Next session goals:**
-- [ ] Finalize ERD (blocks table decision, PostGIS strategy)
-- [ ] Design project folder structure
-- [ ] Define all API endpoints
-- [ ] Start writing code: project setup + models + auth
+- [ ] Update models: add `daily_limits`, `review_rewards` tables + update `photos` and `messages` tables per new policies
+- [ ] Run new Alembic migration for updated models
+- [ ] Write `app/core/security.py` — JWT token creation/verification + password hashing
+- [ ] Write auth schemas (`app/schemas/auth.py`)
+- [ ] Write auth endpoints: register, login (email), Google OAuth
+- [ ] Set up pytest + pytest-asyncio + isolated test DB
+- [ ] Write first unit tests for auth
