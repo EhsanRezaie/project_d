@@ -6,6 +6,7 @@ from google.auth.transport import requests as google_requests
 
 from app.db.session import get_session
 from app.models.user import User
+import app.core.redis as redis
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.core.security import (
@@ -16,11 +17,7 @@ from app.core.security import (
     decode_access_token,
     decode_refresh_token,
 )
-from app.core.redis import (
-    store_refresh_token,
-    get_refresh_token_owner,
-    revoke_refresh_token,
-)
+
 from app.schemas.auth import (
     RegisterRequest,
     LoginRequest,
@@ -42,7 +39,7 @@ async def _build_token_response(user: User) -> TokenResponse:
     """Create access + refresh tokens, store refresh in Redis, return response."""
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
-    await store_refresh_token(refresh_token, str(user.id))
+    await redis.store_refresh_token(refresh_token, str(user.id))
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -247,7 +244,7 @@ async def refresh(
         )
 
     # Step 2: check token exists in Redis (not revoked)
-    stored_user_id = await get_refresh_token_owner(body.refresh_token)
+    stored_user_id = await redis.get_refresh_token_owner(body.refresh_token)
     if not stored_user_id or stored_user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -263,7 +260,7 @@ async def refresh(
         )
 
     # Step 4: revoke old token (rotation)
-    await revoke_refresh_token(body.refresh_token)
+    await redis.revoke_refresh_token(body.refresh_token)
 
     # Step 5: issue new token pair
     return await _build_token_response(user)
@@ -280,4 +277,4 @@ async def logout(request: Request, body: RefreshRequest):
     Revoke the refresh token immediately.
     Access token stays valid until expiry — client must discard both locally.
     """
-    await revoke_refresh_token(body.refresh_token)
+    await redis.revoke_refresh_token(body.refresh_token)
