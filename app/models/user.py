@@ -33,3 +33,5 @@ class User(Base):
     # Relationships
     photos = relationship("Photo", back_populates="user", cascade="all, delete-orphan")
     subscription = relationship("Subscription", back_populates="user", uselist=False)
+    daily_limits = relationship("DailyLimit", back_populates="user", cascade="all, delete-orphan")
+    review_rewards = relationship("ReviewReward", back_populates="user", cascade="all, delete-orphan")

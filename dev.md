@@ -6,9 +6,9 @@
 ---
 
 ## Project Status
-- **Session:** 2
-- **Current Phase:** Project bootstrapped, models created, DB migrated ✅
-- **Next Phase:** Auth system (register/login with email + Google OAuth)
+- **Session:** 3
+- **Current Phase:** Auth system complete (register / login / Google OAuth / refresh) ✅
+- **Next Phase:** pytest setup + auth unit tests
 
 ---
 
@@ -74,6 +74,15 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - Phone number: Optional — used only for identity verification badge
 - No mandatory phone login — reduces signup friction
 - Verified badge: Users who verify phone get a "Verified" badge
+- JWT: access token (7 days) + refresh token (30 days)
+- Token type field in JWT payload to distinguish access vs refresh
+
+### Google OAuth — Profile Completion Flow
+- Google does not return age or gender
+- On first Google login, user is created with placeholder age=18 and gender='male'
+- ⚠️ Frontend must detect this and redirect new Google users to a profile completion screen
+- Profile completion: user sets real age and gender before accessing the app
+- This is **not yet implemented** — needed before Google auth is production-ready
 
 ### User Profile Fields
 - Name, age, gender (male/female), bio
@@ -293,7 +302,7 @@ UNIQUE (user_id, platform)
 dating-app/
 ├── app/
 │   ├── api/v1/endpoints/
-│   │   ├── auth.py
+│   │   ├── auth.py          ✅ done
 │   │   ├── users.py
 │   │   ├── discover.py
 │   │   ├── swipes.py
@@ -303,23 +312,27 @@ dating-app/
 │   │   └── reports.py
 │   ├── core/
 │   │   ├── config.py        ✅ done
-│   │   └── security.py
+│   │   └── security.py      ✅ done
 │   ├── db/
 │   │   ├── base.py          ✅ done
-│   │   └── session.py       ✅ done
+│   │   └── session.py       ✅ done  (get_session + get_db alias)
 │   ├── models/
+│   │   ├── __init__.py      ✅ done  (all models imported)
 │   │   ├── user.py          ✅ done
 │   │   ├── photo.py         ✅ done
 │   │   ├── swipe.py         ✅ done
 │   │   ├── match.py         ✅ done
 │   │   ├── message.py       ✅ done
 │   │   ├── subscription.py  ✅ done
-│   │   └── report.py        ✅ done
+│   │   ├── report.py        ✅ done
+│   │   ├── daily_limit.py   ✅ done
+│   │   └── review_reward.py ✅ done
 │   ├── schemas/
+│   │   └── auth.py          ✅ done
 │   ├── services/
 │   ├── tasks/
-│   └── main.py              ✅ done
-├── alembic/                 ✅ done — initial migration applied
+│   └── main.py              ✅ done  (auth router included)
+├── alembic/                 ✅ done — 2 migrations applied
 ├── tests/                   (not started)
 ├── docker-compose.yml       ✅ done
 ├── .env                     ✅ done
@@ -334,13 +347,13 @@ dating-app/
 
 ## API Endpoints Plan
 
-### Auth
-- `POST /api/v1/auth/register` — email + password
-- `POST /api/v1/auth/login` — email + password → JWT
-- `POST /api/v1/auth/google` — Google OAuth token → JWT
-- `POST /api/v1/auth/refresh` — refresh JWT
-- `POST /api/v1/auth/verify-phone` — send OTP
-- `POST /api/v1/auth/verify-phone/confirm` — confirm OTP
+### Auth ✅ implemented
+- `POST /api/v1/auth/register` — email + password → JWT ✅
+- `POST /api/v1/auth/login` — email + password → JWT ✅
+- `POST /api/v1/auth/google` — Google OAuth ID token → JWT ✅
+- `POST /api/v1/auth/refresh` — refresh token → new JWT pair ✅
+- `POST /api/v1/auth/verify-phone` — send OTP (not started)
+- `POST /api/v1/auth/verify-phone/confirm` — confirm OTP (not started)
 
 ### Users
 - `GET /api/v1/users/me` — get my profile
@@ -375,22 +388,11 @@ dating-app/
 
 ---
 
-## Code Written — Session 2
-
-### ✅ Completed
-- Full project folder structure created
-- `app/core/config.py` — Settings with pydantic-settings
-- `app/db/session.py` — Async SQLAlchemy engine + session
-- `app/db/base.py` — DeclarativeBase + TimestampMixin
-- `app/models/` — All 7 models: User, Photo, Swipe, Match, Message, Subscription, Report
-- `app/main.py` — FastAPI app with CORS + /health endpoint
-- `alembic/` — Configured with include_object filter to exclude PostGIS tables
-- Initial migration applied successfully
-- Docker Compose running (PostgreSQL with PostGIS + Redis)
-
-### ⚠️ Known Issue Solved
-- Alembic autogenerate was picking up PostGIS internal tables (place_lookup etc.)
-- Fixed by adding `include_object()` filter in `alembic/env.py`
+## Installed Packages (requirements.txt additions this session)
+- `python-jose[cryptography]` — JWT signing/verification
+- `passlib[bcrypt]` — password hashing
+- `google-auth` — Google OAuth ID token verification
+- `pydantic[email]` — EmailStr support in schemas
 
 ---
 
@@ -408,11 +410,28 @@ dating-app/
 - Alembic configured and initial migration applied
 - FastAPI app running with /health and /docs
 
+### Session 3
+**Completed:**
+- Updated models: `photo.py` (status, reject_reason, face_verified), `message.py` (receiver_id, is_accepted, match_id now nullable)
+- Added new models: `daily_limit.py`, `review_reward.py`
+- Updated `models/__init__.py` to import all 9 models
+- Updated `user.py` relationships (daily_limits, review_rewards)
+- Second Alembic migration applied for all model changes
+- `app/core/security.py` — password hashing (bcrypt) + JWT create/verify (access + refresh)
+- `app/schemas/auth.py` — RegisterRequest, LoginRequest, GoogleAuthRequest, RefreshRequest, TokenResponse, UserResponse
+- `app/api/v1/endpoints/auth.py` — register, login, Google OAuth, refresh endpoints
+- `app/db/session.py` — renamed get_db → get_session (get_db kept as alias)
+- `app/main.py` — auth router included at /api/v1
+- Server running and verified at /docs ✅
+
+**Known issue / TODO:**
+- Google OAuth creates users with placeholder age=18 and gender='male'
+- Frontend must prompt new Google users for age + gender before entering app
+- Backend profile completion endpoint needed (PUT /api/v1/users/me/complete) — next session
+
 **Next session goals:**
-- [ ] Update models: add `daily_limits`, `review_rewards` tables + update `photos` and `messages` tables per new policies
-- [ ] Run new Alembic migration for updated models
-- [ ] Write `app/core/security.py` — JWT token creation/verification + password hashing
-- [ ] Write auth schemas (`app/schemas/auth.py`)
-- [ ] Write auth endpoints: register, login (email), Google OAuth
-- [ ] Set up pytest + pytest-asyncio + isolated test DB
-- [ ] Write first unit tests for auth
+- [ ] Set up pytest + pytest-asyncio + isolated test DB (.env.test, conftest.py)
+- [ ] Write auth unit tests: register, login, duplicate email, wrong password, refresh
+- [ ] Write `GET /api/v1/users/me` endpoint (requires auth dependency — get_current_user)
+- [ ] Write `PUT /api/v1/users/me` endpoint
+- [ ] Write `PUT /api/v1/users/me/complete` — profile completion for Google OAuth users
