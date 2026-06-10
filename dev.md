@@ -1,4 +1,4 @@
-You're right. Let me give you a clean, detailed `dev.md` without the redundant command sections:
+Here's the updated `dev.md` for Session 10 completion:
 
 ```markdown
 # dev.md — Iranian Dating App
@@ -11,9 +11,9 @@ You're right. Let me give you a clean, detailed `dev.md` without the redundant c
 
 ## Project Status
 
-- **Session:** 9 (Completed)
-- **Current Phase:** Match list + WebSocket notifications fully implemented ✅
-- **Next Phase:** Chat system (messages + WebSocket chat)
+- **Session:** 10 (Completed)
+- **Current Phase:** Chat system fully implemented (text, photo, voice, reply, delete, forward, WebSocket) ✅
+- **Next Phase:** Premium subscriptions + Ad rewards + Daily limits
 
 ---
 
@@ -68,7 +68,7 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 ### Rate Limiting ✅
 
 - Implemented via slowapi + Redis backend
-- Different limits per endpoint (register: 5/min, login: 10/min, etc.)
+- Different limits per endpoint
 - Disabled during tests
 
 ### Photo System ✅
@@ -108,11 +108,27 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - GET /blocks — list blocked users
 - Blocked users excluded from Discover and Search
 
+### Chat System ✅ (Session 10)
+
+| Feature | Endpoint | Status |
+|---------|----------|--------|
+| Chat history | GET /messages/{match_id} | ✅ |
+| Text message | POST /messages/{match_id}/text | ✅ |
+| Photo message | POST /messages/{match_id}/photo | ✅ |
+| Voice message | POST /messages/{match_id}/voice | ✅ |
+| Accept chat | POST /messages/{match_id}/accept | ✅ |
+| Mark delivered | POST /messages/delivered | ✅ |
+| Mark read | POST /messages/read | ✅ |
+| Delete message | DELETE /messages/{message_id} | ✅ |
+| Forward message | POST /messages/{message_id}/forward | ✅ |
+| Message status | GET /messages/{message_id}/status | ✅ |
+| Realtime chat | WS /ws/chat/{match_id} | ✅ |
+
 ---
 
 ## Database Schema
 
-### Tables (8 implemented)
+### Tables (9 implemented)
 
 | Table | Key Columns |
 |-------|-------------|
@@ -120,15 +136,61 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 | photos | user_id, url, is_main, status, reject_reason |
 | swipes | from_user, to_user, direction, created_at |
 | matches | user1_id, user2_id, is_active, matched_at |
-| daily_limits | user_id, date, likes_used, chats_used |
+| daily_limits | user_id, date, likes_used, chats_used, ad_likes_bonus, ad_chats_bonus |
 | blocks | blocker_id, blocked_id |
-| messages | match_id, sender_id, receiver_id, content, is_accepted |
+| messages | match_id, sender_id, receiver_id, message_type, content, media_url, reply_to_id, is_accepted, is_read, is_delivered, is_deleted_for_sender, is_deleted_for_receiver, is_deleted_for_all |
 | subscriptions | user_id, status, plan, expires_at (🔲 Session 11) |
+| reports | reporter_id, reported_id, reason (🔲 Future) |
+
+### Message Fields Detail
+
+```sql
+-- messages table fields
+id                  UUID PRIMARY KEY
+match_id            UUID REFERENCES matches(id) (nullable for unmatched chats)
+sender_id           UUID REFERENCES users(id)
+receiver_id         UUID REFERENCES users(id)
+message_type        VARCHAR(20) DEFAULT 'text'  -- text, photo, voice
+content             TEXT
+reply_to_id         UUID REFERENCES messages(id)
+media_url           TEXT
+media_duration      INTEGER  -- for voice messages
+media_size          INTEGER
+is_sent             BOOLEAN DEFAULT TRUE
+is_delivered        BOOLEAN DEFAULT FALSE
+is_read             BOOLEAN DEFAULT FALSE
+is_accepted         BOOLEAN DEFAULT FALSE
+is_deleted_for_sender   BOOLEAN DEFAULT FALSE
+is_deleted_for_receiver BOOLEAN DEFAULT FALSE
+is_deleted_for_all      BOOLEAN DEFAULT FALSE
+deleted_at          TIMESTAMPTZ
+sent_at             TIMESTAMPTZ
+delivered_at        TIMESTAMPTZ
+read_at             TIMESTAMPTZ
+updated_at          TIMESTAMPTZ
+```
 
 ### Redis Keys
 
 - `refresh_token:{token}` → user_id (30 days)
 - `user:{user_id}` → WebSocket pub/sub channel
+- `chat:{match_id}:{user_id}` → Chat WebSocket connections
+
+### File Storage
+
+```
+uploads/
+├── users/                    # Profile photos
+│   └── {user_id}/
+│       └── {photo_id}.jpg
+└── chat/                     # Chat media
+    ├── photo/
+    │   └── {match_id}/
+    │       └── {message_id}.jpg
+    └── voice/
+        └── {match_id}/
+            └── {message_id}.mp3
+```
 
 ---
 
@@ -146,17 +208,19 @@ app/
 │   │   ├── swipes.py        ✅
 │   │   ├── search.py        ✅
 │   │   ├── blocks.py        ✅
-│   │   └── matches.py       ✅
+│   │   ├── matches.py       ✅
+│   │   └── messages.py      ✅
 │   └── websocket/
-│       └── matches.py       ✅
+│       ├── matches.py       ✅
+│       └── chat.py          ✅
 ├── core/                    ✅ (config, security, redis, limiter, logging, deps)
 ├── db/                      ✅ (base, session)
 ├── models/                  ✅ (9 models)
-├── schemas/                 ✅ (6 schemas)
-├── services/                ✅ (photo_service, websocket_manager)
+├── schemas/                 ✅ (7 schemas)
+├── services/                ✅ (photo_service, websocket_manager, chat_service, media_service)
 └── main.py                  ✅
 
-tests/                       ✅ (9 test files)
+tests/                       ✅ (10 test files)
 ```
 
 ---
@@ -174,52 +238,70 @@ tests/                       ✅ (9 test files)
 | 7 | Discover + Swipe system |
 | 8 | Search + Block system |
 | 9 | Match list + WebSocket notifications |
+| 10 | Chat system (text, photo, voice, reply, delete, forward, WebSocket) |
 
 ---
 
-## Session 10: Chat System
+## Session 10 Completed Features
+
+### REST Endpoints
+- `GET /api/v1/messages/{match_id}` — Chat history with pagination
+- `POST /api/v1/messages/{match_id}/text` — Send text message (with reply support)
+- `POST /api/v1/messages/{match_id}/photo` — Send photo (5MB max, auto-compress)
+- `POST /api/v1/messages/{match_id}/voice` — Send voice (2 min max)
+- `POST /api/v1/messages/{match_id}/accept` — Accept unmatched chat
+- `POST /api/v1/messages/read` — Mark messages as read
+- `POST /api/v1/messages/delivered` — Mark messages as delivered
+- `DELETE /api/v1/messages/{message_id}` — Delete message (me/everyone)
+- `POST /api/v1/messages/{message_id}/forward` — Forward to another chat
+- `GET /api/v1/messages/{message_id}/status` — Get delivery/read status
+
+### WebSocket
+- `WS /ws/chat/{match_id}?token={access_token}` — Realtime chat
+  - Send/receive text, photo, voice
+  - Typing indicators
+  - Delivery receipts
+  - Read receipts
+
+### Business Rules Implemented
+- Unmatched chat: 2 messages limit before acceptance
+- Daily new chat limit: 10/day for free users
+- Delete for everyone: 1 hour window
+- Photo/voice messages: only in accepted/matched chats
+
+---
+
+## Next Session (Session 11) - Premium + Ads + Daily Limits
 
 ### What to Build
 
-| Feature | Endpoint | Description |
-|---------|----------|-------------|
-| Chat history | GET /messages/{match_id} | Paginated messages |
-| Send message | POST /messages/{match_id} | Create message |
-| Accept chat | POST /messages/{match_id}/accept | Accept unmatched conversation |
-| Realtime chat | WS /ws/chat/{match_id} | WebSocket for live messaging |
-| Typing indicators | WS event | User typing status |
-| Mark as read | WS event | Mark messages as read |
-
-### Business Rules
-
-1. **Unmatched chat:** User can send 2 messages without a match
-2. After 2 messages, `is_accepted` must be true to continue
-3. **Daily chat limit:** Free users: 10 chats/day (track in `daily_limits.chats_used`)
-4. **Matched chat:** No limits, WebSocket for real-time
+| Feature | Description |
+|---------|-------------|
+| Premium subscriptions | Monthly/quarterly plans via ZarinPal |
+| Daily like limit | 50/day for free users (already implemented, needs premium override) |
+| Daily chat limit | 10 new chats/day for free users (already implemented) |
+| Ad reward system | Watch ad → +5 likes, +1 new chat |
+| Subscription webhook | Verify payments from ZarinPal |
+| Premium status check | GET /api/v1/subscriptions/me |
 
 ### Files to Create
 
 | File | Purpose |
 |------|---------|
-| `app/schemas/message.py` | Message schemas |
-| `app/api/v1/endpoints/messages.py` | Message endpoints |
-| `app/api/v1/websocket/chat.py` | WebSocket chat handler |
-| `app/services/chat_service.py` | Chat business logic |
-| `tests/test_messages.py` | Message tests |
-| `tests/test_chat_ws.py` | WebSocket chat tests |
+| `app/models/subscription.py` | Subscription model |
+| `app/schemas/subscription.py` | Subscription schemas |
+| `app/api/v1/endpoints/subscriptions.py` | Subscription endpoints |
+| `app/api/v1/endpoints/rewards.py` | Ad reward endpoints |
+| `app/services/payment_service.py` | ZarinPal integration |
+| `tests/test_subscriptions.py` | Subscription tests |
 
 ### Files to Update
 
-- `app/models/daily_limit.py` — ensure `chats_used` field exists
-- `app/main.py` — add new routers
-
-### Files Needed from You
-
-```
-1. app/models/message.py
-2. app/models/match.py
-3. app/models/daily_limit.py
-```
+| File | Changes |
+|------|---------|
+| `app/models/user.py` | Add `is_premium` check (already exists) |
+| `app/api/v1/endpoints/swipes.py` | Use premium status for unlimited likes |
+| `app/services/chat_service.py` | Use premium status for unlimited chats |
 
 ---
 
@@ -227,7 +309,6 @@ tests/                       ✅ (9 test files)
 
 | Session | Focus |
 |---------|-------|
-| 10 | Chat system (messages + WebSocket) |
 | 11 | Premium subscriptions + Ad rewards + Daily limits |
 | 12 | Push notifications + Admin dashboard |
 | 13 | Face verification + Review rewards |
@@ -235,12 +316,77 @@ tests/                       ✅ (9 test files)
 
 ---
 
-## Ready for Session 10
+## Useful Commands
 
-Send me:
+### Run migrations
+```bash
+alembic revision --autogenerate -m "description"
+alembic upgrade head
 ```
-1. app/models/message.py
-2. app/models/match.py
-3. app/models/daily_limit.py
+
+### Docker
+```bash
+docker-compose up -d
+docker-compose down
+docker-compose logs -f
 ```
+
+### Run app
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### WebSocket connections
+```javascript
+// Match notifications
+ws = new WebSocket("ws://localhost:8000/ws/matches?token=ACCESS_TOKEN")
+
+// Chat
+ws = new WebSocket("ws://localhost:8000/ws/chat/{match_id}?token=ACCESS_TOKEN")
+```
+
+### Admin endpoints
+```
+Headers: X-Admin-Key: your-secret-key
+
+GET    /api/v1/admin/photos/pending
+POST   /api/v1/admin/photos/{id}/approve
+POST   /api/v1/admin/photos/{id}/reject?reason=...
+GET    /api/v1/admin/photos/stats
+GET    /api/v1/admin/photos/user/{user_id}
+```
+
+---
+
+## Notes
+
+- All implemented features have passing tests
+- Rate limiting disabled in test environment
+- WebSocket manager handles both match and chat connections
+- Chat supports text, photo, voice messages
+- Delete for everyone available within 1 hour window
+- Unmatched chat requires acceptance after 2 messages
+- Daily new chat limit: 10/day for free users
+- Ready for Session 11: Premium subscriptions + Ad rewards
+```
+
+Now commit the changes:
+
+```bash
+git add .
+git commit -m "feat(chat): implement complete chat system with WebSocket
+
+- Add message endpoints (text, photo, voice)
+- Add reply to messages functionality
+- Add delete for me / delete for everyone (1 hour window)
+- Add forward messages to other chats
+- Add message status tracking (sent → delivered → read)
+- Add WebSocket chat with typing indicators
+- Add unmatched chat limits (2 messages before accept)
+- Add daily new chat limit (10/day for free users)
+- Add photo/voice upload with validation
+- Add chat_service and media_service
+- Add comprehensive chat tests
+
+Session 10 complete. Ready for Session 11: Premium subscriptions + Ad rewards"
 ```
