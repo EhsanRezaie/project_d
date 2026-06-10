@@ -1,0 +1,523 @@
+from typing import Optional, Tuple
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File, Form
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_, or_
+from uuid import UUID
+from datetime import datetime
+
+from app.db.session import get_session
+from app.models.user import User
+from app.models.match import Match
+from app.models.message import Message
+from app.core.deps import get_current_user
+from app.core.limiter import limiter
+from app.schemas.message import (
+    MessageResponse, MessageListResponse, TextMessageRequest,
+    SendMessageResponse, DeleteMessageRequest, ForwardMessageRequest,
+    MarkReadRequest, MessageStatusResponse, AcceptChatResponse
+)
+from app.services.chat_service import (
+    can_start_new_chat, check_unmatched_message_limit, accept_unmatched_chat,
+    increment_new_chat_count, mark_messages_as_delivered, mark_messages_as_read,
+    delete_message, forward_message
+)
+from app.services.media_service import MediaService
+from app.services.websocket_manager import websocket_manager
+
+router = APIRouter(prefix="/messages", tags=["messages"])
+
+
+async def get_match_or_chat(session: AsyncSession, identifier: UUID, user_id: UUID) -> Tuple[Optional[Match], Optional[UUID], Optional[UUID]]:
+    """Get match or determine if it's an unmatched chat"""
+    # First, check if identifier is a valid match ID
+    result = await session.execute(
+        select(Match).where(
+            Match.id == identifier,
+            Match.is_active == True,
+            or_(
+                Match.user1_id == user_id,
+                Match.user2_id == user_id
+            )
+        )
+    )
+    match = result.scalar_one_or_none()
+
+    if match:
+        # This is a matched chat - get the other user
+        other_user_id = match.user2_id if match.user1_id == user_id else match.user1_id
+        return match, other_user_id, match.id
+
+    # Check if identifier is a valid user ID (for unmatched chat)
+    result = await session.execute(
+        select(User).where(User.id == identifier, User.is_active == True)
+    )
+    target_user = result.scalar_one_or_none()
+    
+    if target_user:
+        # This is an unmatched chat - identifier is the other user's ID
+        # The other user is the identifier itself (not the current user)
+        return None, identifier, None
+    
+    return None, None, None
+
+
+@router.get("/{identifier}", response_model=MessageListResponse)
+@limiter.limit("60/minute")
+async def get_chat_history(
+    request: Request,
+    identifier: UUID,
+    limit: int = 50,
+    offset: int = 0,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> MessageListResponse:
+    """
+    Get chat history for a match or unmatched chat.
+    identifier can be match_id OR user_id (for unmatched chat)
+    """
+
+    match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
+
+    if not match and not other_user_id:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # Build query
+    if match_id:
+        query = select(Message).where(
+            Message.match_id == match_id,
+            or_(
+                Message.sender_id == current_user.id,
+                Message.receiver_id == current_user.id
+            ),
+            Message.is_deleted_for_all == False
+        )
+    else:
+        # Unmatched chat
+        query = select(Message).where(
+            Message.match_id.is_(None),
+            or_(
+                and_(
+                    Message.sender_id == current_user.id,
+                    Message.receiver_id == other_user_id
+                ),
+                and_(
+                    Message.sender_id == other_user_id,
+                    Message.receiver_id == current_user.id
+                )
+            ),
+            Message.is_deleted_for_all == False
+        )
+
+    # Filter out messages deleted for this user
+    query = query.where(
+        or_(
+            Message.is_deleted_for_sender == False,
+            Message.sender_id != current_user.id
+        )
+    )
+    query = query.where(
+        or_(
+            Message.is_deleted_for_receiver == False,
+            Message.receiver_id != current_user.id
+        )
+    )
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await session.scalar(count_query)
+
+    # Get messages
+    query = query.order_by(Message.sent_at.desc()).offset(offset).limit(limit)
+    result = await session.execute(query)
+    messages = result.scalars().all()
+
+    # Build response
+    message_responses = []
+    for msg in reversed(messages):
+        reply_to_data = None
+        if msg.reply_to_id:
+            reply_result = await session.execute(
+                select(Message).where(Message.id == msg.reply_to_id)
+            )
+            reply_msg = reply_result.scalar_one_or_none()
+            if reply_msg:
+                reply_to_data = {
+                    "id": reply_msg.id,
+                    "content": reply_msg.content[:100] if reply_msg.content else "[Media]",
+                    "sender_name": "You" if reply_msg.sender_id == current_user.id else "Them",
+                    "message_type": reply_msg.message_type
+                }
+
+        message_responses.append(MessageResponse(
+            id=msg.id,
+            match_id=msg.match_id,
+            sender_id=msg.sender_id,
+            receiver_id=msg.receiver_id,
+            message_type=msg.message_type,
+            content=msg.content,
+            media_url=msg.media_url,
+            media_duration=msg.media_duration,
+            reply_to=reply_to_data,
+            is_sent=msg.is_sent,
+            is_delivered=msg.is_delivered,
+            is_read=msg.is_read,
+            is_accepted=msg.is_accepted,
+            sent_at=msg.sent_at,
+            delivered_at=msg.delivered_at,
+            read_at=msg.read_at,
+        ))
+
+    return MessageListResponse(
+        messages=message_responses,
+        total=total or 0,
+        next_offset=offset + limit if offset + limit < total else None
+    )
+
+
+@router.post("/{identifier}/text", response_model=SendMessageResponse)
+@limiter.limit("60/minute")
+async def send_text_message(
+    request: Request,
+    identifier: UUID,
+    body: TextMessageRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> SendMessageResponse:
+    """Send a text message"""
+
+    match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
+
+    if not match and not other_user_id:
+        raise HTTPException(status_code=404, detail="User or match not found")
+
+    # Check if this is a new chat
+    if not match and not match_id:
+        can_start, reason, daily_limit = await can_start_new_chat(
+            session, current_user.id, other_user_id, current_user.is_premium
+        )
+        if not can_start:
+            raise HTTPException(status_code=429, detail=reason)
+
+    # Check unmatched message limits
+    can_send, reason, is_accepted = await check_unmatched_message_limit(
+        session, current_user.id, other_user_id, match_id
+    )
+    if not can_send:
+        raise HTTPException(status_code=403, detail=reason)
+
+    # Create message
+    new_message = Message(
+        match_id=match_id,
+        sender_id=current_user.id,
+        receiver_id=other_user_id,
+        message_type="text",
+        content=body.content,
+        reply_to_id=body.reply_to_id,
+        is_sent=True,
+        is_accepted=is_accepted or match_id is not None,
+    )
+    session.add(new_message)
+    await session.flush()
+
+    # Increment new chat counter if this is a new chat
+    if not match and not match_id:
+        await increment_new_chat_count(session, current_user.id)
+
+    await session.commit()
+
+    # Send WebSocket notification
+    await websocket_manager.send_to_match(
+        str(match_id) if match_id else str(other_user_id),
+        str(current_user.id),
+        {
+            "type": "new_message",
+            "data": {
+                "id": str(new_message.id),
+                "message_type": "text",
+                "content": body.content,
+                "sender_id": str(current_user.id),
+                "sent_at": new_message.sent_at.isoformat(),
+            }
+        },
+        other_user_id=str(other_user_id)
+    )
+
+    return SendMessageResponse(
+        id=new_message.id,
+        sent_at=new_message.sent_at,
+        requires_acceptance=not is_accepted and not match_id,
+        chat_accepted=is_accepted or match_id is not None
+    )
+
+
+@router.post("/{identifier}/photo", response_model=SendMessageResponse)
+@limiter.limit("30/minute")
+async def send_photo_message(
+    request: Request,
+    identifier: UUID,
+    file: UploadFile = File(...),
+    caption: str = Form(None),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> SendMessageResponse:
+    """Send a photo message"""
+
+    match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
+
+    if not match and not other_user_id:
+        raise HTTPException(status_code=404, detail="User or match not found")
+
+    # Photos can only be sent in matched chats or accepted unmatched chats
+    if not match_id:
+        # Check if chat is accepted
+        can_send, reason, is_accepted = await check_unmatched_message_limit(
+            session, current_user.id, other_user_id, None
+        )
+        if not can_send or not is_accepted:
+            raise HTTPException(status_code=403, detail="Photos can only be sent in accepted chats")
+
+    # Read file
+    file_data = await file.read()
+
+    # Generate IDs
+    message_id = uuid.uuid4()
+
+    # Save photo
+    success, media_url, error = await MediaService.save_photo(
+        file_data, str(other_user_id if not match_id else match_id), str(message_id)
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=error)
+
+    # Create message
+    new_message = Message(
+        id=message_id,
+        match_id=match_id,
+        sender_id=current_user.id,
+        receiver_id=other_user_id,
+        message_type="photo",
+        content=caption,
+        media_url=media_url,
+        is_sent=True,
+        is_accepted=True,  # Photos only in accepted chats
+    )
+    session.add(new_message)
+    await session.commit()
+
+    # Send WebSocket notification
+    await websocket_manager.send_to_match(
+        str(match_id) if match_id else str(other_user_id),
+        str(current_user.id),
+        {
+            "type": "new_message",
+            "data": {
+                "id": str(new_message.id),
+                "message_type": "photo",
+                "media_url": media_url,
+                "caption": caption,
+                "sender_id": str(current_user.id),
+                "sent_at": new_message.sent_at.isoformat(),
+            }
+        },
+        other_user_id=str(other_user_id)
+    )
+
+    return SendMessageResponse(
+        id=new_message.id,
+        sent_at=new_message.sent_at,
+        requires_acceptance=False,
+        chat_accepted=True
+    )
+
+
+@router.post("/{identifier}/voice", response_model=SendMessageResponse)
+@limiter.limit("30/minute")
+async def send_voice_message(
+    request: Request,
+    identifier: UUID,
+    file: UploadFile = File(...),
+    duration: int = Form(...),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> SendMessageResponse:
+    """Send a voice message"""
+
+    match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
+
+    if not match and not other_user_id:
+        raise HTTPException(status_code=404, detail="User or match not found")
+
+    # Voice messages can only be sent in matched chats or accepted unmatched chats
+    if not match_id:
+        can_send, reason, is_accepted = await check_unmatched_message_limit(
+            session, current_user.id, other_user_id, None
+        )
+        if not can_send or not is_accepted:
+            raise HTTPException(status_code=403, detail="Voice messages can only be sent in accepted chats")
+
+    # Read file
+    file_data = await file.read()
+
+    # Generate IDs
+    message_id = uuid.uuid4()
+
+    # Save voice
+    success, media_url, error = await MediaService.save_voice(
+        file_data, str(other_user_id if not match_id else match_id), str(message_id), duration
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=error)
+
+    # Create message
+    new_message = Message(
+        id=message_id,
+        match_id=match_id,
+        sender_id=current_user.id,
+        receiver_id=other_user_id,
+        message_type="voice",
+        media_url=media_url,
+        media_duration=duration,
+        is_sent=True,
+        is_accepted=True,
+    )
+    session.add(new_message)
+    await session.commit()
+
+    # Send WebSocket notification
+    await websocket_manager.send_to_match(
+        str(match_id) if match_id else str(other_user_id),
+        str(current_user.id),
+        {
+            "type": "new_message",
+            "data": {
+                "id": str(new_message.id),
+                "message_type": "voice",
+                "media_url": media_url,
+                "duration": duration,
+                "sender_id": str(current_user.id),
+                "sent_at": new_message.sent_at.isoformat(),
+            }
+        },
+        other_user_id=str(other_user_id)
+    )
+
+    return SendMessageResponse(
+        id=new_message.id,
+        sent_at=new_message.sent_at,
+        requires_acceptance=False,
+        chat_accepted=True
+    )
+
+
+@router.post("/{identifier}/accept", response_model=AcceptChatResponse)
+@limiter.limit("20/minute")
+async def accept_chat(
+    request: Request,
+    identifier: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> AcceptChatResponse:
+    """Accept an unmatched chat (allows unlimited messages)"""
+
+    match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
+
+    if not match and not other_user_id:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # For unmatched chat, the other user is the identifier
+    # The current user is the one accepting
+    await accept_unmatched_chat(session, match_id, identifier, current_user.id)
+
+    return AcceptChatResponse(
+        message="Chat accepted. You can now send unlimited messages.",
+        is_accepted=True
+    )
+
+
+@router.post("/delivered")
+@limiter.limit("100/minute")
+async def mark_delivered(
+    request: Request,
+    body: MarkReadRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Mark messages as delivered"""
+    await mark_messages_as_delivered(session, body.message_ids, current_user.id)
+    return {"message": f"{len(body.message_ids)} messages marked as delivered"}
+
+
+@router.post("/read")
+@limiter.limit("100/minute")
+async def mark_read(
+    request: Request,
+    body: MarkReadRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Mark messages as read"""
+    await mark_messages_as_read(session, body.message_ids, current_user.id)
+    return {"message": f"{len(body.message_ids)} messages marked as read"}
+
+
+@router.delete("/{message_id}")
+@limiter.limit("30/minute")
+async def delete_message_endpoint(
+    request: Request,
+    message_id: UUID,
+    delete_for: str = "me",
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Delete a message (for me or for everyone)"""
+    success, error = await delete_message(session, message_id, current_user.id, delete_for)
+    if not success:
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": f"Message deleted for {delete_for}"}
+
+
+@router.post("/{message_id}/forward")
+@limiter.limit("30/minute")
+async def forward_message_endpoint(
+    request: Request,
+    message_id: UUID,
+    body: ForwardMessageRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Forward a message to another chat"""
+    new_message, error = await forward_message(session, message_id, body.target_match_id, current_user.id)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": "Message forwarded", "new_message_id": str(new_message.id)}
+
+
+@router.get("/{message_id}/status", response_model=MessageStatusResponse)
+@limiter.limit("60/minute")
+async def get_message_status(
+    request: Request,
+    message_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> MessageStatusResponse:
+    """Get delivery and read status of a message"""
+    result = await session.execute(
+        select(Message).where(Message.id == message_id)
+    )
+    message = result.scalar_one_or_none()
+
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    if message.sender_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view status of this message")
+
+    return MessageStatusResponse(
+        id=message.id,
+        sent_at=message.sent_at,
+        delivered_at=message.delivered_at,
+        read_at=message.read_at,
+        is_delivered=message.is_delivered,
+        is_read=message.is_read
+    )

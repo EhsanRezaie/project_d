@@ -9,12 +9,12 @@ logger = get_logger("websocket")
 
 class WebSocketManager:
     """
-    Manage WebSocket connections for real-time notifications.
-    Uses Redis pub/sub for multi-worker support.
+    Manage WebSocket connections for real-time notifications and chat.
     """
     
     def __init__(self):
-        self.active_connections: Dict[str, Set[WebSocket]] = {}
+        self.active_connections: Dict[str, Set[WebSocket]] = {}  # user_id -> set of websockets
+        self.chat_connections: Dict[str, Set[WebSocket]] = {}    # "chat:{match_id}:{user_id}" -> websockets
         self._pubsub = None
     
     async def _get_pubsub(self):
@@ -24,8 +24,10 @@ class WebSocketManager:
             await self._pubsub.subscribe()
         return self._pubsub
     
+    # ==================== Match Notification Methods ====================
+    
     async def connect(self, websocket: WebSocket, user_id: str):
-        """Accept WebSocket connection and store it"""
+        """Accept WebSocket connection and store it for match notifications"""
         await websocket.accept()
         
         if user_id not in self.active_connections:
@@ -59,7 +61,6 @@ class WebSocketManager:
                 logger.error(f"Failed to send message to user {user_id}: {e}")
                 disconnected.append(websocket)
         
-        # Clean up disconnected sockets
         for ws in disconnected:
             await self.disconnect(ws, user_id)
     
@@ -85,7 +86,57 @@ class WebSocketManager:
         await self.send_personal_message(user2_id, message2)
         
         logger.info(f"Match broadcast sent for match {match_id}")
+    
+    # ==================== Chat Methods ====================
+    
+    async def add_chat_connection(self, match_id: str, user_id: str, websocket: WebSocket):
+        """Add a chat WebSocket connection"""
+        await websocket.accept()
+        
+        key = f"chat:{match_id}:{user_id}"
+        if key not in self.chat_connections:
+            self.chat_connections[key] = set()
+        self.chat_connections[key].add(websocket)
+        
+        logger.info(f"Chat WebSocket connected for match {match_id}, user {user_id}")
+    
+    async def remove_chat_connection(self, match_id: str, user_id: str, websocket: WebSocket):
+        """Remove a chat WebSocket connection"""
+        key = f"chat:{match_id}:{user_id}"
+        if key in self.chat_connections:
+            self.chat_connections[key].discard(websocket)
+            if not self.chat_connections[key]:
+                del self.chat_connections[key]
+        
+        logger.info(f"Chat WebSocket disconnected for match {match_id}, user {user_id}")
+    
+    async def send_to_match(self, match_id: str, sender_id: str, message: dict, other_user_id: str = None):
+        """
+        Send message to both users in a match.
+        For matched chats, we need to know both user IDs.
+        For unmatched chats, we need the other user's ID.
+        """
+        data = json.dumps(message)
+        
+        # Send to the other user
+        if other_user_id:
+            other_key = f"chat:{match_id}:{other_user_id}"
+            if other_key in self.chat_connections:
+                for ws in self.chat_connections[other_key]:
+                    try:
+                        await ws.send_text(data)
+                    except Exception as e:
+                        logger.error(f"Failed to send to {other_key}: {e}")
+        
+        # Also send back to sender (for confirmation)
+        sender_key = f"chat:{match_id}:{sender_id}"
+        if sender_key in self.chat_connections:
+            for ws in self.chat_connections[sender_key]:
+                try:
+                    await ws.send_text(data)
+                except Exception as e:
+                    logger.error(f"Failed to send to {sender_key}: {e}")
 
 
-# Singleton instance
+# Create singleton instance
 websocket_manager = WebSocketManager()

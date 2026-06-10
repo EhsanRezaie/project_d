@@ -17,6 +17,9 @@ from app.api.v1.endpoints.search import router as search_router
 from app.api.v1.endpoints.blocks import router as blocks_router
 from app.api.v1.websocket.matches import router as websocket_router
 from app.api.v1.endpoints.matches import router as matches_router
+from app.api.v1.endpoints.messages import router as messages_router
+from app.api.v1.websocket.chat import router as chat_websocket_router
+
 from app.core.logging import setup_logging
 setup_logging()
 
@@ -55,10 +58,13 @@ app.include_router(swipes_router, prefix="/api/v1")
 app.include_router(search_router, prefix="/api/v1")
 app.include_router(blocks_router, prefix="/api/v1")
 app.include_router(matches_router, prefix="/api/v1")
+app.include_router(messages_router, prefix="/api/v1")
 
 
 # WebSocket Router
 app.include_router(websocket_router)
+app.include_router(chat_websocket_router)
+
 
 @app.get("/health")
 async def health():
