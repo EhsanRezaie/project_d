@@ -97,3 +97,8 @@ async def get_current_premium_user(
             detail="Premium subscription required",
         )
     return current_user
+
+async def get_current_user_ws(token: str) -> str | None:
+    """Get current user ID from WebSocket token"""
+    from app.core.security import decode_access_token
+    return decode_access_token(token)

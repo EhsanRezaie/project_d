@@ -6,6 +6,7 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import NullPool
 import redis.asyncio as aioredis
+from unittest.mock import AsyncMock, patch
 
 from dotenv import load_dotenv
 load_dotenv(".env.test", override=True)
@@ -109,6 +110,18 @@ def disable_rate_limiting():
     limiter._enabled = False
     yield
     limiter._enabled = original_enabled
+
+
+# ---------------------------------------------------------------------------
+# Mock WebSocket manager for tests
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture(autouse=True)
+def mock_websocket_manager():
+    """Mock WebSocket manager to avoid Redis pub/sub issues in tests"""
+    with patch("app.api.v1.endpoints.swipes.websocket_manager") as mock:
+        mock.broadcast_match = AsyncMock()
+        yield mock
 
 
 # ---------------------------------------------------------------------------

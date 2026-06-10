@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, func, and_, or_
 from datetime import date
 from uuid import UUID
 
@@ -9,10 +9,11 @@ from app.models.user import User
 from app.models.swipe import Swipe
 from app.models.match import Match
 from app.models.daily_limit import DailyLimit
+from app.models.photo import Photo
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.schemas.discover import SwipeRequest, SwipeResponse
-from sqlalchemy import select, func, and_, or_ 
+from app.services.websocket_manager import websocket_manager
 
 router = APIRouter(prefix="/swipes", tags=["swipes"])
 
@@ -44,6 +45,18 @@ async def get_or_create_daily_limit(
         await session.flush()
     
     return daily_limit
+
+
+async def get_user_main_photo_url(session: AsyncSession, user_id: UUID) -> str | None:
+    """Get user's main approved photo URL"""
+    result = await session.execute(
+        select(Photo.url).where(
+            Photo.user_id == user_id,
+            Photo.is_main == True,
+            Photo.status == "approved"
+        )
+    )
+    return result.scalar_one_or_none()
 
 
 @router.post("", response_model=SwipeResponse)
@@ -158,6 +171,29 @@ async def swipe(
             
             matched = True
             match_id = new_match.id
+            
+            # Send WebSocket notification to both users
+            user1_data = {
+                "id": str(current_user.id),
+                "name": current_user.name,
+                "age": current_user.age,
+                "main_photo_url": await get_user_main_photo_url(session, current_user.id),
+            }
+            
+            user2_data = {
+                "id": str(target_user.id),
+                "name": target_user.name,
+                "age": target_user.age,
+                "main_photo_url": await get_user_main_photo_url(session, target_user.id),
+            }
+            
+            await websocket_manager.broadcast_match(
+                str(current_user.id),
+                str(target_user.id),
+                str(new_match.id),
+                user1_data,
+                user2_data
+            )
     
     await session.commit()
     
