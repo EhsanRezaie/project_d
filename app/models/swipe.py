@@ -2,6 +2,7 @@ import uuid
 from sqlalchemy import Column, String, DateTime, ForeignKey, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
+from sqlalchemy.orm import relationship
 
 
 class Swipe(Base):
@@ -13,3 +14,7 @@ class Swipe(Base):
     to_user = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     direction = Column(String(10), nullable=False)           # 'like' | 'pass'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    #for easier query
+    from_user_rel = relationship("User", foreign_keys=[from_user])
+    to_user_rel = relationship("User", foreign_keys=[to_user])

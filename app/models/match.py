@@ -15,4 +15,7 @@ class Match(Base):
     is_active = Column(Boolean, default=True)
     matched_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # Relationships
+    user1 = relationship("User", foreign_keys=[user1_id])
+    user2 = relationship("User", foreign_keys=[user2_id])
     messages = relationship("Message", back_populates="match", cascade="all, delete-orphan")

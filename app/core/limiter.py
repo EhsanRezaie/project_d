@@ -6,4 +6,5 @@ from app.core.config import settings
 limiter = Limiter(
     key_func=get_remote_address,
     storage_uri=settings.REDIS_URL,
+    enabled=True,  # Can be disabled for tests via conftest.py
 )

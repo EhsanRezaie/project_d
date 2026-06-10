@@ -9,8 +9,10 @@ from app.core.config import settings
 from app.core.limiter import limiter
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.users import router as users_router
-from app.api.v1.endpoints.photos import router as photos_router  # ADD THIS
-from app.api.v1.endpoints.admin import router as admin_router  # ADD THIS
+from app.api.v1.endpoints.photos import router as photos_router  
+from app.api.v1.endpoints.admin import router as admin_router
+from app.api.v1.endpoints.discover import router as discover_router
+from app.api.v1.endpoints.swipes import router as swipes_router  
 
 from app.core.logging import setup_logging
 setup_logging()
@@ -43,8 +45,10 @@ app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 # Routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
-app.include_router(photos_router, prefix="/api/v1")  # ADD THIS
-app.include_router(admin_router, prefix="/api/v1")  # ADD THIS
+app.include_router(photos_router, prefix="/api/v1")  
+app.include_router(admin_router, prefix="/api/v1")
+app.include_router(discover_router, prefix="/api/v1")
+app.include_router(swipes_router, prefix="/api/v1")  
 
 
 @app.get("/health")

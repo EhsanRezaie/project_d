@@ -18,6 +18,7 @@ from app.main import app
 from app.db.base import Base
 from app.db.session import get_session
 import app.core.redis as redis_module
+from app.core.limiter import limiter
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 TEST_REDIS_URL = os.environ["REDIS_URL"]
@@ -95,6 +96,19 @@ async def patch_redis():
     yield r
     redis_module.redis_client = original
     await r.aclose()
+
+
+# ---------------------------------------------------------------------------
+# Disable rate limiting for tests
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture(autouse=True)
+def disable_rate_limiting():
+    """Disable rate limiting during tests so we can create many users quickly"""
+    original_enabled = getattr(limiter, "_enabled", True)
+    limiter._enabled = False
+    yield
+    limiter._enabled = original_enabled
 
 
 # ---------------------------------------------------------------------------
