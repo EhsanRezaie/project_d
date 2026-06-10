@@ -16,6 +16,7 @@ from app.core.security import (
     create_refresh_token,
     decode_access_token,
     decode_refresh_token,
+    get_token_version,
 )
 
 from app.schemas.auth import (
@@ -37,8 +38,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 async def _build_token_response(user: User) -> TokenResponse:
     """Create access + refresh tokens, store refresh in Redis, return response."""
-    access_token = create_access_token(str(user.id))
-    refresh_token = create_refresh_token(str(user.id))
+    access_token = create_access_token(str(user.id), user.token_version)
+    refresh_token = create_refresh_token(str(user.id), user.token_version)
     await redis.store_refresh_token(refresh_token, str(user.id))
     return TokenResponse(
         access_token=access_token,
@@ -66,12 +67,27 @@ async def _get_current_user(
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token.")
     token = auth_header.split(" ", 1)[1]
-    user_id = decode_access_token(token)
-    if not user_id:
+    
+    # Decode and get payload
+    from app.core.security import decode_token
+    payload = decode_token(token, "access")
+    if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token.")
+    
+    user_id = payload.get("sub")
+    token_version = payload.get("ver", 1)
+    
     user = await _get_user_by_id(session, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or deactivated.")
+    
+    # Check token version (for password change / account lock)
+    if token_version != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token revoked. Please login again.",
+        )
+    
     return user
 
 
@@ -100,6 +116,7 @@ async def register(
         age=body.age,
         gender=body.gender,
         is_profile_complete=True,
+        token_version=1,
     )
     session.add(user)
     await session.commit()
@@ -177,9 +194,10 @@ async def google_auth(
                 email=email,
                 google_id=google_id,
                 name=name,
-                age=18,         # placeholder
-                gender="male",  # placeholder
+                age=18,
+                gender="male",
                 is_profile_complete=False,
+                token_version=1,
             )
             session.add(user)
 
@@ -201,11 +219,6 @@ async def complete_profile(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(_get_current_user),
 ):
-    """
-    Called by Google OAuth users after first login.
-    Sets real age, gender (and optionally name), marks profile complete.
-    Returns a fresh token pair so the updated UserResponse reaches the client.
-    """
     if current_user.is_profile_complete:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -225,7 +238,7 @@ async def complete_profile(
 
 
 # ---------------------------------------------------------------------------
-# POST /auth/refresh  —  Rotation: old token revoked, new token issued
+# POST /auth/refresh
 # ---------------------------------------------------------------------------
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -273,8 +286,62 @@ async def refresh(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("20/minute")
 async def logout(request: Request, body: RefreshRequest):
-    """
-    Revoke the refresh token immediately.
-    Access token stays valid until expiry — client must discard both locally.
-    """
     await redis.revoke_refresh_token(body.refresh_token)
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/change-password (NEW - for security)
+# ---------------------------------------------------------------------------
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")
+async def change_password(
+    request: Request,
+    body: dict,  # { "old_password": str, "new_password": str }
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(_get_current_user),
+):
+    old_password = body.get("old_password")
+    new_password = body.get("new_password")
+    
+    if not old_password or not new_password:
+        raise HTTPException(status_code=400, detail="Missing passwords.")
+    
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    
+    if not current_user.password_hash:
+        raise HTTPException(status_code=400, detail="This account uses Google login. Change password through Google.")
+    
+    if not verify_password(old_password, current_user.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect old password.")
+    
+    # Update password and increment token version (revokes all existing tokens)
+    current_user.password_hash = hash_password(new_password)
+    current_user.token_version += 1
+    
+    # Delete all refresh tokens for this user from Redis
+    await redis.revoke_all_user_tokens(str(current_user.id))
+    
+    await session.commit()
+    
+    return None
+
+
+# ---------------------------------------------------------------------------
+# GET /auth/health (for monitoring)
+# ---------------------------------------------------------------------------
+
+@router.get("/health")
+async def auth_health():
+    """Health check for auth service."""
+    redis_ok = await redis.health_check()
+    return {
+        "status": "healthy" if redis_ok else "degraded",
+        "redis": "connected" if redis_ok else "disconnected",
+    }
+
+
+@router.get("/users/me")
+async def get_current_user_info(current_user: User = Depends(_get_current_user)):
+    return {"id": str(current_user.id), "email": current_user.email}

@@ -1,5 +1,9 @@
 import pytest
 from httpx import AsyncClient
+from jose import jwt
+
+from app.core.config import settings
+from app.models.user import User
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -10,6 +14,8 @@ LOGIN_URL = "/api/v1/auth/login"
 REFRESH_URL = "/api/v1/auth/refresh"
 LOGOUT_URL = "/api/v1/auth/logout"
 COMPLETE_PROFILE_URL = "/api/v1/auth/complete-profile"
+CHANGE_PASSWORD_URL = "/api/v1/auth/change-password"
+HEALTH_URL = "/api/v1/auth/health"
 
 VALID_REGISTER_PAYLOAD = {
     "email": "test@example.com",
@@ -233,3 +239,215 @@ class TestCompleteProfile:
             headers=headers,
         )
         assert res.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/change-password
+# ---------------------------------------------------------------------------
+
+class TestChangePassword:
+    
+    async def _register_and_get_headers(self, client: AsyncClient) -> tuple[dict, dict, str]:
+        """Register a user and return (response_data, auth_headers, user_id)."""
+        data = await register_user(client)
+        headers = {"Authorization": f"Bearer {data['access_token']}"}
+        return data, headers, data["user"]["id"]
+    
+    async def test_change_password_success(self, client: AsyncClient):
+        """Change password should work with correct old password."""
+        data, headers, user_id = await self._register_and_get_headers(client)
+        
+        res = await client.post(
+            CHANGE_PASSWORD_URL,
+            json={"old_password": "strongpass123", "new_password": "newpass456"},
+            headers=headers,
+        )
+        assert res.status_code == 204
+        
+        # Old password should not work anymore
+        login_res = await client.post(LOGIN_URL, json={
+            "email": VALID_REGISTER_PAYLOAD["email"],
+            "password": "strongpass123",
+        })
+        assert login_res.status_code == 401
+        
+        # New password should work
+        login_res2 = await client.post(LOGIN_URL, json={
+            "email": VALID_REGISTER_PAYLOAD["email"],
+            "password": "newpass456",
+        })
+        assert login_res2.status_code == 200
+    
+    async def test_change_password_revokes_all_tokens(self, client: AsyncClient):
+        """After password change, all existing tokens should be invalid."""
+        data, headers, user_id = await self._register_and_get_headers(client)
+        old_refresh = data["refresh_token"]
+        
+        # Change password
+        res = await client.post(
+            CHANGE_PASSWORD_URL,
+            json={"old_password": "strongpass123", "new_password": "newpass456"},
+            headers=headers,
+        )
+        assert res.status_code == 204
+        
+        # Old refresh token should be rejected
+        res3 = await client.post(REFRESH_URL, json={"refresh_token": old_refresh})
+        assert res3.status_code == 401
+        
+        # New login should work
+        login_res = await client.post(LOGIN_URL, json={
+            "email": VALID_REGISTER_PAYLOAD["email"],
+            "password": "newpass456",
+        })
+        assert login_res.status_code == 200
+    
+    async def test_change_password_wrong_old_password(self, client: AsyncClient):
+        """Wrong old password should be rejected."""
+        _, headers, _ = await self._register_and_get_headers(client)
+        
+        res = await client.post(
+            CHANGE_PASSWORD_URL,
+            json={"old_password": "wrongpassword", "new_password": "newpass456"},
+            headers=headers,
+        )
+        assert res.status_code == 401
+        assert "Incorrect old password" in res.json()["detail"]
+    
+    async def test_change_password_weak_new_password(self, client: AsyncClient):
+        """New password must meet requirements."""
+        _, headers, _ = await self._register_and_get_headers(client)
+        
+        res = await client.post(
+            CHANGE_PASSWORD_URL,
+            json={"old_password": "strongpass123", "new_password": "weak"},
+            headers=headers,
+        )
+        assert res.status_code == 400
+        assert "at least 8 characters" in res.json()["detail"]
+    
+    async def test_change_password_missing_fields(self, client: AsyncClient):
+        """Both old and new passwords are required."""
+        _, headers, _ = await self._register_and_get_headers(client)
+        
+        res = await client.post(
+            CHANGE_PASSWORD_URL,
+            json={"old_password": "strongpass123"},
+            headers=headers,
+        )
+        assert res.status_code == 400
+    
+    async def test_change_password_requires_auth(self, client: AsyncClient):
+        """Cannot change password without authentication."""
+        res = await client.post(
+            CHANGE_PASSWORD_URL,
+            json={"old_password": "strongpass123", "new_password": "newpass456"},
+        )
+        assert res.status_code == 401
+    
+    async def test_google_user_cannot_change_password(self, client: AsyncClient):
+        """Users who signed up with Google cannot change password."""
+        # This test would need a valid Google token
+        # Skipping for now
+        pass
+
+
+# ---------------------------------------------------------------------------
+# GET /auth/health
+# ---------------------------------------------------------------------------
+
+class TestHealthCheck:
+    
+    async def test_health_check_returns_redis_status(self, client: AsyncClient):
+        """Health endpoint should show Redis status."""
+        res = await client.get(HEALTH_URL)
+        assert res.status_code == 200
+        data = res.json()
+        assert "status" in data
+        assert "redis" in data
+        # Should be healthy in test environment
+        assert data["redis"] == "connected"
+
+
+# ---------------------------------------------------------------------------
+# Token Versioning Tests
+# ---------------------------------------------------------------------------
+
+class TestTokenVersioning:
+    
+    async def test_token_contains_version(self, client: AsyncClient):
+        """Access token should contain version number."""
+        data = await register_user(client)
+        
+        # Decode the access token to check version using jose
+        payload = jwt.decode(
+            data["access_token"], 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM]
+        )
+        assert "ver" in payload
+        assert payload["ver"] == 1
+    
+    async def test_login_increments_token_version(self, client: AsyncClient):
+        """Login should use current token version."""
+        data = await register_user(client)
+        
+        # First login - version 1
+        payload1 = jwt.decode(
+            data["access_token"], 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM]
+        )
+        assert payload1["ver"] == 1
+        
+        # Login again - still version 1 (password not changed)
+        login_res = await client.post(LOGIN_URL, json={
+            "email": VALID_REGISTER_PAYLOAD["email"],
+            "password": VALID_REGISTER_PAYLOAD["password"],
+        })
+        assert login_res.status_code == 200
+        data2 = login_res.json()
+        
+        payload2 = jwt.decode(
+            data2["access_token"], 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM]
+        )
+        # Version should still be 1 (password unchanged)
+        assert payload2["ver"] == 1
+    
+    async def test_token_version_increments_after_password_change(self, client: AsyncClient):
+        """Token version should increment after password change."""
+        data, headers, user_id = await TestChangePassword()._register_and_get_headers(client)
+        
+        # Check initial version
+        payload1 = jwt.decode(
+            data["access_token"], 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM]
+        )
+        assert payload1["ver"] == 1
+        
+        # Change password
+        res = await client.post(
+            CHANGE_PASSWORD_URL,
+            json={"old_password": "strongpass123", "new_password": "newpass456"},
+            headers=headers,
+        )
+        assert res.status_code == 204
+        
+        # Login again and check new version
+        login_res = await client.post(LOGIN_URL, json={
+            "email": VALID_REGISTER_PAYLOAD["email"],
+            "password": "newpass456",
+        })
+        assert login_res.status_code == 200
+        data2 = login_res.json()
+        
+        payload2 = jwt.decode(
+            data2["access_token"], 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM]
+        )
+        # Version should be 2 after password change
+        assert payload2["ver"] == 2

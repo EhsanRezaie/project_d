@@ -7,6 +7,10 @@ from app.core.config import settings
 from app.core.limiter import limiter
 from app.api.v1.endpoints.auth import router as auth_router
 
+from app.core.logging import setup_logging
+setup_logging()
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
