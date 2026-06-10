@@ -145,9 +145,10 @@ async def login(
         )
 
     if not user.is_active:
+        # CHANGE THIS: return 401 instead of 403 for security
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This account has been deactivated.",
+            status_code=status.HTTP_401_UNAUTHORIZED,  # CHANGED FROM 403
+            detail="Incorrect email or password.",  # CHANGED - don't reveal account is deactivated
         )
 
     return await _build_token_response(user)
