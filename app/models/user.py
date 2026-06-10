@@ -42,3 +42,7 @@ class User(Base):
     subscription = relationship("Subscription", back_populates="user", uselist=False)
     daily_limits = relationship("DailyLimit", back_populates="user", cascade="all, delete-orphan")
     review_rewards = relationship("ReviewReward", back_populates="user", cascade="all, delete-orphan")
+    sent_swipes = relationship("Swipe", foreign_keys="Swipe.from_user", back_populates="from_user_rel", cascade="all, delete-orphan")
+    received_swipes = relationship("Swipe", foreign_keys="Swipe.to_user", back_populates="to_user_rel", cascade="all, delete-orphan")
+    matches_as_user1 = relationship("Match", foreign_keys="Match.user1_id", back_populates="user1")
+    matches_as_user2 = relationship("Match", foreign_keys="Match.user2_id", back_populates="user2")
