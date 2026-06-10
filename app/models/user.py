@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, SmallInteger, Double, DateTime, Text, func
+from sqlalchemy import Column, String, Boolean, SmallInteger, Double, DateTime, Text, func, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -27,6 +27,9 @@ class User(Base):
 
     is_premium = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+    
+    # Token version for instant revocation on password change / account lock
+    token_version = Column(Integer, default=1, nullable=False)
 
     # False only for Google OAuth users until they set real age + gender
     is_profile_complete = Column(Boolean, default=True)

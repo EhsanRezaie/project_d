@@ -14,6 +14,12 @@ class Settings(BaseSettings):
 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
+    
+    # Redis production settings
+    REDIS_SOCKET_TIMEOUT: int = 5
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = 5
+    REDIS_RETRY_ON_TIMEOUT: bool = True
+    REDIS_MAX_RETRIES: int = 3
 
     class Config:
         env_file = ".env"
