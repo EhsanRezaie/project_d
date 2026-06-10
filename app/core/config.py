@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     
+     # Admin secret key for admin endpoints - MUST be set in .env
+    ADMIN_SECRET_KEY: str = "" 
+
     # Redis production settings
     REDIS_SOCKET_TIMEOUT: int = 5
     REDIS_SOCKET_CONNECT_TIMEOUT: int = 5
