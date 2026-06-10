@@ -1,4 +1,4 @@
-You're right! My apologies. The backticks for the SQL code blocks were not properly closed. Here is the complete, properly formatted `dev.md` file:
+Here's the updated `dev.md` for Session 5 completion:
 
 ```markdown
 # dev.md — Iranian Dating App
@@ -11,9 +11,9 @@ You're right! My apologies. The backticks for the SQL code blocks were not prope
 
 ## Project Status
 
-- **Session:** 4 (Completed)
-- **Current Phase:** Auth system fully hardened with token versioning + 33 tests passing ✅
-- **Next Phase:** Users endpoints (GET/PUT /users/me) + photo upload with moderation
+- **Session:** 5 (Completed)
+- **Current Phase:** Users endpoints fully implemented with 53 tests passing ✅
+- **Next Phase:** Photo upload system + Discover endpoint
 
 ---
 
@@ -109,6 +109,10 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
   - POST /logout → 20/min
   - POST /complete-profile → 10/min
   - POST /change-password → 5/min
+  - GET /users/me → 100/min
+  - PUT /users/me → 30/min
+  - DELETE /users/me → 5/min
+  - POST /users/me/location → 60/min
 - 429 response includes Retry-After header
 
 ### Google OAuth — Profile Completion Flow
@@ -215,7 +219,7 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - Test DB uses Docker PostgreSQL container
 - No mocking of the database — tests run against real DB
 - Structure: tests/ folder mirrors app/ structure
-- **33 tests written and passing** for auth system
+- **53 tests written and passing** (33 auth + 20 users)
 
 ### 8. Review Reward System
 
@@ -372,7 +376,7 @@ dating-app/
 ├── app/
 │   ├── api/v1/endpoints/
 │   │   ├── auth.py          ✅ done
-│   │   ├── users.py
+│   │   ├── users.py         ✅ done (GET/PUT/DELETE /me + location)
 │   │   ├── discover.py
 │   │   ├── swipes.py
 │   │   ├── matches.py
@@ -385,7 +389,7 @@ dating-app/
 │   │   ├── redis.py         ✅ done
 │   │   ├── limiter.py       ✅ done
 │   │   ├── logging.py       ✅ done
-│   │   └── deps.py
+│   │   └── deps.py          ✅ done (get_current_user)
 │   ├── db/
 │   │   ├── base.py          ✅ done
 │   │   └── session.py       ✅ done
@@ -401,21 +405,23 @@ dating-app/
 │   │   ├── daily_limit.py   ✅ done
 │   │   └── review_reward.py ✅ done
 │   ├── schemas/
-│   │   └── auth.py          ✅ done
+│   │   ├── auth.py          ✅ done
+│   │   └── user.py          ✅ done (UserResponse, UserUpdateRequest)
 │   ├── services/
 │   ├── tasks/
 │   └── main.py              ✅ done
 ├── alembic/                 ✅ done
 ├── tests/
 │   ├── conftest.py          ✅ done
-│   └── test_auth.py         ✅ done (33 tests)
+│   ├── test_auth.py         ✅ done (33 tests)
+│   └── test_users.py        ✅ done (20 tests)
 ├── logs/                    ✅ done
 ├── docker-compose.yml       ✅ done
 ├── .env                     ✅ done
 ├── .env.test                ✅ done
 ├── .env.example             ✅ done
 ├── .gitignore               ✅ done
-├── requirements.txt         ✅ done
+├── requirements.txt         ✅ done (pytest-cov added)
 ├── dev.md                   ✅ this file
 └── README.md                ✅ done
 ```
@@ -437,15 +443,17 @@ dating-app/
 - `POST /api/v1/auth/verify-phone` — send OTP (not started)
 - `POST /api/v1/auth/verify-phone/confirm` — confirm OTP (not started)
 
-### Users (NEXT)
+### Users ✅ fully implemented
 
-- `GET /api/v1/users/me` — get my profile
-- `PUT /api/v1/users/me` — update my profile
-- `POST /api/v1/users/me/photos` — upload photo
-- `DELETE /api/v1/users/me/photos/{id}` — delete photo
-- `PUT /api/v1/users/me/location` — update lat/lng
+- `GET /api/v1/users/me` — get my profile ✅
+- `PUT /api/v1/users/me` — update my profile ✅
+- `DELETE /api/v1/users/me` — soft delete account ✅
+- `POST /api/v1/users/me/location` — update lat/lng ✅
+- `POST /api/v1/users/me/photos` — upload photo (next session)
+- `DELETE /api/v1/users/me/photos/{id}` — delete photo (next session)
+- `PUT /api/v1/users/me/photos/{id}/main` — set main photo (next session)
 
-### Discover
+### Discover (next session)
 
 - `GET /api/v1/discover` — get candidate profiles
 
@@ -498,6 +506,7 @@ python-dotenv==1.2.2
 httpx==0.28.1
 pytest==9.0.3
 pytest-asyncio==1.4.0
+pytest-cov==6.0.0
 ```
 
 ---
@@ -516,28 +525,98 @@ Full project bootstrapped on Ubuntu/Linux. Python venv, all dependencies install
 
 Updated models: photo.py, message.py. Added models: daily_limit.py, review_reward.py. security.py, schemas/auth.py, endpoints/auth.py (register/login/google/refresh). session.py renamed to get_session, main.py updated.
 
-### Session 4 (COMPLETED)
+### Session 4
+
+Auth system hardened with token versioning, jti, Redis retries, logging, pytest setup, 33 auth tests passing.
+
+### Session 5 (COMPLETED)
 
 **Completed:**
-- `app/core/redis.py` — Redis connection + refresh token helpers
-- `app/core/limiter.py` — slowapi limiter with Redis backend
-- `app/core/security.py` — added jti and token versioning
-- `app/core/config.py` — added Redis timeout settings
-- `app/core/logging.py` — structured logging with file rotation
-- `app/models/user.py` — added token_version field
-- `app/api/v1/endpoints/auth.py` — added /change-password endpoint
-- Alembic migration: added token_version column
-- pytest setup with isolated test DB and Redis
-- 33 comprehensive auth tests written and passing
-- Redis production hardening with timeouts and retries
-- Health check endpoint for monitoring
+- `app/schemas/user.py` — UserResponse and UserUpdateRequest with validation
+- `app/core/deps.py` — get_current_user shared dependency
+- `app/api/v1/endpoints/users.py` — GET/PUT/DELETE /users/me, POST /users/me/location
+- `app/main.py` — added users router
+- `tests/test_users.py` — 20 comprehensive users endpoint tests
+- Fixed login to return 401 for deactivated accounts (security best practice)
+- Added pytest-cov to requirements.txt
+- **Total tests: 53 passing** (33 auth + 20 users)
 
 ---
 
-## Next Session Goals (Session 5)
+## Next Session Goals (Session 6)
 
-1. Create `app/core/deps.py` with `get_current_user` dependency
-2. Implement `GET /api/v1/users/me` endpoint
-3. Implement `PUT /api/v1/users/me` endpoint
-4. Write tests for users endpoints
-5. Start photo upload implementation with moderation stub
+1. **Photo Upload System**
+   - `POST /api/v1/users/me/photos` — upload photo (multipart/form-data)
+   - `GET /api/v1/users/me/photos` — list user photos
+   - `DELETE /api/v1/users/me/photos/{id}` — delete photo
+   - `PUT /api/v1/users/me/photos/{id}/main` — set as main photo
+
+2. **Photo Moderation Service (Stub)**
+   - Create moderation service with placeholder
+   - Photo status: pending → approved/rejected
+   - Queue for async processing
+
+3. **Discover Endpoint (Basic)**
+   - `GET /api/v1/discover` — get candidate profiles
+   - Filter by age range (18-100)
+   - Filter by opposite gender
+   - Filter by distance (default 50km)
+   - Exclude already swiped users
+   - Pagination support
+
+4. **Write tests** for photos and discover endpoints
+
+---
+
+## Useful Commands
+
+### Run tests
+```bash
+pytest tests/ -v
+pytest tests/test_auth.py -v
+pytest tests/test_users.py -v
+pytest tests/ -v --cov=app --cov-report=html
+```
+
+### Run migrations
+```bash
+alembic revision --autogenerate -m "description"
+alembic upgrade head
+```
+
+### Docker
+```bash
+docker-compose up -d
+docker-compose down
+docker-compose logs -f
+```
+
+### Run app
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+---
+
+## Notes
+
+- All 53 tests are passing ✅
+- Coverage available via `pytest tests/ -v --cov=app --cov-report=html`
+- Login returns 401 for all failures (security best practice)
+- Token versioning enables instant revocation on password change
+- Rate limiting configured for all endpoints
+- Ready for Session 6: Photo upload + Discover endpoint
+```
+
+Now commit this update:
+
+```bash
+git add dev.md
+git commit -m "docs: update dev.md for Session 5 completion
+
+- Add users endpoints documentation
+- Update test count to 53 passing tests
+- Add Session 5 log
+- Define Session 6 goals (photo upload + discover)
+- Update API endpoints status"
+```
