@@ -1,12 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+import os
 
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.users import router as users_router
+from app.api.v1.endpoints.photos import router as photos_router  # ADD THIS
+from app.api.v1.endpoints.admin import router as admin_router  # ADD THIS
 
 from app.core.logging import setup_logging
 setup_logging()
@@ -17,10 +21,11 @@ app = FastAPI(
     debug=settings.DEBUG,
 )
 
-# Rate limiter — must be attached before middleware
+# Rate limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,9 +34,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serve uploaded files
+uploads_dir = "uploads"
+if not os.path.exists(uploads_dir):
+    os.makedirs(uploads_dir)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 # Routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
+app.include_router(photos_router, prefix="/api/v1")  # ADD THIS
+app.include_router(admin_router, prefix="/api/v1")  # ADD THIS
 
 
 @app.get("/health")

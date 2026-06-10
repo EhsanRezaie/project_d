@@ -1,4 +1,4 @@
-Here's the updated `dev.md` for Session 5 completion:
+Here's the updated `dev.md` for Session 6 completion:
 
 ```markdown
 # dev.md — Iranian Dating App
@@ -11,9 +11,9 @@ Here's the updated `dev.md` for Session 5 completion:
 
 ## Project Status
 
-- **Session:** 5 (Completed)
-- **Current Phase:** Users endpoints fully implemented with 53 tests passing ✅
-- **Next Phase:** Photo upload system + Discover endpoint
+- **Session:** 6 (Completed)
+- **Current Phase:** Photo upload system fully implemented with admin review ✅
+- **Next Phase:** Discover endpoint + Swipe system
 
 ---
 
@@ -113,6 +113,10 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
   - PUT /users/me → 30/min
   - DELETE /users/me → 5/min
   - POST /users/me/location → 60/min
+  - POST /users/me/photos → 10/min
+  - GET /users/me/photos → 30/min
+  - DELETE /users/me/photos/{id} → 20/min
+  - PUT /users/me/photos/{id}/main → 20/min
 - 429 response includes Retry-After header
 
 ### Google OAuth — Profile Completion Flow
@@ -130,8 +134,20 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - Name, age, gender (male/female), bio
 - Height (cm) — optional
 - Weight (kg) — optional
-- Profile photos (multiple)
+- Profile photos (multiple, max 6)
 - Location (lat/lng — updated on app open)
+
+### Photo System ✅ FULLY IMPLEMENTED
+
+- Users can upload up to 6 photos
+- Photos saved locally in `uploads/users/{user_id}/{photo_id}.jpg`
+- Auto-validation: file size (max 5MB), dimensions (200-5000px), format (JPEG/PNG/WEBP)
+- Photos start with status='pending' (not visible to other users)
+- Admin reviews photos via admin endpoints
+- Admin can approve/reject with reason
+- First uploaded photo becomes main profile photo
+- Users can reorder, delete, and change main photo
+- Only approved photos visible to other users
 
 ### Matching Model
 
@@ -188,15 +204,15 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - This prevents spam and harassment
 - Acceptance = explicit button tap ("Allow messages from this person")
 
-### 5. Photo Moderation System
+### 5. Photo Moderation System ✅ IMPLEMENTED
 
-- All uploaded photos must pass automated moderation before going live
-- Block: nudity, explicit content, text-heavy images (watermarks, ads), faces of other people
-- Use a moderation API (e.g. AWS Rekognition, Google Vision API, or SightEngine)
-- Flow: upload → pending → auto-review → approved / rejected
-- Rejected photos notify the user with reason
-- Photos stay in "pending" state and are not shown until approved
-- Human review queue for borderline cases (admin panel — later phase)
+- All uploaded photos go through admin review before appearing to others
+- Photos start with status='pending'
+- Admin endpoints to approve/reject photos
+- Rejected photos include reason visible to user
+- Max 6 photos per user
+- First photo automatically becomes main profile photo
+- Users can reorder and change main photo (after approval)
 
 ### 6. Face Verification (Selfie Match)
 
@@ -219,7 +235,7 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - Test DB uses Docker PostgreSQL container
 - No mocking of the database — tests run against real DB
 - Structure: tests/ folder mirrors app/ structure
-- **53 tests written and passing** (33 auth + 20 users)
+- **66 tests written and passing** (33 auth + 20 users + 13 photos)
 
 ### 8. Review Reward System
 
@@ -259,7 +275,7 @@ created_at           TIMESTAMPTZ DEFAULT NOW()
 last_seen_at         TIMESTAMPTZ
 ```
 
-### Table: `photos`
+### Table: `photos` ✅ with moderation
 
 ```sql
 id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
@@ -267,9 +283,10 @@ user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 url           TEXT NOT NULL
 order         SMALLINT NOT NULL DEFAULT 0
 is_main       BOOLEAN DEFAULT FALSE
-status        VARCHAR(20) DEFAULT 'pending'
+status        VARCHAR(20) DEFAULT 'pending'   -- 'pending' | 'approved' | 'rejected'
 reject_reason TEXT
 face_verified BOOLEAN DEFAULT FALSE
+created_at    TIMESTAMPTZ DEFAULT NOW()
 ```
 
 ### Table: `swipes`
@@ -361,11 +378,21 @@ UNIQUE (user_id, platform)
 refresh_token:{token}  →  user_id string (TTL: 30 days)
 ```
 
+### File Storage
+
+```
+uploads/
+└── users/
+    └── {user_id}/
+        └── {photo_id}.jpg
+```
+
 ### Logging
 
 - Logs stored in `logs/app.log` with rotation
 - Redis operations logged for debugging
 - Auth events logged
+- Admin actions logged
 
 ---
 
@@ -376,7 +403,9 @@ dating-app/
 ├── app/
 │   ├── api/v1/endpoints/
 │   │   ├── auth.py          ✅ done
-│   │   ├── users.py         ✅ done (GET/PUT/DELETE /me + location)
+│   │   ├── users.py         ✅ done
+│   │   ├── photos.py        ✅ done (upload, list, delete, set main)
+│   │   ├── admin.py         ✅ done (approve/reject photos)
 │   │   ├── discover.py
 │   │   ├── swipes.py
 │   │   ├── matches.py
@@ -389,7 +418,7 @@ dating-app/
 │   │   ├── redis.py         ✅ done
 │   │   ├── limiter.py       ✅ done
 │   │   ├── logging.py       ✅ done
-│   │   └── deps.py          ✅ done (get_current_user)
+│   │   └── deps.py          ✅ done
 │   ├── db/
 │   │   ├── base.py          ✅ done
 │   │   └── session.py       ✅ done
@@ -406,22 +435,28 @@ dating-app/
 │   │   └── review_reward.py ✅ done
 │   ├── schemas/
 │   │   ├── auth.py          ✅ done
-│   │   └── user.py          ✅ done (UserResponse, UserUpdateRequest)
+│   │   ├── user.py          ✅ done
+│   │   └── photo.py         ✅ done
 │   ├── services/
+│   │   ├── photo_service.py ✅ done (validation, storage)
+│   │   └── moderation_service.py (placeholder)
 │   ├── tasks/
-│   └── main.py              ✅ done
+│   └── main.py              ✅ done (with static files serving)
 ├── alembic/                 ✅ done
 ├── tests/
 │   ├── conftest.py          ✅ done
 │   ├── test_auth.py         ✅ done (33 tests)
-│   └── test_users.py        ✅ done (20 tests)
+│   ├── test_users.py        ✅ done (20 tests)
+│   └── test_photos.py       ✅ done (13 tests)
+├── uploads/                 ✅ created
+│   └── users/
 ├── logs/                    ✅ done
 ├── docker-compose.yml       ✅ done
 ├── .env                     ✅ done
 ├── .env.test                ✅ done
 ├── .env.example             ✅ done
 ├── .gitignore               ✅ done
-├── requirements.txt         ✅ done (pytest-cov added)
+├── requirements.txt         ✅ done (Pillow added)
 ├── dev.md                   ✅ this file
 └── README.md                ✅ done
 ```
@@ -440,8 +475,6 @@ dating-app/
 - `POST /api/v1/auth/complete-profile` — Google users set real age + gender ✅
 - `POST /api/v1/auth/change-password` — change password + revoke all tokens ✅
 - `GET /api/v1/auth/health` — health check (Redis status) ✅
-- `POST /api/v1/auth/verify-phone` — send OTP (not started)
-- `POST /api/v1/auth/verify-phone/confirm` — confirm OTP (not started)
 
 ### Users ✅ fully implemented
 
@@ -449,9 +482,21 @@ dating-app/
 - `PUT /api/v1/users/me` — update my profile ✅
 - `DELETE /api/v1/users/me` — soft delete account ✅
 - `POST /api/v1/users/me/location` — update lat/lng ✅
-- `POST /api/v1/users/me/photos` — upload photo (next session)
-- `DELETE /api/v1/users/me/photos/{id}` — delete photo (next session)
-- `PUT /api/v1/users/me/photos/{id}/main` — set main photo (next session)
+
+### Photos ✅ fully implemented
+
+- `POST /api/v1/users/me/photos` — upload photo (pending review) ✅
+- `GET /api/v1/users/me/photos` — list my photos ✅
+- `DELETE /api/v1/users/me/photos/{id}` — delete photo ✅
+- `PUT /api/v1/users/me/photos/{id}/main` — set main photo ✅
+
+### Admin ✅ fully implemented
+
+- `GET /api/v1/admin/photos/pending` — list pending photos ✅
+- `POST /api/v1/admin/photos/{id}/approve` — approve photo ✅
+- `POST /api/v1/admin/photos/{id}/reject` — reject photo with reason ✅
+- `GET /api/v1/admin/photos/stats` — moderation statistics ✅
+- `GET /api/v1/admin/photos/user/{user_id}` — view user's photos ✅
 
 ### Discover (next session)
 
@@ -479,11 +524,6 @@ dating-app/
 
 - `POST /api/v1/reports` — report a user
 
-### Rewards
-
-- `POST /api/v1/rewards/review` — submit store review proof
-- `POST /api/v1/rewards/ad-watched` — claim ad reward
-
 ---
 
 ## Installed Packages
@@ -507,6 +547,7 @@ httpx==0.28.1
 pytest==9.0.3
 pytest-asyncio==1.4.0
 pytest-cov==6.0.0
+Pillow==12.2.0
 ```
 
 ---
@@ -529,42 +570,45 @@ Updated models: photo.py, message.py. Added models: daily_limit.py, review_rewar
 
 Auth system hardened with token versioning, jti, Redis retries, logging, pytest setup, 33 auth tests passing.
 
-### Session 5 (COMPLETED)
+### Session 5
+
+Users endpoints implemented: GET/PUT/DELETE /users/me, POST /users/me/location. 20 users tests passing. Total 53 tests.
+
+### Session 6 (COMPLETED)
 
 **Completed:**
-- `app/schemas/user.py` — UserResponse and UserUpdateRequest with validation
-- `app/core/deps.py` — get_current_user shared dependency
-- `app/api/v1/endpoints/users.py` — GET/PUT/DELETE /users/me, POST /users/me/location
-- `app/main.py` — added users router
-- `tests/test_users.py` — 20 comprehensive users endpoint tests
-- Fixed login to return 401 for deactivated accounts (security best practice)
-- Added pytest-cov to requirements.txt
-- **Total tests: 53 passing** (33 auth + 20 users)
+- `app/schemas/photo.py` — PhotoResponse schema
+- `app/services/photo_service.py` — Image validation, compression, local storage
+- `app/api/v1/endpoints/photos.py` — Upload, list, delete, set main photo
+- `app/api/v1/endpoints/admin.py` — Admin endpoints for photo moderation
+- `app/main.py` — Added static file serving for uploads
+- `app/core/config.py` — Added ADMIN_SECRET_KEY
+- `app/models/photo.py` — Added created_at field
+- `tests/test_photos.py` — 13 comprehensive photo tests
+- Added Pillow dependency for image processing
+- **Total tests: 66 passing** (33 auth + 20 users + 13 photos)
 
 ---
 
-## Next Session Goals (Session 6)
+## Next Session Goals (Session 7)
 
-1. **Photo Upload System**
-   - `POST /api/v1/users/me/photos` — upload photo (multipart/form-data)
-   - `GET /api/v1/users/me/photos` — list user photos
-   - `DELETE /api/v1/users/me/photos/{id}` — delete photo
-   - `PUT /api/v1/users/me/photos/{id}/main` — set as main photo
-
-2. **Photo Moderation Service (Stub)**
-   - Create moderation service with placeholder
-   - Photo status: pending → approved/rejected
-   - Queue for async processing
-
-3. **Discover Endpoint (Basic)**
+1. **Discover Endpoint**
    - `GET /api/v1/discover` — get candidate profiles
+   - Filter by opposite gender only
    - Filter by age range (18-100)
-   - Filter by opposite gender
-   - Filter by distance (default 50km)
+   - Filter by distance (default 50km, user configurable)
    - Exclude already swiped users
-   - Pagination support
+   - Exclude deactivated users
+   - Pagination (limit/offset)
+   - Sort by recency (newest first) + distance
 
-4. **Write tests** for photos and discover endpoints
+2. **Swipe System**
+   - `POST /api/v1/swipes` — like or pass on a user
+   - Check daily like limit for free users
+   - Create match record when both users like each other
+   - Send notification (WebSocket) when match happens
+
+3. **Write tests** for discover and swipes
 
 ---
 
@@ -575,6 +619,7 @@ Auth system hardened with token versioning, jti, Redis retries, logging, pytest 
 pytest tests/ -v
 pytest tests/test_auth.py -v
 pytest tests/test_users.py -v
+pytest tests/test_photos.py -v
 pytest tests/ -v --cov=app --cov-report=html
 ```
 
@@ -596,27 +641,26 @@ docker-compose logs -f
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+### Admin endpoints (with Postman)
+```
+Headers: X-Admin-Key: your-secret-key
+
+GET    /api/v1/admin/photos/pending
+POST   /api/v1/admin/photos/{id}/approve
+POST   /api/v1/admin/photos/{id}/reject?reason=... 
+GET    /api/v1/admin/photos/stats
+GET    /api/v1/admin/photos/user/{user_id}
+```
+
 ---
 
 ## Notes
 
-- All 53 tests are passing ✅
+- All 66 tests are passing ✅
 - Coverage available via `pytest tests/ -v --cov=app --cov-report=html`
-- Login returns 401 for all failures (security best practice)
-- Token versioning enables instant revocation on password change
-- Rate limiting configured for all endpoints
-- Ready for Session 6: Photo upload + Discover endpoint
-```
+- Photos stored locally in `uploads/` folder
+- Admin secret key must be set in `.env`
+- Photos require admin approval before visible to other users
+- Ready for Session 7: Discover + Swipe system
 
-Now commit this update:
-
-```bash
-git add dev.md
-git commit -m "docs: update dev.md for Session 5 completion
-
-- Add users endpoints documentation
-- Update test count to 53 passing tests
-- Add Session 5 log
-- Define Session 6 goals (photo upload + discover)
-- Update API endpoints status"
-```
+---
