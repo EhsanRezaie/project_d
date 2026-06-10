@@ -1,4 +1,4 @@
-Here's the updated `dev.md` for Session 6 completion:
+Here's the updated `dev.md` with all the future work added:
 
 ```markdown
 # dev.md — Iranian Dating App
@@ -13,7 +13,7 @@ Here's the updated `dev.md` for Session 6 completion:
 
 - **Session:** 6 (Completed)
 - **Current Phase:** Photo upload system fully implemented with admin review ✅
-- **Next Phase:** Discover endpoint + Swipe system
+- **Next Phase:** Discover page + Swipe system (Like/Pass)
 
 ---
 
@@ -149,6 +149,13 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - Users can reorder, delete, and change main photo
 - Only approved photos visible to other users
 
+### Two Discovery Modes (Planned)
+
+| Page | Purpose | Can see same user twice? |
+|------|---------|-------------------------|
+| **Discover (Swipe Page)** | Main swiping interface like Tinder | ❌ NO - once swiped (like/pass), gone forever |
+| **Search Page** | Browse, filter, search for specific people | ✅ YES - can see again unless blocked |
+
 ### Matching Model
 
 - Heterosexual only: males see females, females see males
@@ -156,11 +163,27 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - Match = both users liked each other
 - MVP algorithm: recency + distance only
 
+### Daily Like Limits (Planned)
+
+| User Type | Daily Likes |
+|-----------|-------------|
+| Free User | 50 likes per day |
+| Premium User | Unlimited |
+| Ad Reward | +5 bonus likes |
+
+### Unmatched Chat Limits (Planned)
+
+- Free users can send **2 messages** to any user without a match
+- After 2 messages, recipient must accept the conversation
+- Acceptance = explicit button tap ("Allow messages from this person")
+- This prevents spam and harassment
+
 ### Monetization
 
-- All features free for all users
+- All core features free for all users
 - Ad shown every 10 minutes (full-screen interstitial)
-- Premium subscription = no ads + unlimited likes/chats
+- Premium subscription = no ads + unlimited likes + unlimited chats
+- Ad reward system: watch ad → +5 likes, +1 new chat
 - Subscription managed via Iranian payment gateway (not Google Play Billing)
 
 ### Iranian Market Constraints
@@ -178,26 +201,27 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 
 > These must be implemented as features develop. Do not forget them.
 
-### 1. Daily Like Limit (Free Users)
+### 1. Daily Like Limit (Free Users) 🔲 Session 11
 
 - Free users can send **50 likes per day**
 - Resets at midnight (Tehran time)
 - Premium users: unlimited likes
+- Tracked in `daily_limits` table
 
-### 2. Daily Chat Limit Without Match (Free Users)
+### 2. Daily Chat Limit Without Match (Free Users) 🔲 Session 10
 
 - Free users can **start 10 chats per day without being matched**
 - Resets at midnight (Tehran time)
 - Premium users: unlimited
 
-### 3. Ad Reward System
+### 3. Ad Reward System 🔲 Session 11
 
 - When a free user hits their daily like or chat limit, they can watch a rewarded ad
 - Each rewarded ad gives: **+5 likes** and **+1 new chat**
 - Implemented via AdMob Rewarded Ads (or Iranian equivalent)
 - Must be tracked server-side to prevent abuse (not just client-side)
 
-### 4. Unmatched Chat Limit
+### 4. Unmatched Chat Limit 🔲 Session 10
 
 - Without a match, a user can send max **2 messages** to another user
 - After 2 messages, the recipient must accept the conversation to continue
@@ -214,7 +238,7 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 - First photo automatically becomes main profile photo
 - Users can reorder and change main photo (after approval)
 
-### 6. Face Verification (Selfie Match)
+### 6. Face Verification (Selfie Match) 🔲 Future
 
 - To verify that profile photos actually show the user (not someone else)
 - Flow: user takes a live selfie in-app → compared against their uploaded photos using face similarity
@@ -226,18 +250,12 @@ A Persian-language dating app for the **Iranian market**, similar to Badoo.
 ### 7. Unit Testing Strategy ✅ IMPLEMENTED
 
 - Every feature must have unit tests before being considered done
-- Test environment is fully isolated:
-  - Separate test database (spun up fresh for each test run)
-  - Seed data loaded automatically
-  - All tables dropped and recreated after test run
+- Test environment is fully isolated
 - Using pytest + pytest-asyncio
 - Using .env.test file for test config
-- Test DB uses Docker PostgreSQL container
-- No mocking of the database — tests run against real DB
-- Structure: tests/ folder mirrors app/ structure
 - **66 tests written and passing** (33 auth + 20 users + 13 photos)
 
-### 8. Review Reward System
+### 8. Review Reward System 🔲 Future
 
 - If a user leaves a review on Google Play, Cafe Bazaar, or Myket → they receive **3 days of free premium**
 - Implementation: user submits proof (screenshot or in-app deep link callback)
@@ -283,24 +301,24 @@ user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 url           TEXT NOT NULL
 order         SMALLINT NOT NULL DEFAULT 0
 is_main       BOOLEAN DEFAULT FALSE
-status        VARCHAR(20) DEFAULT 'pending'   -- 'pending' | 'approved' | 'rejected'
+status        VARCHAR(20) DEFAULT 'pending'
 reject_reason TEXT
 face_verified BOOLEAN DEFAULT FALSE
 created_at    TIMESTAMPTZ DEFAULT NOW()
 ```
 
-### Table: `swipes`
+### Table: `swipes` 🔲 Session 7
 
 ```sql
 id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
 from_user   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 to_user     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-direction   VARCHAR(10) NOT NULL
+direction   VARCHAR(10) NOT NULL   -- 'like' | 'pass'
 created_at  TIMESTAMPTZ DEFAULT NOW()
 UNIQUE (from_user, to_user)
 ```
 
-### Table: `matches`
+### Table: `matches` 🔲 Session 9
 
 ```sql
 id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
@@ -311,32 +329,7 @@ matched_at  TIMESTAMPTZ DEFAULT NOW()
 UNIQUE (user1_id, user2_id)
 ```
 
-### Table: `messages`
-
-```sql
-id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
-match_id    UUID REFERENCES matches(id) ON DELETE CASCADE
-sender_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-content     TEXT NOT NULL
-is_read     BOOLEAN DEFAULT FALSE
-is_accepted BOOLEAN DEFAULT FALSE
-sent_at     TIMESTAMPTZ DEFAULT NOW()
-```
-
-### Table: `subscriptions`
-
-```sql
-id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-status      VARCHAR(20) NOT NULL
-plan        VARCHAR(50) NOT NULL
-started_at  TIMESTAMPTZ NOT NULL
-expires_at  TIMESTAMPTZ NOT NULL
-source      VARCHAR(50)
-```
-
-### Table: `daily_limits`
+### Table: `daily_limits` 🔲 Session 11
 
 ```sql
 id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
@@ -349,7 +342,42 @@ ad_chats_bonus  SMALLINT DEFAULT 0
 UNIQUE (user_id, date)
 ```
 
-### Table: `reports`
+### Table: `blocks` 🔲 Session 8
+
+```sql
+id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
+blocker_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+blocked_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+created_at   TIMESTAMPTZ DEFAULT NOW()
+UNIQUE (blocker_id, blocked_id)
+```
+
+### Table: `messages` 🔲 Session 10
+
+```sql
+id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
+match_id    UUID REFERENCES matches(id) ON DELETE CASCADE
+sender_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+content     TEXT NOT NULL
+is_read     BOOLEAN DEFAULT FALSE
+is_accepted BOOLEAN DEFAULT FALSE   -- for unmatched chats
+sent_at     TIMESTAMPTZ DEFAULT NOW()
+```
+
+### Table: `subscriptions` 🔲 Session 11
+
+```sql
+id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
+user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+status      VARCHAR(20) NOT NULL
+plan        VARCHAR(50) NOT NULL
+started_at  TIMESTAMPTZ NOT NULL
+expires_at  TIMESTAMPTZ NOT NULL
+source      VARCHAR(50)
+```
+
+### Table: `reports` 🔲 Session 8
 
 ```sql
 id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
@@ -359,7 +387,7 @@ reason       TEXT NOT NULL
 created_at   TIMESTAMPTZ DEFAULT NOW()
 ```
 
-### Table: `review_rewards`
+### Table: `review_rewards` 🔲 Future
 
 ```sql
 id           UUID PRIMARY KEY DEFAULT gen_random_uuid()
@@ -404,14 +432,16 @@ dating-app/
 │   ├── api/v1/endpoints/
 │   │   ├── auth.py          ✅ done
 │   │   ├── users.py         ✅ done
-│   │   ├── photos.py        ✅ done (upload, list, delete, set main)
-│   │   ├── admin.py         ✅ done (approve/reject photos)
-│   │   ├── discover.py
-│   │   ├── swipes.py
-│   │   ├── matches.py
-│   │   ├── messages.py
-│   │   ├── subscriptions.py
-│   │   └── reports.py
+│   │   ├── photos.py        ✅ done
+│   │   ├── admin.py         ✅ done
+│   │   ├── discover.py      🔲 Session 7
+│   │   ├── swipes.py        🔲 Session 7
+│   │   ├── search.py        🔲 Session 8
+│   │   ├── blocks.py        🔲 Session 8
+│   │   ├── matches.py       🔲 Session 9
+│   │   ├── messages.py      🔲 Session 10
+│   │   ├── subscriptions.py 🔲 Session 11
+│   │   └── reports.py       🔲 Session 8
 │   ├── core/
 │   │   ├── config.py        ✅ done
 │   │   ├── security.py      ✅ done
@@ -426,37 +456,46 @@ dating-app/
 │   │   ├── __init__.py      ✅ done
 │   │   ├── user.py          ✅ done
 │   │   ├── photo.py         ✅ done
-│   │   ├── swipe.py         ✅ done
-│   │   ├── match.py         ✅ done
-│   │   ├── message.py       ✅ done
-│   │   ├── subscription.py  ✅ done
-│   │   ├── report.py        ✅ done
-│   │   ├── daily_limit.py   ✅ done
-│   │   └── review_reward.py ✅ done
+│   │   ├── swipe.py         🔲 Session 7
+│   │   ├── match.py         🔲 Session 9
+│   │   ├── daily_limit.py   🔲 Session 11
+│   │   ├── block.py         🔲 Session 8
+│   │   ├── message.py       🔲 Session 10
+│   │   ├── subscription.py  🔲 Session 11
+│   │   ├── report.py        🔲 Session 8
+│   │   └── review_reward.py 🔲 Future
 │   ├── schemas/
 │   │   ├── auth.py          ✅ done
 │   │   ├── user.py          ✅ done
-│   │   └── photo.py         ✅ done
+│   │   ├── photo.py         ✅ done
+│   │   ├── swipe.py         🔲 Session 7
+│   │   ├── match.py         🔲 Session 9
+│   │   └── message.py       🔲 Session 10
 │   ├── services/
-│   │   ├── photo_service.py ✅ done (validation, storage)
+│   │   ├── photo_service.py ✅ done
 │   │   └── moderation_service.py (placeholder)
 │   ├── tasks/
-│   └── main.py              ✅ done (with static files serving)
+│   └── main.py              ✅ done
 ├── alembic/                 ✅ done
 ├── tests/
 │   ├── conftest.py          ✅ done
 │   ├── test_auth.py         ✅ done (33 tests)
 │   ├── test_users.py        ✅ done (20 tests)
-│   └── test_photos.py       ✅ done (13 tests)
+│   ├── test_photos.py       ✅ done (13 tests)
+│   ├── test_discover.py     🔲 Session 7
+│   ├── test_swipes.py       🔲 Session 7
+│   ├── test_search.py       🔲 Session 8
+│   ├── test_blocks.py       🔲 Session 8
+│   ├── test_matches.py      🔲 Session 9
+│   └── test_messages.py     🔲 Session 10
 ├── uploads/                 ✅ created
-│   └── users/
 ├── logs/                    ✅ done
 ├── docker-compose.yml       ✅ done
 ├── .env                     ✅ done
 ├── .env.test                ✅ done
 ├── .env.example             ✅ done
 ├── .gitignore               ✅ done
-├── requirements.txt         ✅ done (Pillow added)
+├── requirements.txt         ✅ done
 ├── dev.md                   ✅ this file
 └── README.md                ✅ done
 ```
@@ -467,60 +506,81 @@ dating-app/
 
 ### Auth ✅ fully implemented
 
-- `POST /api/v1/auth/register` — email + password → JWT ✅
-- `POST /api/v1/auth/login` — email + password → JWT ✅
-- `POST /api/v1/auth/google` — Google OAuth ID token → JWT ✅
-- `POST /api/v1/auth/refresh` — refresh token → new JWT pair (rotation) ✅
-- `POST /api/v1/auth/logout` — revoke refresh token ✅
-- `POST /api/v1/auth/complete-profile` — Google users set real age + gender ✅
-- `POST /api/v1/auth/change-password` — change password + revoke all tokens ✅
-- `GET /api/v1/auth/health` — health check (Redis status) ✅
+- `POST /api/v1/auth/register` ✅
+- `POST /api/v1/auth/login` ✅
+- `POST /api/v1/auth/google` ✅
+- `POST /api/v1/auth/refresh` ✅
+- `POST /api/v1/auth/logout` ✅
+- `POST /api/v1/auth/complete-profile` ✅
+- `POST /api/v1/auth/change-password` ✅
+- `GET /api/v1/auth/health` ✅
 
 ### Users ✅ fully implemented
 
-- `GET /api/v1/users/me` — get my profile ✅
-- `PUT /api/v1/users/me` — update my profile ✅
-- `DELETE /api/v1/users/me` — soft delete account ✅
-- `POST /api/v1/users/me/location` — update lat/lng ✅
+- `GET /api/v1/users/me` ✅
+- `PUT /api/v1/users/me` ✅
+- `DELETE /api/v1/users/me` ✅
+- `POST /api/v1/users/me/location` ✅
 
 ### Photos ✅ fully implemented
 
-- `POST /api/v1/users/me/photos` — upload photo (pending review) ✅
-- `GET /api/v1/users/me/photos` — list my photos ✅
-- `DELETE /api/v1/users/me/photos/{id}` — delete photo ✅
-- `PUT /api/v1/users/me/photos/{id}/main` — set main photo ✅
+- `POST /api/v1/users/me/photos` ✅
+- `GET /api/v1/users/me/photos` ✅
+- `DELETE /api/v1/users/me/photos/{id}` ✅
+- `PUT /api/v1/users/me/photos/{id}/main` ✅
 
 ### Admin ✅ fully implemented
 
-- `GET /api/v1/admin/photos/pending` — list pending photos ✅
-- `POST /api/v1/admin/photos/{id}/approve` — approve photo ✅
-- `POST /api/v1/admin/photos/{id}/reject` — reject photo with reason ✅
-- `GET /api/v1/admin/photos/stats` — moderation statistics ✅
-- `GET /api/v1/admin/photos/user/{user_id}` — view user's photos ✅
+- `GET /api/v1/admin/photos/pending` ✅
+- `POST /api/v1/admin/photos/{id}/approve` ✅
+- `POST /api/v1/admin/photos/{id}/reject` ✅
+- `GET /api/v1/admin/photos/stats` ✅
+- `GET /api/v1/admin/photos/user/{user_id}` ✅
 
-### Discover (next session)
+### Discover 🔲 Session 7
 
-- `GET /api/v1/discover` — get candidate profiles
+- `GET /api/v1/discover` — swipe feed (excludes swiped users)
 
-### Swipes
+### Swipes 🔲 Session 7
 
-- `POST /api/v1/swipes` — send like or pass
+- `POST /api/v1/swipes` — like or pass on a user
+- `GET /api/v1/swipes/stats` — get swipe stats
 
-### Matches
+### Search 🔲 Session 8
+
+- `GET /api/v1/search` — advanced search with filters
+
+### Blocks 🔲 Session 8
+
+- `POST /api/v1/users/{id}/block` — block a user
+- `POST /api/v1/users/{id}/unblock` — unblock a user
+- `GET /api/v1/blocks` — list blocked users
+
+### Matches 🔲 Session 9
 
 - `GET /api/v1/matches` — list my matches
+- `GET /api/v1/matches/{id}` — get match details
+- `WS /ws/matches` — realtime match notifications
 
-### Messages
+### Messages 🔲 Session 10
 
 - `GET /api/v1/messages/{match_id}` — get chat history
+- `POST /api/v1/messages/{match_id}` — send message
+- `POST /api/v1/messages/{match_id}/accept` — accept unmatched chat
 - `WS /ws/chat/{match_id}` — realtime WebSocket chat
 
-### Subscriptions
+### Subscriptions 🔲 Session 11
 
 - `POST /api/v1/subscriptions` — initiate purchase
 - `POST /api/v1/subscriptions/verify` — verify payment
+- `GET /api/v1/subscriptions/me` — get my subscription
 
-### Reports
+### Rewards 🔲 Session 11
+
+- `POST /api/v1/rewards/ad-watched` — claim ad reward
+- `POST /api/v1/rewards/review` — submit store review proof
+
+### Reports 🔲 Session 8
 
 - `POST /api/v1/reports` — report a user
 
@@ -555,60 +615,56 @@ Pillow==12.2.0
 ## Session Log
 
 ### Session 1
-
-Decisions made: Stack, monetization model, auth model, ERD design, Iranian market constraints identified.
+Stack decisions, monetization model, auth model, ERD design, Iranian market constraints.
 
 ### Session 2
-
-Full project bootstrapped on Ubuntu/Linux. Python venv, all dependencies installed. Docker Compose with PostGIS + Redis. All SQLAlchemy models written. Alembic configured and initial migration applied. FastAPI app running with /health and /docs.
+Project bootstrapped, Docker Compose, all SQLAlchemy models, Alembic, FastAPI running.
 
 ### Session 3
-
-Updated models: photo.py, message.py. Added models: daily_limit.py, review_reward.py. security.py, schemas/auth.py, endpoints/auth.py (register/login/google/refresh). session.py renamed to get_session, main.py updated.
+Updated models, added daily_limit and review_reward, auth endpoints (register/login/google/refresh).
 
 ### Session 4
-
-Auth system hardened with token versioning, jti, Redis retries, logging, pytest setup, 33 auth tests passing.
+Auth system hardened: token versioning, jti, Redis retries, logging, pytest setup, 33 auth tests.
 
 ### Session 5
-
-Users endpoints implemented: GET/PUT/DELETE /users/me, POST /users/me/location. 20 users tests passing. Total 53 tests.
+Users endpoints: GET/PUT/DELETE /users/me, POST /users/me/location. 20 users tests. Total 53 tests.
 
 ### Session 6 (COMPLETED)
-
-**Completed:**
-- `app/schemas/photo.py` — PhotoResponse schema
-- `app/services/photo_service.py` — Image validation, compression, local storage
-- `app/api/v1/endpoints/photos.py` — Upload, list, delete, set main photo
-- `app/api/v1/endpoints/admin.py` — Admin endpoints for photo moderation
-- `app/main.py` — Added static file serving for uploads
-- `app/core/config.py` — Added ADMIN_SECRET_KEY
-- `app/models/photo.py` — Added created_at field
-- `tests/test_photos.py` — 13 comprehensive photo tests
-- Added Pillow dependency for image processing
-- **Total tests: 66 passing** (33 auth + 20 users + 13 photos)
+Photo upload system: validation, local storage, admin moderation endpoints, 13 photo tests. Total 66 tests.
 
 ---
 
-## Next Session Goals (Session 7)
+## Session 7 Goals (NEXT)
 
-1. **Discover Endpoint**
-   - `GET /api/v1/discover` — get candidate profiles
-   - Filter by opposite gender only
-   - Filter by age range (18-100)
-   - Filter by distance (default 50km, user configurable)
-   - Exclude already swiped users
+### Main Tasks
+
+1. **Swipe Model** - create `app/models/swipe.py`
+2. **Discover Endpoint** - `GET /api/v1/discover`
+   - Only opposite gender
+   - Age range filter (18-100)
+   - Distance filter (default 50km)
+   - Exclude already swiped users (like OR pass)
+   - Exclude blocked users
    - Exclude deactivated users
    - Pagination (limit/offset)
-   - Sort by recency (newest first) + distance
+   - Sort by distance + recency
 
-2. **Swipe System**
-   - `POST /api/v1/swipes` — like or pass on a user
-   - Check daily like limit for free users
+3. **Swipe Endpoint** - `POST /api/v1/swipes`
+   - Like or pass on a user
+   - Prevent double swiping
+   - Check daily like limit (free users: 50/day)
    - Create match record when both users like each other
-   - Send notification (WebSocket) when match happens
+   - Return match status
 
-3. **Write tests** for discover and swipes
+4. **Write tests** for discover and swipes
+
+### Files Needed for Session 7
+
+```
+1. app/models/swipe.py (need to see if exists)
+2. app/models/match.py (need to see if exists)
+3. app/models/daily_limit.py (need to see if exists)
+```
 
 ---
 
@@ -647,7 +703,7 @@ Headers: X-Admin-Key: your-secret-key
 
 GET    /api/v1/admin/photos/pending
 POST   /api/v1/admin/photos/{id}/approve
-POST   /api/v1/admin/photos/{id}/reject?reason=... 
+POST   /api/v1/admin/photos/{id}/reject?reason=...
 GET    /api/v1/admin/photos/stats
 GET    /api/v1/admin/photos/user/{user_id}
 ```
@@ -657,10 +713,57 @@ GET    /api/v1/admin/photos/user/{user_id}
 ## Notes
 
 - All 66 tests are passing ✅
-- Coverage available via `pytest tests/ -v --cov=app --cov-report=html`
 - Photos stored locally in `uploads/` folder
 - Admin secret key must be set in `.env`
-- Photos require admin approval before visible to other users
 - Ready for Session 7: Discover + Swipe system
 
 ---
+
+## Future Work (Backlog)
+
+### Session 7
+- [ ] Discover Page (GET /discover)
+- [ ] Swipe System (POST /swipes)
+- [ ] Basic match detection
+
+### Session 8
+- [ ] Search Page (GET /search with advanced filters)
+- [ ] Block System (block/unblock users)
+- [ ] Report System
+
+### Session 9
+- [ ] Match List (GET /matches)
+- [ ] WebSocket Match Notifications
+
+### Session 10
+- [ ] Chat System (WebSocket + message history)
+- [ ] Unmatched chat limit (2 messages per user)
+- [ ] Chat acceptance flow
+
+### Session 11
+- [ ] Premium/Free user system
+- [ ] Daily like limit (50/day for free users)
+- [ ] Ad reward system (+5 likes, +1 chat per ad)
+- [ ] Subscription management
+
+### Session 12+
+- [ ] Face verification (selfie match)
+- [ ] Review reward system
+- [ ] PostGIS for better location search
+- [ ] Celery for background tasks
+- [ ] Admin dashboard UI
+- [ ] Push notifications
+- [ ] Mobile app development (Flutter)
+```
+
+---
+
+Now I'm ready for Session 7. Please send me:
+
+```
+1. app/models/swipe.py (if exists)
+2. app/models/match.py (if exists)
+3. app/models/daily_limit.py (if exists)
+```
+
+Once you send these, I'll start coding the Discover + Swipe system! 🚀
