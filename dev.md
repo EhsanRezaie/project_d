@@ -1,3 +1,5 @@
+## `dev.md` - Iranian Dating App (Complete)
+
 ```markdown
 # dev.md — Iranian Dating App (Badoo-style)
 
@@ -19,11 +21,10 @@
 8. [Architecture Decisions](#8-architecture-decisions)
 9. [Business Rules](#9-business-rules)
 10. [Session Progress](#10-session-progress)
-11. [Session 13 Plan: Admin Panel](#11-session-13-plan-admin-panel)
-12. [Session 14 Plan: Location Fields + Referral Complete](#12-session-14-plan-location-fields--referral-complete)
-13. [Session 15 Plan: Push Notifications + Production Ready](#13-session-15-plan-push-notifications--production-ready)
-14. [Testing Strategy](#14-testing-strategy)
-15. [Deployment Notes](#15-deployment-notes)
+11. [Session 14 Plan: Location Fields + Referral Complete](#11-session-14-plan-location-fields--referral-complete)
+12. [Session 15 Plan: Push Notifications + Production Ready](#12-session-15-plan-push-notifications--production-ready)
+13. [Testing Strategy](#13-testing-strategy)
+14. [Deployment Notes](#14-deployment-notes)
 
 ---
 
@@ -82,68 +83,73 @@ iranian-dating-app/
 │   │   ├── redis_client.py
 │   │   │
 │   │   ├── models/
-│   │   │   ├── user.py                    # ✅
-│   │   │   ├── photo.py                   # ✅
-│   │   │   ├── swipe.py                   # ✅
-│   │   │   ├── match.py                   # ✅
-│   │   │   ├── block.py                   # ✅
-│   │   │   ├── message.py                 # ✅
-│   │   │   ├── daily_limit.py             # ✅
-│   │   │   ├── review_reward.py           # ✅
-│   │   │   ├── subscription.py            # ✅ Session 11
-│   │   │   ├── referral_reward.py         # ✅ Session 11
-│   │   │   ├── notification.py            # ✅ Session 12
-│   │   │   ├── report.py                  # ✅ Session 12
-│   │   │   └── ticket.py                  # 🔲 Session 13
+│   │   │   ├── user.py
+│   │   │   ├── photo.py
+│   │   │   ├── swipe.py
+│   │   │   ├── match.py
+│   │   │   ├── block.py
+│   │   │   ├── message.py
+│   │   │   ├── daily_limit.py
+│   │   │   ├── review_reward.py
+│   │   │   ├── subscription.py
+│   │   │   ├── referral_reward.py
+│   │   │   ├── notification.py
+│   │   │   ├── report.py
+│   │   │   └── ticket.py
 │   │   │
 │   │   ├── schemas/
-│   │   │   ├── auth.py                    # ✅
-│   │   │   ├── user.py                    # ✅
-│   │   │   ├── photo.py                   # ✅
-│   │   │   ├── discover.py                # ✅
-│   │   │   ├── search.py                  # ✅
-│   │   │   ├── match.py                   # ✅
-│   │   │   ├── message.py                 # ✅
-│   │   │   ├── subscription.py            # ✅ Session 11
-│   │   │   ├── rewards.py                 # ✅ Session 11
-│   │   │   ├── referral.py                # ✅ Session 11
-│   │   │   ├── notification.py            # ✅ Session 12
-│   │   │   ├── report.py                  # ✅ Session 12
-│   │   │   ├── privacy.py                 # ✅ Session 12
-│   │   │   └── ticket.py                  # 🔲 Session 13
+│   │   │   ├── auth.py
+│   │   │   ├── user.py
+│   │   │   ├── photo.py
+│   │   │   ├── discover.py
+│   │   │   ├── search.py
+│   │   │   ├── match.py
+│   │   │   ├── message.py
+│   │   │   ├── subscription.py
+│   │   │   ├── rewards.py
+│   │   │   ├── referral.py
+│   │   │   ├── notification.py
+│   │   │   ├── report.py
+│   │   │   ├── privacy.py
+│   │   │   ├── ticket.py
+│   │   │   ├── admin.py
+│   │   │   └── dashboard.py
 │   │   │
 │   │   ├── api/v1/endpoints/
-│   │   │   ├── auth.py                    # ✅
-│   │   │   ├── users.py                   # ✅
-│   │   │   ├── photos.py                  # ✅
-│   │   │   ├── admin_photos.py            # ✅
-│   │   │   ├── discover.py                # ✅
-│   │   │   ├── swipes.py                  # ✅
-│   │   │   ├── search.py                  # ✅
-│   │   │   ├── matches.py                 # ✅
-│   │   │   ├── blocks.py                  # ✅
-│   │   │   ├── messages.py                # ✅
-│   │   │   ├── subscriptions.py           # ✅ Session 11
-│   │   │   ├── rewards.py                 # ✅ Session 11
-│   │   │   ├── referrals.py               # ✅ Session 11
-│   │   │   ├── notifications.py           # ✅ Session 12
-│   │   │   ├── reports.py                 # ✅ Session 12
-│   │   │   ├── privacy.py                 # ✅ Session 12
-│   │   │   ├── tickets.py                 # 🔲 Session 13
-│   │   │   └── admin_*.py                 # 🔲 Session 13
+│   │   │   ├── auth.py
+│   │   │   ├── users.py
+│   │   │   ├── photos.py
+│   │   │   ├── admin_photos.py
+│   │   │   ├── discover.py
+│   │   │   ├── swipes.py
+│   │   │   ├── search.py
+│   │   │   ├── matches.py
+│   │   │   ├── blocks.py
+│   │   │   ├── messages.py
+│   │   │   ├── subscriptions.py
+│   │   │   ├── rewards.py
+│   │   │   ├── referrals.py
+│   │   │   ├── notifications.py
+│   │   │   ├── reports.py
+│   │   │   ├── privacy.py
+│   │   │   ├── tickets.py
+│   │   │   ├── admin_tickets.py
+│   │   │   ├── admin_reports.py
+│   │   │   ├── admin_users.py
+│   │   │   ├── admin_dashboard.py
+│   │   │   ├── admin_announcements.py
+│   │   │   └── admin_photos.py
 │   │   │
 │   │   ├── api/v1/websocket/
-│   │   │   ├── matches.py                 # ✅
-│   │   │   └── chat.py                    # ✅
+│   │   │   ├── matches.py
+│   │   │   └── chat.py
 │   │   │
 │   │   ├── services/
-│   │   │   ├── reward_service.py          # ✅ Session 11
-│   │   │   ├── notification_service.py    # ✅ Session 12
-│   │   │   ├── chat_service.py            # ✅
-│   │   │   ├── photo_service.py           # ✅
-│   │   │   ├── websocket_manager.py       # ✅
-│   │   │   ├── payment_service.py         # 🔲 Session 15
-│   │   │   └── location_service.py        # 🔲 Session 14
+│   │   │   ├── reward_service.py
+│   │   │   ├── notification_service.py
+│   │   │   ├── chat_service.py
+│   │   │   ├── photo_service.py
+│   │   │   └── websocket_manager.py
 │   │   │
 │   │   ├── core/
 │   │   │   ├── config.py
@@ -157,7 +163,7 @@ iranian-dating-app/
 │   │       ├── geo.py
 │   │       └── pagination.py
 │   │
-│   ├── alembic/versions/                  # Migration files
+│   ├── alembic/versions/
 │   ├── tests/
 │   │   ├── conftest.py
 │   │   ├── test_auth.py
@@ -168,18 +174,23 @@ iranian-dating-app/
 │   │   ├── test_messages.py
 │   │   ├── test_search.py
 │   │   ├── test_blocks.py
-│   │   ├── test_rewards.py                # ✅ Session 11
-│   │   ├── test_referrals.py              # ✅ Session 11
-│   │   ├── test_subscriptions.py          # ✅ Session 11
-│   │   ├── test_daily_limits.py           # ✅ Session 11
-│   │   ├── test_notifications.py          # ✅ Session 12
-│   │   ├── test_reports.py                # ✅ Session 12
-│   │   ├── test_privacy.py                # ✅ Session 12
-│   │   ├── test_tickets.py                # 🔲 Session 13
-│   │   └── test_admin.py                  # 🔲 Session 13
+│   │   ├── test_rewards.py
+│   │   ├── test_referrals.py
+│   │   ├── test_subscriptions.py
+│   │   ├── test_daily_limits.py
+│   │   ├── test_notifications.py
+│   │   ├── test_reports.py
+│   │   ├── test_privacy.py
+│   │   ├── test_tickets.py
+│   │   ├── test_admin_tickets.py
+│   │   ├── test_admin_reports.py
+│   │   ├── test_admin_users.py
+│   │   ├── test_admin_dashboard.py
+│   │   ├── test_admin_photos.py
+│   │   └── test_admin_messages.py
 │   │
-│   ├── uploads/                           # User photos (gitignored)
-│   ├── .env                               # Local env vars (gitignored)
+│   ├── uploads/
+│   ├── .env
 │   ├── .env.example
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -191,7 +202,7 @@ iranian-dating-app/
 
 ## 5. Environment & Configuration
 
-### Current `.env` Variables
+### `.env` Variables
 
 ```env
 # Database
@@ -208,7 +219,7 @@ ADMIN_SECRET_KEY=your-admin-key
 APP_NAME=DatingApp
 DEBUG=True
 
-# Daily Limits (ONLY restrictions in the app)
+# Daily Limits
 FREE_USER_DAILY_LIKES=20
 FREE_USER_DAILY_CHATS=10
 
@@ -244,85 +255,50 @@ MAX_PHOTOS_PER_USER=6
 
 ## 6. Database Schema
 
-### `users` Table (Current State)
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary Key |
-| email | VARCHAR(255) | Unique |
-| password_hash | VARCHAR(255) | Nullable for Google users |
-| google_id | VARCHAR(255) | Unique |
-| phone | VARCHAR(20) | |
-| phone_verified | BOOLEAN | |
-| name | VARCHAR(100) | |
-| age | SMALLINT | |
-| gender | VARCHAR(10) | male/female |
-| bio | TEXT | |
-| height | SMALLINT | |
-| weight | SMALLINT | |
-| lat/lng | DOUBLE | Location coordinates |
-| premium_until | TIMESTAMPTZ | NULL = free user |
-| is_active | BOOLEAN | |
-| token_version | INTEGER | |
-| is_profile_complete | BOOLEAN | |
-| referral_code | VARCHAR(20) | Unique |
-| referred_by | UUID | |
-| hide_last_seen | BOOLEAN | Privacy setting |
-| country/province/city | VARCHAR(100) | Location text |
-| location_manual | BOOLEAN | |
-| created_at | TIMESTAMPTZ | |
-| last_seen_at | TIMESTAMPTZ | |
-
-### `subscriptions` Table (Session 11)
-
-Tracks premium subscriptions and rewards.
-
-### `referral_rewards` Table (Session 11)
-
-Tracks referral rewards given.
-
-### `daily_limits` Table (Session 7)
-
-Tracks daily likes and chats usage.
-
-### `notifications` Table (Session 12)
+### `users` Table
 
 | Column | Type |
 |--------|------|
 | id | UUID |
-| user_id | UUID FK |
-| type | VARCHAR(50) |
-| title | VARCHAR(200) |
-| body | TEXT |
-| data | JSONB |
-| is_read | BOOLEAN |
+| email | VARCHAR(255) UNIQUE |
+| password_hash | VARCHAR(255) |
+| google_id | VARCHAR(255) UNIQUE |
+| phone | VARCHAR(20) |
+| phone_verified | BOOLEAN |
+| name | VARCHAR(100) |
+| age | SMALLINT |
+| gender | VARCHAR(10) |
+| bio | TEXT |
+| height | SMALLINT |
+| weight | SMALLINT |
+| lat/lng | DOUBLE |
+| premium_until | TIMESTAMPTZ |
+| is_active | BOOLEAN |
+| token_version | INTEGER |
+| is_profile_complete | BOOLEAN |
+| referral_code | VARCHAR(20) UNIQUE |
+| referred_by | UUID |
+| hide_last_seen | BOOLEAN |
+| country/province/city | VARCHAR(100) |
+| location_manual | BOOLEAN |
 | created_at | TIMESTAMPTZ |
+| last_seen_at | TIMESTAMPTZ |
 
-### `reports` Table (Session 12)
+### Other Tables
 
-| Column | Type |
-|--------|------|
-| id | UUID |
-| reporter_id | UUID FK |
-| reported_id | UUID FK |
-| reason | TEXT |
-| status | VARCHAR(20) |
-| admin_note | TEXT |
-| created_at | TIMESTAMPTZ |
-| resolved_at | TIMESTAMPTZ |
-
-### `tickets` Table (Session 13)
-
-| Column | Type |
-|--------|------|
-| id | UUID |
-| user_id | UUID FK |
-| subject | VARCHAR(200) |
-| message | TEXT |
-| status | VARCHAR(20) |
-| admin_response | TEXT |
-| created_at | TIMESTAMPTZ |
-| updated_at | TIMESTAMPTZ |
+| Table | Purpose |
+|-------|---------|
+| photos | User photos with moderation |
+| swipes | Like/pass records |
+| matches | Mutual likes |
+| blocks | Blocked users |
+| messages | Chat messages |
+| daily_limits | Daily likes/chats usage |
+| subscriptions | Premium subscriptions |
+| referral_rewards | Referral rewards |
+| notifications | In-app notifications |
+| reports | User reports |
+| tickets | Support tickets |
 
 ---
 
@@ -330,40 +306,25 @@ Tracks daily likes and chats usage.
 
 ### Completed Endpoints
 
-| Category | Endpoints | Session |
-|----------|-----------|---------|
-| Auth | POST /register, /login, /google, /refresh, /logout, /change-password | 3-4 |
-| Users | GET/PUT/DELETE /me, GET /{user_id}, POST /me/location | 5 |
-| Photos | POST/GET/DELETE /users/me/photos, PUT /{photo_id}/main | 6 |
-| Admin Photos | GET /admin/photos/pending, POST /approve|reject, GET /stats | 6 |
-| Discover | GET /discover | 7 |
-| Swipes | POST /swipes, GET /stats | 7 |
-| Search | GET /search (age, gender, height, weight, province, city) | 8 |
-| Matches | GET /matches, GET /{match_id}, WS /ws/matches | 9 |
-| Blocks | POST /{user_id}/block|unblock, GET /blocks | 8 |
-| Messages | GET/POST /{match_id}, POST /accept, /delivered, /read, DELETE /{id}, POST /forward, GET /{id}/status, WS /ws/chat | 10 |
-| Rewards | POST /rewards/ad-watched, GET /rewards/my-limits | 11 |
-| Referrals | GET /referrals/my-code, POST /referrals/claim, GET /referrals/stats | 11 |
-| Subscriptions | GET /subscriptions/plans, POST /purchase, GET /verify, GET /my, POST /cancel | 11 |
-| Notifications | GET /notifications, POST /notifications/read, DELETE /notifications/{id} | 12 |
-| Reports | POST /reports/{user_id}, GET /reports/my | 12 |
-| Privacy | GET /privacy/settings, PATCH /privacy/settings | 12 |
-
-### Pending Endpoints (Session 13)
-
-| Category | Endpoint | Description |
-|----------|----------|-------------|
-| Tickets | POST /tickets | Submit support ticket |
-| Tickets | GET /tickets | List user tickets |
-| Tickets | GET /tickets/{id} | Get ticket detail |
-| Admin | GET /admin/tickets | List all tickets |
-| Admin | PATCH /admin/tickets/{id} | Respond to ticket |
-| Admin | GET /admin/reports | List all reports |
-| Admin | PATCH /admin/reports/{id} | Review report |
-| Admin | GET /admin/users | List users |
-| Admin | PATCH /admin/users/{id} | Activate/deactivate user |
-| Admin | DELETE /admin/users/{id} | Delete user |
-| Admin | POST /admin/users/{id}/grant-premium | Grant premium days |
+| Category | Endpoints |
+|----------|-----------|
+| Auth | POST /register, /login, /google, /refresh, /logout, /change-password |
+| Users | GET/PUT/DELETE /me, GET /{user_id}, POST /me/location |
+| Photos | POST/GET/DELETE /users/me/photos, PUT /{photo_id}/main |
+| Discover | GET /discover |
+| Swipes | POST /swipes, GET /stats |
+| Search | GET /search (age, gender, height, weight, province, city, etc.) |
+| Matches | GET /matches, GET /{match_id}, WS /ws/matches |
+| Blocks | POST /{user_id}/block|unblock, GET /blocks |
+| Messages | GET/POST /{match_id}, POST /accept, /delivered, /read, DELETE /{id}, POST /forward, GET /{id}/status, WS /ws/chat |
+| Rewards | POST /rewards/ad-watched, GET /rewards/my-limits |
+| Referrals | GET /referrals/my-code, POST /referrals/claim, GET /referrals/stats |
+| Subscriptions | GET /subscriptions/plans, POST /purchase, GET /verify, GET /my, POST /cancel |
+| Notifications | GET /notifications, POST /notifications/read, DELETE /notifications/{id} |
+| Reports | POST /reports/{user_id}, GET /reports/my |
+| Privacy | GET /privacy/settings, PATCH /privacy/settings |
+| Tickets | POST /tickets, GET /tickets, GET /tickets/{id} |
+| Admin | GET /admin/tickets, PATCH /admin/tickets/{id}, GET /admin/reports, PATCH /admin/reports/{id}, GET /admin/users, PATCH /admin/users/{id}, DELETE /admin/users/{id}, POST /admin/users/{id}/premium, POST /admin/users/{id}/message, GET /admin/users/{id}/activity, POST /admin/announcements, POST /admin/announcements/test, GET /admin/dashboard, GET /admin/dashboard/stats/*, GET /admin/photos/pending, POST /admin/photos/{id}/approve, POST /admin/photos/{id}/reject, GET /admin/photos/stats, GET /admin/photos/{id}, POST /admin/photos/{id}/verify-face, GET /admin/photos/users/{user_id}/photos |
 
 ---
 
@@ -379,7 +340,6 @@ API call → Bearer {access_token}
 access_token expires → POST /auth/refresh (token rotation)
          ↓
 Logout → delete refresh_token from Redis
-Logout-all → increment user.token_version
 ```
 
 ### Premium Logic
@@ -392,34 +352,31 @@ def is_premium(self) -> bool:
     return self.premium_until > datetime.now(timezone.utc)
 ```
 
-### Daily Limits (ONLY restrictions in the app)
+### Daily Limits (ONLY restrictions)
 
-- **Free users:** `FREE_USER_DAILY_LIKES` (20) and `FREE_USER_DAILY_CHATS` (10)
-- **Premium users:** unlimited (-1)
-- **Ad rewards:** +5 likes, +3 chats per ad (max 2 ads/day)
-- Limits stored in `daily_limits` table
+- Free users: `FREE_USER_DAILY_LIKES` (20) and `FREE_USER_DAILY_CHATS` (10)
+- Premium users: unlimited (-1)
+- Ad rewards: +5 likes, +3 chats per ad (max 2 ads/day)
 
-### All Other Features Are FREE
+### Admin Authentication
 
-- ✅ Searching users
-- ✅ Viewing profiles
-- ✅ Receiving likes (notifications)
-- ✅ Matching
-- ✅ Chatting (after match or within limits)
-- ✅ Sending photos/voice in chats
-- ✅ Report users
-- ✅ Privacy settings
+- Header: `X-Admin-Key: {ADMIN_SECRET_KEY}`
+- Returns 403 if missing or invalid
+- No JWT required for admin endpoints
 
-### ⚠️ Important Notes
+### Notifications
 
-- **Like notifications are sent to ALL users** (not just premium)
-- **Premium ONLY removes daily limits** (unlimited likes and new chats)
-- **No other paywalls** - everything else is completely free
+| Type | Trigger | Recipient |
+|------|---------|-----------|
+| Like | User likes another user | The user who was liked (all users) |
+| Match | Two users like each other | Both users |
+| Message | User sends message | Recipient (if offline) |
+| System | Admin message or announcement | Target user(s) |
 
-### Payment Status
+### Privacy
 
-- ⚠️ **ZarinPal is MOCKED** - Real integration needed before production (Session 15)
-- ⚠️ **No IP restriction for Iran** - Not implemented (Session 15)
+- `hide_last_seen = True` → last_seen_at hidden, online status hidden
+- `hide_last_seen = False` → last_seen_at visible, online status visible
 
 ---
 
@@ -430,7 +387,7 @@ def is_premium(self) -> bool:
 | Action | Daily Limit | Ad Bonus (max 2x/day) |
 |--------|-------------|----------------------|
 | Likes | 20 | +5 each |
-| New Chats (first message to someone new) | 10 | +3 each |
+| New Chats | 10 | +3 each |
 
 ### Premium User
 
@@ -455,25 +412,19 @@ def is_premium(self) -> bool:
 | Quarterly | 90 days | 15% |
 | Yearly | 365 days | 30% |
 
-### Notifications
+### Admin Capabilities
 
-| Type | Trigger | Recipient |
-|------|---------|-----------|
-| Like | User likes another user | The user who was liked |
-| Match | Two users like each other | Both users |
-| Message | User sends message | Recipient (if offline) |
-
-### Reports
-
-- User can report another user with reason (min 5 chars, max 500)
-- Cannot report same user twice within 24 hours
-- Cannot report yourself
-- Reports go to admin for review
-
-### Privacy
-
-- `hide_last_seen = True` → last_seen_at hidden, online status hidden
-- `hide_last_seen = False` → last_seen_at visible, online status visible
+- View all users with filters
+- Activate/deactivate users
+- Delete users (hard delete)
+- Grant premium days
+- View user activity (swipes, matches, messages)
+- Send direct messages to users
+- Send announcements to all or premium-only users
+- View dashboard analytics
+- Moderate photos (approve/reject/verify face)
+- Manage support tickets
+- Review user reports
 
 ---
 
@@ -490,87 +441,23 @@ def is_premium(self) -> bool:
 | 8 | Search + Block system | ✅ |
 | 9 | Match list + WebSocket | ✅ |
 | 10 | Chat system | ✅ |
-| **11** | **Premium + Daily Limits + Ad Rewards + Referrals** | ✅ |
-| **12** | **Notifications + Privacy + Reports** | ✅ |
-| **13** | **Admin Panel (Tickets + Reports + User management)** | 🔲 |
-| **14** | **Location fields + Referral complete** | 🔲 |
-| **15** | **Push notifications + Real Payment + Production** | 🔲 |
+| 11 | Premium + Daily Limits + Ad Rewards + Referrals | ✅ |
+| 12 | Notifications + Privacy + Reports | ✅ |
+| 13 | Admin Panel (Tickets + Reports + User management + Dashboard + Announcements) | ✅ |
+| 14 | Location fields + Referral complete | 🔲 |
+| 15 | Push notifications + Real Payment + Production | 🔲 |
 | 16+ | Flutter mobile app | 🔲 |
 
 ---
 
-## 11. Session 13 Plan: Admin Panel
-
-### Goal
-Build admin tools for content moderation, user management, and support tickets.
-
-### Database Changes
-
-```sql
-CREATE TABLE tickets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    subject VARCHAR(200) NOT NULL,
-    message TEXT NOT NULL,
-    status VARCHAR(20) DEFAULT 'open',
-    admin_response TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ
-);
-```
-
-### Files to Create
-
-| File | Purpose |
-|------|---------|
-| `app/models/ticket.py` | Ticket ORM model |
-| `app/schemas/ticket.py` | Ticket schemas |
-| `app/api/v1/endpoints/tickets.py` | User: POST /, GET /, GET /{id} |
-| `app/api/v1/endpoints/admin_tickets.py` | Admin: GET /admin/tickets, PATCH /admin/tickets/{id} |
-| `app/api/v1/endpoints/admin_reports.py` | Admin: GET /admin/reports, PATCH /admin/reports/{id} |
-| `app/api/v1/endpoints/admin_users.py` | Admin: GET /admin/users, PATCH /admin/users/{id}, DELETE /admin/users/{id}, POST /admin/users/{id}/grant-premium |
-| `tests/test_tickets.py` | Ticket tests |
-| `tests/test_admin.py` | Admin tests |
-
-### Admin Actions
-
-| Action | Endpoint | Method |
-|--------|----------|--------|
-| List tickets | /admin/tickets | GET |
-| Respond to ticket | /admin/tickets/{id} | PATCH |
-| List reports | /admin/reports | GET |
-| Review report | /admin/reports/{id} | PATCH |
-| List users | /admin/users | GET |
-| Deactivate user | /admin/users/{id} | PATCH |
-| Delete user | /admin/users/{id} | DELETE |
-| Grant premium | /admin/users/{id}/grant-premium | POST |
-
-### Admin Authentication
-
-- Use `ADMIN_SECRET_KEY` from `.env`
-- Header: `X-Admin-Key: your-admin-secret-key`
-
-### Tests Checklist
-
-- [ ] Non-admin cannot access admin endpoints (403)
-- [ ] Admin can list tickets
-- [ ] Admin can respond to tickets
-- [ ] Admin can list reports
-- [ ] Admin can review reports
-- [ ] Admin can deactivate user (sets is_active=False, increments token_version)
-- [ ] Admin can delete user (hard delete after cooldown)
-- [ ] Admin can grant premium days
-
----
-
-## 12. Session 14 Plan: Location Fields + Referral Complete
+## 11. Session 14 Plan: Location Fields + Referral Complete
 
 ### Goal
 Complete location system with province/city and finalize referral claim flow.
 
 ### Database Changes
 
-Already in `users` table from Session 11:
+Already in `users` table:
 - `country`, `province`, `city`, `location_manual`
 
 ### Files to Update
@@ -596,6 +483,15 @@ Backend:
   3. Set location_manual = True
 ```
 
+### Referral Claim 24-Hour Window
+
+Add check to `POST /referrals/claim`:
+```python
+hours_since_registration = (datetime.now(timezone.utc) - current_user.created_at).total_seconds() / 3600
+if hours_since_registration > 24:
+    raise HTTPException(400, "Referral must be claimed within 24 hours of registration")
+```
+
 ### Tests Checklist
 
 - [ ] Referral claim within 24 hours works
@@ -606,7 +502,7 @@ Backend:
 
 ---
 
-## 13. Session 15 Plan: Push Notifications + Production Ready
+## 12. Session 15 Plan: Push Notifications + Production Ready
 
 ### Goal
 Real push notifications via Firebase Cloud Messaging, real ZarinPal integration.
@@ -641,23 +537,22 @@ CREATE INDEX idx_notifications_user ON notifications(user_id, is_read, created_a
 
 - [ ] Real ZarinPal integration (replace mock)
 - [ ] FCM push notifications
-- [ ] Iran-only IP check for payment (optional)
 - [ ] All indexes added
 - [ ] OpenAPI documentation complete
 - [ ] Environment variables documented
 
 ---
 
-## 14. Testing Strategy
+## 13. Testing Strategy
 
 ### Test Files by Session
 
-| Session | Test Files | Tests |
-|---------|------------|-------|
-| 1-10 | test_auth, test_users, test_photos, test_swipes, test_matches, test_messages, test_search, test_blocks | ~50 |
-| 11 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 32 |
-| 12 | test_notifications, test_reports, test_privacy | 31 |
-| 13 | test_tickets, test_admin | TBD |
+| Session | Test Files |
+|---------|------------|
+| 1-10 | test_auth, test_users, test_photos, test_swipes, test_matches, test_messages, test_search, test_blocks |
+| 11 | test_rewards, test_referrals, test_subscriptions, test_daily_limits |
+| 12 | test_notifications, test_reports, test_privacy |
+| 13 | test_tickets, test_admin_tickets, test_admin_reports, test_admin_users, test_admin_dashboard, test_admin_photos, test_admin_messages |
 
 ### Run All Tests
 
@@ -667,7 +562,7 @@ pytest tests/ -v
 
 ---
 
-## 15. Deployment Notes
+## 14. Deployment Notes
 
 ### Docker Compose
 
@@ -702,7 +597,7 @@ alembic downgrade -1
 
 ---
 
-## Session 11 & 12 Completion Summary
+## Session 11-13 Completion Summary
 
 ### ✅ Session 11 Complete
 
@@ -715,7 +610,6 @@ alembic downgrade -1
 | Welcome bonus (7 days premium) | ✅ |
 | Subscription plans (mock payment) | ✅ |
 | Search with province/city filters | ✅ |
-| 32 tests passing | ✅ |
 
 ### ✅ Session 12 Complete
 
@@ -724,7 +618,20 @@ alembic downgrade -1
 | Notifications (like, match, message) | ✅ |
 | Reports system (report users) | ✅ |
 | Privacy settings (hide_last_seen) | ✅ |
-| 31 tests passing | ✅ |
+
+### ✅ Session 13 Complete
+
+| Feature | Status |
+|---------|--------|
+| Admin authentication (X-Admin-Key) | ✅ |
+| Ticket system (user support) | ✅ |
+| Report management | ✅ |
+| User management (list, activate, deactivate, delete, grant premium) | ✅ |
+| User activity tracking | ✅ |
+| Admin messaging to users | ✅ |
+| Announcements to all/premium users | ✅ |
+| Dashboard analytics (overview, user growth, activity charts) | ✅ |
+| Photo moderation with face verification | ✅ |
 
 ### ⚠️ Pending for Production
 
@@ -732,11 +639,10 @@ alembic downgrade -1
 |------|---------|
 | Real ZarinPal integration | 15 |
 | FCM push notifications | 15 |
-| Iran IP restriction (optional) | 15 |
 
 ---
 
-**Next: Session 13 - Admin Panel (Tickets + Reports management + User management)**
+**Next: Session 14 - Location fields + Referral complete**
 
-Ready to start Session 13 when you are.
+Ready to start Session 14 when you are.
 ```
