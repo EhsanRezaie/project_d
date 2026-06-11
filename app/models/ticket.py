@@ -13,9 +13,10 @@ class Ticket(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     subject = Column(String(200), nullable=False)
     message = Column(Text, nullable=False)
-    status = Column(String(20), default="open")
+    status = Column(String(20), default="open")  # open, in_progress, closed
     admin_response = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
+    # Relationships
     user = relationship("User", back_populates="tickets")

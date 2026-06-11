@@ -5,6 +5,7 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import NullPool
+from sqlalchemy import text
 import redis.asyncio as aioredis
 from unittest.mock import AsyncMock, patch
 
@@ -39,10 +40,34 @@ def make_redis():
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_database():
+    from app.core.security import hash_password
+    import uuid
+    
     engine = make_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+        
+        # Create admin user for tests
+        admin_id = uuid.uuid4()
+        await conn.execute(
+            text("""
+                INSERT INTO users (id, email, password_hash, name, age, gender, is_active, token_version, is_profile_complete)
+                VALUES (
+                    :id,
+                    'admin@test.com',
+                    :password,
+                    'Test Admin',
+                    30,
+                    'male',
+                    true,
+                    1,
+                    true
+                )
+            """),
+            {"id": admin_id, "password": hash_password("admin123")}
+        )
+        
     await engine.dispose()
     yield
     engine = make_engine()
@@ -58,11 +83,15 @@ async def setup_database():
 @pytest_asyncio.fixture(autouse=True)
 async def reset_state():
     yield
-    # Clean DB
+    # Clean DB but preserve admin user
     engine = make_engine()
     async with engine.begin() as conn:
+        # Delete all tables except preserve admin user
         for table in reversed(Base.metadata.sorted_tables):
-            await conn.execute(table.delete())
+            if table.name != 'users':  # Skip users table
+                await conn.execute(table.delete())
+        # Delete all non-admin users
+        await conn.execute(text("DELETE FROM users WHERE email != 'admin@test.com'"))
     await engine.dispose()
     # Clean Redis
     r = make_redis()

@@ -181,8 +181,10 @@ async def search_users(
             distance_km=round(item["distance"], 1) if item["distance"] and item["distance"] != 999999 else None,
             main_photo_url=item["main_photo_url"],
             is_premium=user.is_premium,
-            is_verified=user.phone_verified,
+            is_verified=user.phone_verified if user.phone_verified is not None else False,
             last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else None,
+            hide_last_seen=user.hide_last_seen if user.hide_last_seen is not None else False,
+            hide_online_status=user.hide_online_status if user.hide_online_status is not None else False
         ))
     
     return SearchResponse(

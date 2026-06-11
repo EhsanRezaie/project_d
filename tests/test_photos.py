@@ -220,4 +220,4 @@ class TestAdminEndpoints:
     async def test_admin_requires_key(self, client: AsyncClient):
         """Admin endpoints should require valid key"""
         res = await client.get(ADMIN_PENDING_URL)
-        assert res.status_code == 401
+        assert res.status_code == 403

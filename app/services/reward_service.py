@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta ,timezone
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -169,7 +169,7 @@ class RewardService:
     
     async def grant_premium_days(self, user: User, days: int, source: str, payment_id: str = None):
         """Grant premium days to user and create subscription record."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Calculate new expiry
         if user.premium_until is None or user.premium_until < now:

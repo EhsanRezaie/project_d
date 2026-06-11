@@ -1,8 +1,9 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from jose import JWTError, jwt
+import uuid
 
 from app.db.session import get_session
 from app.models.user import User
@@ -17,10 +18,7 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     session: AsyncSession = Depends(get_session),
 ) -> User:
-    """
-    Extract and validate Bearer token, return the User object.
-    Shared dependency for all protected endpoints.
-    """
+    """Extract and validate Bearer token, return the User object."""
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -30,7 +28,6 @@ async def get_current_user(
     
     token = credentials.credentials
     
-    # Decode and validate token
     payload = decode_token(token, ACCESS_TOKEN_TYPE)
     if not payload:
         raise HTTPException(
@@ -48,7 +45,6 @@ async def get_current_user(
             detail="Invalid token payload",
         )
     
-    # Get user from database
     result = await session.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     
@@ -64,7 +60,6 @@ async def get_current_user(
             detail="Account is deactivated",
         )
     
-    # Check token version (for password change / account lock)
     if token_version != user.token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -98,7 +93,36 @@ async def get_current_premium_user(
         )
     return current_user
 
+
 async def get_current_user_ws(token: str) -> str | None:
     """Get current user ID from WebSocket token"""
     from app.core.security import decode_access_token
     return decode_access_token(token)
+
+
+async def get_admin_user(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    """Verify admin access using X-Admin-Key header only (no JWT required)"""
+    admin_key = request.headers.get("X-Admin-Key")
+    
+    if not admin_key or admin_key != settings.ADMIN_SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    # Get existing admin user from database
+    result = await session.execute(
+        select(User).where(User.email == "admin@test.com")
+    )
+    admin_user = result.scalar_one_or_none()
+    
+    if not admin_user:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Admin user not found in database. Please run setup."
+        )
+    
+    return admin_user
