@@ -1,5 +1,6 @@
 import pytest
 from httpx import AsyncClient
+from unittest.mock import AsyncMock, patch
 
 REGISTER_URL = "/api/v1/auth/register"
 SEARCH_URL = "/api/v1/search"
@@ -86,6 +87,17 @@ class TestSearch:
         )
         assert res.status_code == 200
     
+    async def test_search_country_filter(self, client: AsyncClient):
+        """Should filter by country"""
+        headers, _ = await register_and_get_headers(client, VALID_REGISTER_PAYLOAD_MALE)
+        
+        res = await client.get(
+            SEARCH_URL,
+            params={"country": "Iran"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+    
     async def test_search_province_filter(self, client: AsyncClient):
         """Should filter by province"""
         headers, _ = await register_and_get_headers(client, VALID_REGISTER_PAYLOAD_MALE)
@@ -104,6 +116,35 @@ class TestSearch:
         res = await client.get(
             SEARCH_URL,
             params={"city": "Shiraz"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+    
+    async def test_search_combined_location_filters(self, client: AsyncClient):
+        """Should filter by country, province, and city together"""
+        headers, _ = await register_and_get_headers(client, VALID_REGISTER_PAYLOAD_MALE)
+        
+        res = await client.get(
+            SEARCH_URL,
+            params={"country": "Iran", "province": "Tehran", "city": "Tehran"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+    
+    async def test_search_distance_filter(self, client: AsyncClient):
+        """Should filter by distance"""
+        headers, _ = await register_and_get_headers(client, VALID_REGISTER_PAYLOAD_MALE)
+        
+        # First set current user's location
+        await client.post(
+            "/api/v1/users/me/location",
+            params={"lat": 35.6892, "lng": 51.3890},
+            headers=headers
+        )
+        
+        res = await client.get(
+            SEARCH_URL,
+            params={"distance_km": 50},
             headers=headers,
         )
         assert res.status_code == 200
@@ -151,3 +192,30 @@ class TestBlocks:
         assert res.status_code == 200
         data = res.json()
         assert len(data) >= 1
+    
+    async def test_blocked_user_not_in_search(self, client: AsyncClient):
+        """Blocked user should not appear in search results"""
+        # Create blocker
+        blocker_headers, blocker_id = await register_and_get_headers(client, VALID_REGISTER_PAYLOAD_MALE)
+        
+        # Create user to block
+        user_to_block_payload = {
+            "email": "to_block@example.com",
+            "password": "strongpass123",
+            "name": "To Block",
+            "age": 25,
+            "gender": "female"
+        }
+        block_user_res = await client.post("/api/v1/auth/register", json=user_to_block_payload)
+        block_user_id = block_user_res.json()["user"]["id"]
+        
+        # Block the user
+        await client.post(f"{BLOCKS_URL}/{block_user_id}/block", headers=blocker_headers)
+        
+        # Search should not return blocked user
+        search_res = await client.get(SEARCH_URL, headers=blocker_headers)
+        assert search_res.status_code == 200
+        users = search_res.json().get("users", [])
+        
+        blocked_found = any(u.get("id") == block_user_id for u in users)
+        assert blocked_found is False

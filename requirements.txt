@@ -71,3 +71,4 @@ wcwidth==0.8.1
 websockets==16.0
 wrapt==2.2.1
 pytest-cov==6.0.0
+countrystatecity-countries=1.0.2
