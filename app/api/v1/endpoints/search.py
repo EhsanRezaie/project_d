@@ -45,6 +45,8 @@ async def search_users(
     weight_max: int = Query(None, ge=30, le=300),
     has_photos: bool = Query(None),
     is_verified: bool = Query(None),
+    province: str = Query(None, max_length=100),
+    city: str = Query(None, max_length=100),
     sort_by: str = Query("recent", pattern="^(recent|distance|age|name)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(20, ge=1, le=100),
@@ -55,6 +57,19 @@ async def search_users(
     """
     Search users with advanced filters.
     Users who blocked you are excluded.
+    
+    Filters available:
+    - age_min, age_max: Age range
+    - distance_km: Maximum distance in kilometers
+    - gender: male/female
+    - height_min, height_max: Height in cm
+    - weight_min, weight_max: Weight in kg
+    - has_photos: Only users with photos
+    - is_verified: Only phone-verified users
+    - province: Filter by province (e.g., "Tehran")
+    - city: Filter by city (e.g., "Shiraz")
+    - sort_by: recent, distance, age, name
+    - sort_order: asc, desc
     """
     
     # Base query - exclude self and blocked users
@@ -88,6 +103,14 @@ async def search_users(
     # Phone verified filter
     if is_verified is not None:
         query = query.where(User.phone_verified == is_verified)
+    
+    # Province filter
+    if province:
+        query = query.where(User.province == province)
+    
+    # City filter
+    if city:
+        query = query.where(User.city == city)
     
     # Has photos filter
     if has_photos is not None:

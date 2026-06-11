@@ -17,6 +17,7 @@ class UserResponse(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     is_premium: bool
+    premium_until: Optional[datetime] = None
     is_active: bool
     is_profile_complete: bool
     created_at: datetime

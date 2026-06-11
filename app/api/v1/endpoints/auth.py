@@ -3,9 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
+import random
+import string
+from datetime import datetime, timedelta, timezone
 
 from app.db.session import get_session
 from app.models.user import User
+from app.models.subscription import Subscription
+from app.models.referral_reward import ReferralReward
 import app.core.redis as redis
 from app.core.config import settings
 from app.core.limiter import limiter
@@ -35,6 +40,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def generate_referral_code() -> str:
+    """Generate unique 8-character referral code."""
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
 
 async def _build_token_response(user: User) -> TokenResponse:
     """Create access + refresh tokens, store refresh in Redis, return response."""
@@ -109,6 +119,20 @@ async def register(
             detail="An account with this email already exists.",
         )
 
+    # Generate referral code
+    referral_code = generate_referral_code()
+    
+    # Check if user was referred
+    referred_by_user = None
+    if body.referral_code:
+        result = await session.execute(
+            select(User).where(User.referral_code == body.referral_code)
+        )
+        referred_by_user = result.scalar_one_or_none()
+    
+    # Calculate premium expiry (welcome bonus)
+    premium_until = datetime.now(timezone.utc) + timedelta(days=settings.WELCOME_BONUS_DAYS)
+    
     user = User(
         email=body.email,
         password_hash=hash_password(body.password),
@@ -117,8 +141,51 @@ async def register(
         gender=body.gender,
         is_profile_complete=True,
         token_version=1,
+        referral_code=referral_code,
+        referred_by=referred_by_user.id if referred_by_user else None,
+        premium_until=premium_until,
     )
     session.add(user)
+    await session.flush()
+    
+    # Create subscription record for welcome bonus
+    subscription = Subscription(
+        user_id=user.id,
+        plan="welcome_bonus",
+        status="active",
+        started_at=datetime.now(timezone.utc),
+        expires_at=premium_until,
+        source="welcome_bonus",
+    )
+    session.add(subscription)
+    
+    # If referred, create referral reward record
+    if referred_by_user:
+        reward = ReferralReward(
+            inviter_id=referred_by_user.id,
+            invited_id=user.id,
+            inviter_days=settings.REFERRAL_INVITER_DAYS,
+            invited_days=settings.REFERRAL_INVITED_DAYS,
+        )
+        session.add(reward)
+        
+        # Grant premium days to inviter
+        if referred_by_user.premium_until is None or referred_by_user.premium_until < datetime.now(timezone.utc):
+            referred_by_user.premium_until = datetime.now(timezone.utc) + timedelta(days=settings.REFERRAL_INVITER_DAYS)
+        else:
+            referred_by_user.premium_until = referred_by_user.premium_until + timedelta(days=settings.REFERRAL_INVITER_DAYS)
+        
+        # Create subscription for inviter's referral reward
+        inviter_sub = Subscription(
+            user_id=referred_by_user.id,
+            plan="referral_reward",
+            status="active",
+            started_at=datetime.now(timezone.utc),
+            expires_at=referred_by_user.premium_until,
+            source="referral",
+        )
+        session.add(inviter_sub)
+    
     await session.commit()
     await session.refresh(user)
 
@@ -145,10 +212,9 @@ async def login(
         )
 
     if not user.is_active:
-        # CHANGE THIS: return 401 instead of 403 for security
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,  # CHANGED FROM 403
-            detail="Incorrect email or password.",  # CHANGED - don't reveal account is deactivated
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password.",
         )
 
     return await _build_token_response(user)
@@ -190,7 +256,8 @@ async def google_auth(
             # Existing email user — just link Google
             user.google_id = google_id
         else:
-            # Brand new Google user — mark profile incomplete
+            # Brand new Google user — mark profile incomplete, give welcome bonus
+            premium_until = datetime.now(timezone.utc) + timedelta(days=settings.WELCOME_BONUS_DAYS)
             user = User(
                 email=email,
                 google_id=google_id,
@@ -199,8 +266,22 @@ async def google_auth(
                 gender="male",
                 is_profile_complete=False,
                 token_version=1,
+                referral_code=generate_referral_code(),
+                premium_until=premium_until,
             )
             session.add(user)
+            await session.flush()
+            
+            # Create subscription record for welcome bonus
+            subscription = Subscription(
+                user_id=user.id,
+                plan="welcome_bonus",
+                status="active",
+                started_at=datetime.now(timezone.utc),
+                expires_at=premium_until,
+                source="welcome_bonus",
+            )
+            session.add(subscription)
 
     await session.commit()
     await session.refresh(user)
@@ -291,14 +372,14 @@ async def logout(request: Request, body: RefreshRequest):
 
 
 # ---------------------------------------------------------------------------
-# POST /auth/change-password (NEW - for security)
+# POST /auth/change-password
 # ---------------------------------------------------------------------------
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("5/minute")
 async def change_password(
     request: Request,
-    body: dict,  # { "old_password": str, "new_password": str }
+    body: dict,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(_get_current_user),
 ):
@@ -317,11 +398,9 @@ async def change_password(
     if not verify_password(old_password, current_user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect old password.")
     
-    # Update password and increment token version (revokes all existing tokens)
     current_user.password_hash = hash_password(new_password)
     current_user.token_version += 1
     
-    # Delete all refresh tokens for this user from Redis
     await redis.revoke_all_user_tokens(str(current_user.id))
     
     await session.commit()
@@ -330,12 +409,11 @@ async def change_password(
 
 
 # ---------------------------------------------------------------------------
-# GET /auth/health (for monitoring)
+# GET /auth/health
 # ---------------------------------------------------------------------------
 
 @router.get("/health")
 async def auth_health():
-    """Health check for auth service."""
     redis_ok = await redis.health_check()
     return {
         "status": "healthy" if redis_ok else "degraded",

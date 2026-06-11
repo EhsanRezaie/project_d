@@ -86,6 +86,28 @@ class TestSearch:
         )
         assert res.status_code == 200
     
+    async def test_search_province_filter(self, client: AsyncClient):
+        """Should filter by province"""
+        headers, _ = await register_and_get_headers(client, VALID_REGISTER_PAYLOAD_MALE)
+        
+        res = await client.get(
+            SEARCH_URL,
+            params={"province": "Tehran"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+    
+    async def test_search_city_filter(self, client: AsyncClient):
+        """Should filter by city"""
+        headers, _ = await register_and_get_headers(client, VALID_REGISTER_PAYLOAD_MALE)
+        
+        res = await client.get(
+            SEARCH_URL,
+            params={"city": "Shiraz"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+    
     async def test_search_requires_auth(self, client: AsyncClient):
         """Should return 401 without token"""
         res = await client.get(SEARCH_URL)

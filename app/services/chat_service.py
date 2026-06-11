@@ -4,6 +4,8 @@ from typing import Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, update
 
+from app.core.config import settings
+from app.services.reward_service import RewardService
 from app.models.user import User
 from app.models.match import Match
 from app.models.message import Message
@@ -52,9 +54,11 @@ async def can_start_new_chat(
     Check if user can start a new chat with target user.
     Returns: (can_start, reason, daily_limit)
     """
+    # Premium users have no limits
     if is_premium:
         return True, None, None
 
+    # Check if they already have a chat (not a new chat)
     existing = await session.execute(
         select(Message).where(
             or_(
@@ -67,15 +71,19 @@ async def can_start_new_chat(
     if existing.scalar_one_or_none():
         return True, None, None
 
-    today = date.today()
-    daily_limit = await get_or_create_daily_limit(session, user_id, today)
+    # This is a new chat - check daily limit using RewardService
+    from app.models.user import User
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if user:
+        reward_service = RewardService(session)
+        remaining = await reward_service.get_remaining_chats(user)
+        
+        if remaining <= 0:
+            return False, f"Daily new chat limit reached ({settings.FREE_USER_DAILY_CHATS} per day). Watch an ad or upgrade to premium.", None
 
-    available_chats = 10 + daily_limit.ad_chats_bonus - daily_limit.chats_used
-
-    if available_chats <= 0:
-        return False, "Daily new chat limit reached (10/day). Watch an ad or upgrade to premium.", daily_limit
-
-    return True, None, daily_limit
+    return True, None, None
 
 
 async def check_unmatched_message_limit(
@@ -174,11 +182,14 @@ async def increment_new_chat_count(
     session: AsyncSession,
     user_id: UUID
 ) -> None:
-    """Increment the new chats counter for a user"""
-    today = date.today()
-    daily_limit = await get_or_create_daily_limit(session, user_id, today)
-    daily_limit.chats_used += 1
-    await session.commit()
+    """Increment the new chats counter for a user using RewardService"""
+    from app.models.user import User
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if user:
+        reward_service = RewardService(session)
+        await reward_service.consume_chat(user)
 
 
 async def mark_messages_as_delivered(

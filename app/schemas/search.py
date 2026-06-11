@@ -41,6 +41,8 @@ class SearchFilters(BaseModel):
     weight_max: Optional[int] = Field(None, ge=30, le=300)
     has_photos: Optional[bool] = None
     is_verified: Optional[bool] = None
+    province: Optional[str] = Field(None, max_length=100)  # ADD THIS
+    city: Optional[str] = Field(None, max_length=100)      # ADD THIS
     sort_by: str = Field("recent", pattern="^(recent|distance|age|name)$")
     sort_order: str = Field("desc", pattern="^(asc|desc)$")
     limit: int = Field(20, ge=1, le=100)
