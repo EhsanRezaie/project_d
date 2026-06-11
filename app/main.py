@@ -18,6 +18,9 @@ from app.api.v1.endpoints.blocks import router as blocks_router
 from app.api.v1.endpoints.rewards import router as rewards_router
 from app.api.v1.endpoints.referrals import router as referrals_router
 from app.api.v1.endpoints.subscriptions import router as subscription_router
+from app.api.v1.endpoints.notifications import router as notifications_router
+from app.api.v1.endpoints.reports import router as reports_router
+from app.api.v1.endpoints.privacy import router as privacy_router
 
 from app.api.v1.websocket.matches import router as websocket_router
 from app.api.v1.endpoints.matches import router as matches_router
@@ -67,6 +70,9 @@ app.include_router(messages_router, prefix="/api/v1")
 app.include_router(rewards_router, prefix="/api/v1")
 app.include_router(referrals_router, prefix="/api/v1")
 app.include_router(subscription_router, prefix="/api/v1")
+app.router.include_router(notifications_router,prefix="/api/v1")
+app.router.include_router(reports_router,prefix="/api/v1")
+app.router.include_router(privacy_router,prefix="/api/v1")
 
 
 # WebSocket Router
