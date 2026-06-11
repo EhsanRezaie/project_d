@@ -1,6 +1,7 @@
 from uuid import UUID
 from datetime import datetime
 from typing import Optional
+from app.schemas.user import UserResponse
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
@@ -30,7 +31,6 @@ class LoginRequest(BaseModel):
 
 
 class GoogleAuthRequest(BaseModel):
-    """Client sends the ID token it received from Google Sign-In."""
     id_token: str
 
 
@@ -39,31 +39,15 @@ class RefreshRequest(BaseModel):
 
 
 class CompleteProfileRequest(BaseModel):
-    """Sent by Google OAuth users after first login to set real age + gender."""
     age: int = Field(ge=18, le=100)
     gender: str = Field(pattern="^(male|female)$")
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
 
 
 # ---------------------------------------------------------------------------
-# Response schemas
+# Response schemas - Import from user.py instead of duplicating
 # ---------------------------------------------------------------------------
-
-class UserResponse(BaseModel):
-    id: UUID
-    email: str
-    name: str
-    age: int
-    gender: str
-    bio: Optional[str] = None
-    height: Optional[int] = None
-    weight: Optional[int] = None
-    phone_verified: bool
-    is_premium: bool
-    is_profile_complete: bool
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
+# UserResponse is now imported from user.py
 
 
 class TokenResponse(BaseModel):

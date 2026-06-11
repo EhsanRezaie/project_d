@@ -22,6 +22,12 @@ class UserResponse(BaseModel):
     is_profile_complete: bool
     created_at: datetime
     last_seen_at: Optional[datetime] = None
+    hide_last_seen: bool = False
+    # Location fields
+    country: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
+    location_manual: bool = False
 
     class Config:
         from_attributes = True
@@ -41,6 +47,9 @@ class PublicUserResponse(BaseModel):
     is_verified: bool
     last_seen_at: Optional[datetime] = None
     is_online: Optional[bool] = None
+    country: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -48,7 +57,6 @@ class PublicUserResponse(BaseModel):
     @classmethod
     def from_user_with_privacy(cls, user, current_user_id: UUID = None):
         """Create public response respecting privacy settings."""
-        # If this is the current user, return full data
         if current_user_id and user.id == current_user_id:
             return cls(
                 id=user.id,
@@ -58,14 +66,16 @@ class PublicUserResponse(BaseModel):
                 bio=user.bio,
                 height=user.height,
                 weight=user.weight,
-                main_photo_url=None,  # Will be filled separately
+                main_photo_url=None,
                 is_premium=user.is_premium,
                 is_verified=user.phone_verified,
                 last_seen_at=user.last_seen_at,
-                is_online=user.last_seen_at and (datetime.now(timezone.utc) - user.last_seen_at).seconds < 300
+                is_online=user.last_seen_at and (datetime.now(timezone.utc) - user.last_seen_at).seconds < 300,
+                country=user.country,
+                province=user.province,
+                city=user.city
             )
         
-        # For other users, respect hide_last_seen
         if user.hide_last_seen:
             return cls(
                 id=user.id,
@@ -79,7 +89,10 @@ class PublicUserResponse(BaseModel):
                 is_premium=user.is_premium,
                 is_verified=user.phone_verified,
                 last_seen_at=None,
-                is_online=None
+                is_online=None,
+                country=user.country,
+                province=user.province,
+                city=user.city
             )
         else:
             return cls(
@@ -94,7 +107,10 @@ class PublicUserResponse(BaseModel):
                 is_premium=user.is_premium,
                 is_verified=user.phone_verified,
                 last_seen_at=user.last_seen_at,
-                is_online=user.last_seen_at and (datetime.now(timezone.utc) - user.last_seen_at).seconds < 300
+                is_online=user.last_seen_at and (datetime.now(timezone.utc) - user.last_seen_at).seconds < 300,
+                country=user.country,
+                province=user.province,
+                city=user.city
             )
 
 
@@ -134,3 +150,17 @@ class UserUpdateRequest(BaseModel):
         if v is not None and (v < 30 or v > 300):
             raise ValueError("Weight must be between 30kg and 300kg")
         return v
+
+
+class LocationTextUpdateRequest(BaseModel):
+    """Update user location with text fields."""
+    country: Optional[str] = Field(None, max_length=100)
+    province: Optional[str] = Field(None, max_length=100)
+    city: Optional[str] = Field(None, max_length=100)
+
+class LocationTextUpdateResponse(BaseModel):
+    """Response for PATCH /users/me/location-text"""
+    country: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
+    location_manual: bool

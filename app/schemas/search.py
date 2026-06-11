@@ -15,10 +15,10 @@ class SearchProfileResponse(BaseModel):
     distance_km: Optional[float] = None
     main_photo_url: Optional[str] = None
     is_premium: bool
-    is_verified: bool = False  # Default to False if None
+    is_verified: bool = False
     last_seen_at: Optional[str] = None
-    hide_last_seen: bool = False  # Default to False if None
-    hide_online_status: bool = False  # Default to False if None
+    hide_last_seen: bool = False
+    hide_online_status: bool = False
     
     class Config:
         from_attributes = True
@@ -43,6 +43,7 @@ class SearchFilters(BaseModel):
     weight_max: Optional[int] = Field(None, ge=30, le=300)
     has_photos: Optional[bool] = None
     is_verified: Optional[bool] = None
+    country: Optional[str] = Field(None, max_length=100)
     province: Optional[str] = Field(None, max_length=100)
     city: Optional[str] = Field(None, max_length=100)
     sort_by: str = Field("recent", pattern="^(recent|distance|age|name)$")

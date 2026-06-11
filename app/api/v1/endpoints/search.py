@@ -45,6 +45,7 @@ async def search_users(
     weight_max: int = Query(None, ge=30, le=300),
     has_photos: bool = Query(None),
     is_verified: bool = Query(None),
+    country: str = Query(None, max_length=100),
     province: str = Query(None, max_length=100),
     city: str = Query(None, max_length=100),
     sort_by: str = Query("recent", pattern="^(recent|distance|age|name)$"),
@@ -66,6 +67,7 @@ async def search_users(
     - weight_min, weight_max: Weight in kg
     - has_photos: Only users with photos
     - is_verified: Only phone-verified users
+    - country: Filter by country (e.g., "Iran")
     - province: Filter by province (e.g., "Tehran")
     - city: Filter by city (e.g., "Shiraz")
     - sort_by: recent, distance, age, name
@@ -103,6 +105,10 @@ async def search_users(
     # Phone verified filter
     if is_verified is not None:
         query = query.where(User.phone_verified == is_verified)
+    
+    # Country filter
+    if country:
+        query = query.where(User.country == country)
     
     # Province filter
     if province:

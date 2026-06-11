@@ -1,4 +1,4 @@
-## `dev.md` - Iranian Dating App (Complete)
+## `dev.md` - Iranian Dating App (Updated)
 
 ```markdown
 # dev.md — Iranian Dating App (Badoo-style)
@@ -21,10 +21,9 @@
 8. [Architecture Decisions](#8-architecture-decisions)
 9. [Business Rules](#9-business-rules)
 10. [Session Progress](#10-session-progress)
-11. [Session 14 Plan: Location Fields + Referral Complete](#11-session-14-plan-location-fields--referral-complete)
-12. [Session 15 Plan: Push Notifications + Production Ready](#12-session-15-plan-push-notifications--production-ready)
-13. [Testing Strategy](#13-testing-strategy)
-14. [Deployment Notes](#14-deployment-notes)
+11. [Session 15 Plan: Push Notifications + Production Ready](#11-session-15-plan-push-notifications--production-ready)
+12. [Testing Strategy](#12-testing-strategy)
+13. [Deployment Notes](#13-deployment-notes)
 
 ---
 
@@ -62,12 +61,14 @@ A **Persian-language dating app** for the Iranian market, similar to Badoo.
 | Database | PostgreSQL 15 |
 | ORM | SQLAlchemy 2.x (async) |
 | Migrations | Alembic |
-| Cache | Redis 7 |
+| Cache | Redis 7 (tokens, rate limiting) + LRU cache (static location data) |
 | Realtime | WebSocket |
 | File storage | Local disk (`uploads/`) |
 | Containerization | Docker + Docker Compose |
 | Mobile | Flutter |
 | Payment | ZarinPal (MOCKED - real integration needed) |
+| Location | countrystatecity-countries package |
+| Reverse Geocoding | Nominatim (OpenStreetMap) |
 
 ---
 
@@ -113,7 +114,8 @@ iranian-dating-app/
 │   │   │   ├── privacy.py
 │   │   │   ├── ticket.py
 │   │   │   ├── admin.py
-│   │   │   └── dashboard.py
+│   │   │   ├── dashboard.py
+│   │   │   └── location.py
 │   │   │
 │   │   ├── api/v1/endpoints/
 │   │   │   ├── auth.py
@@ -138,7 +140,8 @@ iranian-dating-app/
 │   │   │   ├── admin_users.py
 │   │   │   ├── admin_dashboard.py
 │   │   │   ├── admin_announcements.py
-│   │   │   └── admin_photos.py
+│   │   │   ├── admin_photos.py
+│   │   │   └── locations.py
 │   │   │
 │   │   ├── api/v1/websocket/
 │   │   │   ├── matches.py
@@ -149,7 +152,8 @@ iranian-dating-app/
 │   │   │   ├── notification_service.py
 │   │   │   ├── chat_service.py
 │   │   │   ├── photo_service.py
-│   │   │   └── websocket_manager.py
+│   │   │   ├── websocket_manager.py
+│   │   │   └── location_service.py
 │   │   │
 │   │   ├── core/
 │   │   │   ├── config.py
@@ -187,7 +191,8 @@ iranian-dating-app/
 │   │   ├── test_admin_users.py
 │   │   ├── test_admin_dashboard.py
 │   │   ├── test_admin_photos.py
-│   │   └── test_admin_messages.py
+│   │   ├── test_admin_messages.py
+│   │   └── test_location.py
 │   │
 │   ├── uploads/
 │   ├── .env
@@ -219,7 +224,7 @@ ADMIN_SECRET_KEY=your-admin-key
 APP_NAME=DatingApp
 DEBUG=True
 
-# Daily Limits
+# Daily Limits (ONLY restrictions in the app)
 FREE_USER_DAILY_LIKES=20
 FREE_USER_DAILY_CHATS=10
 
@@ -304,16 +309,16 @@ MAX_PHOTOS_PER_USER=6
 
 ## 7. API Reference
 
-### Completed Endpoints
+### Completed Endpoints (Sessions 1-14)
 
 | Category | Endpoints |
 |----------|-----------|
 | Auth | POST /register, /login, /google, /refresh, /logout, /change-password |
-| Users | GET/PUT/DELETE /me, GET /{user_id}, POST /me/location |
+| Users | GET/PUT/DELETE /me, GET /{user_id}, POST /me/location, PATCH /me/location-text |
 | Photos | POST/GET/DELETE /users/me/photos, PUT /{photo_id}/main |
 | Discover | GET /discover |
 | Swipes | POST /swipes, GET /stats |
-| Search | GET /search (age, gender, height, weight, province, city, etc.) |
+| Search | GET /search (country, province, city, distance, age, gender, height, weight) |
 | Matches | GET /matches, GET /{match_id}, WS /ws/matches |
 | Blocks | POST /{user_id}/block|unblock, GET /blocks |
 | Messages | GET/POST /{match_id}, POST /accept, /delivered, /read, DELETE /{id}, POST /forward, GET /{id}/status, WS /ws/chat |
@@ -324,7 +329,8 @@ MAX_PHOTOS_PER_USER=6
 | Reports | POST /reports/{user_id}, GET /reports/my |
 | Privacy | GET /privacy/settings, PATCH /privacy/settings |
 | Tickets | POST /tickets, GET /tickets, GET /tickets/{id} |
-| Admin | GET /admin/tickets, PATCH /admin/tickets/{id}, GET /admin/reports, PATCH /admin/reports/{id}, GET /admin/users, PATCH /admin/users/{id}, DELETE /admin/users/{id}, POST /admin/users/{id}/premium, POST /admin/users/{id}/message, GET /admin/users/{id}/activity, POST /admin/announcements, POST /admin/announcements/test, GET /admin/dashboard, GET /admin/dashboard/stats/*, GET /admin/photos/pending, POST /admin/photos/{id}/approve, POST /admin/photos/{id}/reject, GET /admin/photos/stats, GET /admin/photos/{id}, POST /admin/photos/{id}/verify-face, GET /admin/photos/users/{user_id}/photos |
+| Locations | GET /locations/provinces, GET /locations/cities, GET /locations/validate |
+| Admin | GET /admin/tickets, PATCH /admin/tickets/{id}, GET /admin/reports, PATCH /admin/reports/{id}, GET /admin/users, PATCH /admin/users/{id}, DELETE /admin/users/{id}, POST /admin/users/{id}/premium, POST /admin/users/{id}/message, GET /admin/users/{id}/activity, POST /admin/announcements, GET /admin/dashboard, GET /admin/dashboard/stats/*, GET /admin/photos/pending, POST /admin/photos/{id}/approve, POST /admin/photos/{id}/reject, GET /admin/photos/stats, GET /admin/photos/{id}, POST /admin/photos/{id}/verify-face, GET /admin/photos/users/{user_id}/photos |
 
 ---
 
@@ -352,11 +358,37 @@ def is_premium(self) -> bool:
     return self.premium_until > datetime.now(timezone.utc)
 ```
 
-### Daily Limits (ONLY restrictions)
+### Daily Limits (ONLY restrictions in the app)
 
-- Free users: `FREE_USER_DAILY_LIKES` (20) and `FREE_USER_DAILY_CHATS` (10)
-- Premium users: unlimited (-1)
-- Ad rewards: +5 likes, +3 chats per ad (max 2 ads/day)
+| Action | Free User | Premium User |
+|--------|-----------|--------------|
+| Likes | 20/day | Unlimited |
+| New Chats | 10/day | Unlimited |
+
+**All other features are FREE:**
+- Searching users
+- Viewing profiles
+- Matching
+- Chatting (after match)
+- Sending photos/voice
+- Notifications
+- Reports
+
+### Location System
+
+| Method | Description |
+|--------|-------------|
+| `POST /users/me/location` | Update lat/lng from GPS, auto-fills country/province/city via reverse geocoding |
+| `PATCH /users/me/location-text` | Manually set country/province/city (sets location_manual=True) |
+| `GET /locations/provinces` | Get all Iranian provinces (cached with LRU) |
+| `GET /locations/cities` | Get cities by province code (cached with LRU) |
+| `GET /search?country=&province=&city=&distance_km=` | Search users by location |
+
+**Reverse Geocoding:** Uses Nominatim (OpenStreetMap) to convert lat/lng to country/province/city.
+
+**Caching:** 
+- Provinces list: `@lru_cache(maxsize=1)` - forever
+- Cities list per province: `@lru_cache(maxsize=32)` - forever
 
 ### Admin Authentication
 
@@ -368,7 +400,7 @@ def is_premium(self) -> bool:
 
 | Type | Trigger | Recipient |
 |------|---------|-----------|
-| Like | User likes another user | The user who was liked (all users) |
+| Like | User likes another user | The user who was liked |
 | Match | Two users like each other | Both users |
 | Message | User sends message | Recipient (if offline) |
 | System | Admin message or announcement | Target user(s) |
@@ -444,115 +476,122 @@ def is_premium(self) -> bool:
 | 11 | Premium + Daily Limits + Ad Rewards + Referrals | ✅ |
 | 12 | Notifications + Privacy + Reports | ✅ |
 | 13 | Admin Panel (Tickets + Reports + User management + Dashboard + Announcements) | ✅ |
-| 14 | Location fields + Referral complete | 🔲 |
-| 15 | Push notifications + Real Payment + Production | 🔲 |
+| 14 | Location fields + Referral complete + Reverse geocoding + Search by country | ✅ |
+| **15** | **Push notifications + Real Payment + Production** | 🔲 |
 | 16+ | Flutter mobile app | 🔲 |
 
 ---
 
-## 11. Session 14 Plan: Location Fields + Referral Complete
+## 11. Session 15 Plan: Push Notifications + Production Ready
 
 ### Goal
-Complete location system with province/city and finalize referral claim flow.
+Real push notifications via Firebase Cloud Messaging, real ZarinPal integration, performance optimization, and production readiness.
 
-### Database Changes
+### Tasks
 
-Already in `users` table:
-- `country`, `province`, `city`, `location_manual`
+#### 1. Push Notifications (FCM)
 
-### Files to Update
-
-| File | Changes |
-|------|---------|
-| `app/api/v1/endpoints/users.py` | Add `PATCH /me/location-text` for country/province/city |
-| `app/api/v1/endpoints/search.py` | Already has province/city filters ✅ |
-| `app/api/v1/endpoints/referrals.py` | Complete `/claim` with 24-hour window check |
-| `app/services/location_service.py` | NEW - province/city validation |
-
-### Location Flow
-
-```
-Frontend:
-  1. User selects province/city from dropdown
-  2. Frontend converts city name to lat/lng
-  3. PATCH /users/me/location with {lat, lng, country, province, city}
-
-Backend:
-  1. Update lat/lng
-  2. Update country, province, city
-  3. Set location_manual = True
-```
-
-### Referral Claim 24-Hour Window
-
-Add check to `POST /referrals/claim`:
-```python
-hours_since_registration = (datetime.now(timezone.utc) - current_user.created_at).total_seconds() / 3600
-if hours_since_registration > 24:
-    raise HTTPException(400, "Referral must be claimed within 24 hours of registration")
-```
-
-### Tests Checklist
-
-- [ ] Referral claim within 24 hours works
-- [ ] Referral claim after 24 hours fails
-- [ ] Location text fields saved correctly
-- [ ] Search by province returns correct users
-- [ ] Search by city returns correct users
-
----
-
-## 12. Session 15 Plan: Push Notifications + Production Ready
-
-### Goal
-Real push notifications via Firebase Cloud Messaging, real ZarinPal integration.
-
-### Files to Create
+**Files to Create:**
 
 | File | Purpose |
 |------|---------|
-| `app/services/push_service.py` | FCM send_push() |
-| `app/models/device_token.py` | Store FCM tokens |
-| `app/services/payment_service.py` | REAL ZarinPal integration |
+| `app/services/push_service.py` | FCM send_push(), send_to_topic() |
+| `app/models/device_token.py` | Store FCM tokens per user/device |
 
-### Files to Update
+**Files to Update:**
 
 | File | Changes |
 |------|---------|
-| `app/services/notification_service.py` | Call push_service after DB notification |
-| `app/api/v1/endpoints/notifications.py` | Add POST /device-token |
-| `app/api/v1/endpoints/subscriptions.py` | Replace mock with real ZarinPal |
+| `app/services/notification_service.py` | Call push_service after creating DB notification |
+| `app/api/v1/endpoints/notifications.py` | Add POST /device-token endpoint |
 
-### Performance Work
+**Implementation:**
+
+```python
+# POST /notifications/device-token
+{
+    "device_token": "fcm_token_string",
+    "device_type": "android"  # or ios
+}
+```
+
+#### 2. Real Payment Integration (ZarinPal)
+
+**Files to Update:**
+
+| File | Changes |
+|------|---------|
+| `app/api/v1/endpoints/subscriptions.py` | Replace mock with real ZarinPal calls |
+| `app/services/payment_service.py` | NEW - real ZarinPal API integration |
+
+**ZarinPal API Endpoints:**
+
+```python
+ZARINPAL_REQUEST_URL = "https://api.zarinpal.com/pg/v4/payment/request.json"
+ZARINPAL_VERIFY_URL = "https://api.zarinpal.com/pg/v4/payment/verify.json"
+```
+
+**Flow:**
+1. User selects plan → POST /subscriptions/purchase
+2. Backend calls ZarinPal API → gets redirect URL
+3. User pays on ZarinPal
+4. ZarinPal redirects to /subscriptions/verify
+5. Backend verifies payment → activates premium
+
+#### 3. Performance Optimization
+
+**Indexes to Add:**
 
 ```sql
--- Add missing indexes
 CREATE INDEX idx_users_premium_until ON users(premium_until);
 CREATE INDEX idx_users_province ON users(province);
 CREATE INDEX idx_users_city ON users(city);
 CREATE INDEX idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 ```
 
-### Production Checklist
+**Other Optimizations:**
+- Add DB connection pooling (pool_size=20, max_overflow=40)
+- Add Redis connection pool limits
+- Review slow queries with logging
+- Add response compression (gzip)
 
-- [ ] Real ZarinPal integration (replace mock)
-- [ ] FCM push notifications
-- [ ] All indexes added
-- [ ] OpenAPI documentation complete
-- [ ] Environment variables documented
+#### 4. API Documentation
+
+- Ensure all endpoints have proper OpenAPI `summary`, `description`, `response_model`
+- Add example request/response bodies
+- Export final OpenAPI spec as `openapi.json`
+
+#### 5. Production Checklist
+
+| Item | Status |
+|------|--------|
+| Real ZarinPal integration (replace mock) | 🔲 |
+| FCM push notifications | 🔲 |
+| Device token storage | 🔲 |
+| All indexes added | 🔲 |
+| DB connection pooling configured | 🔲 |
+| Redis connection pooling configured | 🔲 |
+| OpenAPI documentation complete | 🔲 |
+| Environment variables documented | 🔲 |
+| CORS configured for production | 🔲 |
+| Rate limiting tuned | 🔲 |
+| Logging configured | 🔲 |
+| Backup strategy for uploads | 🔲 |
 
 ---
 
-## 13. Testing Strategy
+## 12. Testing Strategy
 
 ### Test Files by Session
 
-| Session | Test Files |
-|---------|------------|
-| 1-10 | test_auth, test_users, test_photos, test_swipes, test_matches, test_messages, test_search, test_blocks |
-| 11 | test_rewards, test_referrals, test_subscriptions, test_daily_limits |
-| 12 | test_notifications, test_reports, test_privacy |
-| 13 | test_tickets, test_admin_tickets, test_admin_reports, test_admin_users, test_admin_dashboard, test_admin_photos, test_admin_messages |
+| Session | Test Files | Tests |
+|---------|------------|-------|
+| 1-10 | test_auth, test_users, test_photos, test_swipes, test_matches, test_messages, test_search, test_blocks | ~50 |
+| 11 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 32 |
+| 12 | test_notifications, test_reports, test_privacy | 31 |
+| 13 | test_tickets, test_admin_tickets, test_admin_reports, test_admin_users, test_admin_dashboard, test_admin_photos, test_admin_messages | 57 |
+| 14 | test_location | 25 |
 
 ### Run All Tests
 
@@ -562,7 +601,7 @@ pytest tests/ -v
 
 ---
 
-## 14. Deployment Notes
+## 13. Deployment Notes
 
 ### Docker Compose
 
@@ -570,13 +609,23 @@ pytest tests/ -v
 services:
   db:
     image: postgres:15
+    environment:
+      POSTGRES_DB: dating_db
+      POSTGRES_USER: dating_user
+      POSTGRES_PASSWORD: dating_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   redis:
     image: redis:7-alpine
+
   api:
     build: .
     depends_on:
       - db
       - redis
+    env_file:
+      - .env
     volumes:
       - ./uploads:/app/uploads
 ```
@@ -597,7 +646,7 @@ alembic downgrade -1
 
 ---
 
-## Session 11-13 Completion Summary
+## Session 11-14 Completion Summary
 
 ### ✅ Session 11 Complete
 
@@ -609,7 +658,6 @@ alembic downgrade -1
 | Referral system (codes + rewards) | ✅ |
 | Welcome bonus (7 days premium) | ✅ |
 | Subscription plans (mock payment) | ✅ |
-| Search with province/city filters | ✅ |
 
 ### ✅ Session 12 Complete
 
@@ -633,16 +681,33 @@ alembic downgrade -1
 | Dashboard analytics (overview, user growth, activity charts) | ✅ |
 | Photo moderation with face verification | ✅ |
 
-### ⚠️ Pending for Production
+### ✅ Session 14 Complete
 
-| Item | Session |
-|------|---------|
-| Real ZarinPal integration | 15 |
-| FCM push notifications | 15 |
+| Feature | Status |
+|---------|--------|
+| Location text fields (country, province, city) | ✅ |
+| Reverse geocoding (lat/lng → text location) | ✅ |
+| Manual location override with location_manual flag | ✅ |
+| Location validation with countrystatecity-countries | ✅ |
+| GET /locations/provinces (cached) | ✅ |
+| GET /locations/cities (cached) | ✅ |
+| Search by country, province, city, distance | ✅ |
+| Location cache with @lru_cache | ✅ |
+| Complete location tests (25 tests) | ✅ |
+
+### ⚠️ Pending for Production (Session 15)
+
+| Item | Priority |
+|------|----------|
+| Real ZarinPal integration | High |
+| FCM push notifications | High |
+| Database indexes | Medium |
+| Connection pooling optimization | Medium |
+| API documentation (OpenAPI) | Low |
 
 ---
 
-**Next: Session 14 - Location fields + Referral complete**
+**Next: Session 15 - Push Notifications + Real Payment + Production Ready**
 
-Ready to start Session 14 when you are.
+Ready to start Session 15 when you are.
 ```
