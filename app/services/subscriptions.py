@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta ,timezone
 import uuid
 from sqlalchemy import select
 from app.db.session import get_session
@@ -145,7 +145,7 @@ async def verify_payment(
     days = plan_days.get(plan, 30)
     
     # Grant premium
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if user.premium_until is None or user.premium_until < now:
         user.premium_until = now + timedelta(days=days)
     else:
