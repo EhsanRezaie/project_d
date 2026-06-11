@@ -15,10 +15,15 @@ from app.api.v1.endpoints.discover import router as discover_router
 from app.api.v1.endpoints.swipes import router as swipes_router  
 from app.api.v1.endpoints.search import router as search_router
 from app.api.v1.endpoints.blocks import router as blocks_router
+from app.api.v1.endpoints.rewards import router as rewards_router
+from app.api.v1.endpoints.referrals import router as referrals_router
+from app.api.v1.endpoints.subscriptions import router as subscription_router
+
 from app.api.v1.websocket.matches import router as websocket_router
 from app.api.v1.endpoints.matches import router as matches_router
 from app.api.v1.endpoints.messages import router as messages_router
 from app.api.v1.websocket.chat import router as chat_websocket_router
+
 
 from app.core.logging import setup_logging
 setup_logging()
@@ -59,6 +64,9 @@ app.include_router(search_router, prefix="/api/v1")
 app.include_router(blocks_router, prefix="/api/v1")
 app.include_router(matches_router, prefix="/api/v1")
 app.include_router(messages_router, prefix="/api/v1")
+app.include_router(rewards_router, prefix="/api/v1")
+app.include_router(referrals_router, prefix="/api/v1")
+app.include_router(subscription_router, prefix="/api/v1")
 
 
 # WebSocket Router

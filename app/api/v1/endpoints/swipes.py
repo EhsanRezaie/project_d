@@ -4,11 +4,12 @@ from sqlalchemy import select, func, and_, or_
 from datetime import date
 from uuid import UUID
 
+from app.core.config import settings
+from app.services.reward_service import RewardService
 from app.db.session import get_session
 from app.models.user import User
 from app.models.swipe import Swipe
 from app.models.match import Match
-from app.models.daily_limit import DailyLimit
 from app.models.photo import Photo
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
@@ -16,35 +17,6 @@ from app.schemas.discover import SwipeRequest, SwipeResponse
 from app.services.websocket_manager import websocket_manager
 
 router = APIRouter(prefix="/swipes", tags=["swipes"])
-
-
-async def get_or_create_daily_limit(
-    session: AsyncSession, 
-    user_id: UUID, 
-    target_date: date
-) -> DailyLimit:
-    """Get or create daily limit record for a user on a specific date"""
-    result = await session.execute(
-        select(DailyLimit).where(
-            DailyLimit.user_id == user_id,
-            DailyLimit.date == target_date
-        )
-    )
-    daily_limit = result.scalar_one_or_none()
-    
-    if not daily_limit:
-        daily_limit = DailyLimit(
-            user_id=user_id,
-            date=target_date,
-            likes_used=0,
-            chats_used=0,
-            ad_likes_bonus=0,
-            ad_chats_bonus=0,
-        )
-        session.add(daily_limit)
-        await session.flush()
-    
-    return daily_limit
 
 
 async def get_user_main_photo_url(session: AsyncSession, user_id: UUID) -> str | None:
@@ -73,8 +45,9 @@ async def swipe(
     Rules:
     1. Cannot swipe on yourself
     2. Cannot swipe twice on same user
-    3. Free users: max 50 likes per day
-    4. If both like each other → create match
+    3. Free users: limited likes per day (configurable via .env)
+    4. Premium users: unlimited likes
+    5. If both like each other → create match
     """
     
     # Cannot swipe on yourself
@@ -114,26 +87,28 @@ async def swipe(
             detail=f"Already swiped {existing_swipe.direction} on this user"
         )
     
-    # Check daily like limit (only for 'like' direction)
+    # Check daily like limit using RewardService
     likes_remaining = None
-    if body.direction == "like" and not current_user.is_premium:
-        today = date.today()
-        daily_limit = await get_or_create_daily_limit(session, current_user.id, today)
+    if body.direction == "like":
+        reward_service = RewardService(session)
+        can_like = await reward_service.consume_like(current_user)
         
-        # Available likes = 50 (base) + bonus from ads - used
-        available_likes = 50 + daily_limit.ad_likes_bonus - daily_limit.likes_used
+        if not can_like:
+            remaining = await reward_service.get_remaining_likes(current_user)
+            if remaining == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Daily like limit reached ({settings.FREE_USER_DAILY_LIKES} per day). Watch an ad or upgrade to premium."
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Daily like limit reached. Watch an ad or upgrade to premium."
+                )
         
-        if available_likes <= 0:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Daily like limit reached. Watch an ad or upgrade to premium."
-            )
-        
-        likes_remaining = available_likes - 1
-        
-        # Increment used likes
-        daily_limit.likes_used += 1
-        session.add(daily_limit)
+        # Get remaining after consumption
+        remaining = await reward_service.get_remaining_likes(current_user)
+        likes_remaining = remaining if remaining != -1 else None
     
     # Create swipe record
     new_swipe = Swipe(
@@ -214,13 +189,8 @@ async def get_swipe_stats(
 ) -> dict:
     """Get swipe statistics for current user"""
     
-    # Total swipes today
-    today = date.today()
-    daily_limit = await get_or_create_daily_limit(session, current_user.id, today)
-    
-    available_likes = 50 + daily_limit.ad_likes_bonus - daily_limit.likes_used
-    if current_user.is_premium:
-        available_likes = -1  # Unlimited
+    reward_service = RewardService(session)
+    stats = await reward_service.get_daily_stats(current_user)
     
     # Count total likes sent
     total_likes_result = await session.execute(
@@ -253,9 +223,11 @@ async def get_swipe_stats(
     total_matches = matches_result.scalar()
     
     return {
-        "daily_likes_remaining": available_likes if available_likes > 0 else 0,
-        "is_unlimited": current_user.is_premium,
+        "daily_likes_remaining": stats["likes_remaining_today"],
+        "is_unlimited": stats["is_premium"],
         "total_likes_sent": total_likes,
         "total_passes_sent": total_passes,
         "total_matches": total_matches,
+        "ads_watched_today": stats["ads_watched_today"],
+        "max_ads_per_day": stats["max_ads_per_day"],
     }

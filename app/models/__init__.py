@@ -7,3 +7,6 @@ from app.models.subscription import Subscription
 from app.models.report import Report
 from app.models.daily_limit import DailyLimit
 from app.models.review_reward import ReviewReward
+from app.models.referral_reward import ReferralReward
+from app.models.notification import Notification
+from app.models.ticket import Ticket

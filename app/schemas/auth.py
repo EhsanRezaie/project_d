@@ -15,6 +15,7 @@ class RegisterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     age: int = Field(ge=18, le=100)
     gender: str = Field(pattern="^(male|female)$")
+    referral_code: Optional[str] = Field(None, max_length=20)
 
     @model_validator(mode="after")
     def password_not_whitespace(self) -> "RegisterRequest":
