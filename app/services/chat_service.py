@@ -6,6 +6,7 @@ from sqlalchemy import select, func, and_, or_, update
 
 from app.core.config import settings
 from app.services.reward_service import RewardService
+from app.services.notification_service import NotificationService
 from app.models.user import User
 from app.models.match import Match
 from app.models.message import Message
@@ -190,6 +191,44 @@ async def increment_new_chat_count(
     if user:
         reward_service = RewardService(session)
         await reward_service.consume_chat(user)
+
+
+async def send_message_with_notification(
+    session: AsyncSession,
+    sender_id: UUID,
+    receiver_id: UUID,
+    match_id: Optional[UUID],
+    sender_name: str,
+    content: str,
+    message_type: str = "text"
+) -> Message:
+    """
+    Send a message and create notification if recipient is offline.
+    Returns the created message.
+    """
+    # Create message
+    new_message = Message(
+        match_id=match_id,
+        sender_id=sender_id,
+        receiver_id=receiver_id,
+        message_type=message_type,
+        content=content,
+        is_sent=True,
+        is_accepted=match_id is not None,
+    )
+    session.add(new_message)
+    await session.flush()
+    
+    # Check if recipient is online (you can implement this with WebSocket manager)
+    # For MVP, always send notification
+    notification_service = NotificationService(session)
+    await notification_service.notify_message(
+        receiver_id=receiver_id,
+        sender_name=sender_name,
+        match_id=match_id or receiver_id
+    )
+    
+    return new_message
 
 
 async def mark_messages_as_delivered(

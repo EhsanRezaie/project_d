@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 
@@ -25,6 +25,77 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PublicUserResponse(BaseModel):
+    """Public profile response for other users (respects privacy settings)."""
+    id: UUID
+    name: str
+    age: int
+    gender: str
+    bio: Optional[str] = None
+    height: Optional[int] = None
+    weight: Optional[int] = None
+    main_photo_url: Optional[str] = None
+    is_premium: bool
+    is_verified: bool
+    last_seen_at: Optional[datetime] = None
+    is_online: Optional[bool] = None
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_user_with_privacy(cls, user, current_user_id: UUID = None):
+        """Create public response respecting privacy settings."""
+        # If this is the current user, return full data
+        if current_user_id and user.id == current_user_id:
+            return cls(
+                id=user.id,
+                name=user.name,
+                age=user.age,
+                gender=user.gender,
+                bio=user.bio,
+                height=user.height,
+                weight=user.weight,
+                main_photo_url=None,  # Will be filled separately
+                is_premium=user.is_premium,
+                is_verified=user.phone_verified,
+                last_seen_at=user.last_seen_at,
+                is_online=user.last_seen_at and (datetime.now(timezone.utc) - user.last_seen_at).seconds < 300
+            )
+        
+        # For other users, respect hide_last_seen
+        if user.hide_last_seen:
+            return cls(
+                id=user.id,
+                name=user.name,
+                age=user.age,
+                gender=user.gender,
+                bio=user.bio,
+                height=user.height,
+                weight=user.weight,
+                main_photo_url=None,
+                is_premium=user.is_premium,
+                is_verified=user.phone_verified,
+                last_seen_at=None,
+                is_online=None
+            )
+        else:
+            return cls(
+                id=user.id,
+                name=user.name,
+                age=user.age,
+                gender=user.gender,
+                bio=user.bio,
+                height=user.height,
+                weight=user.weight,
+                main_photo_url=None,
+                is_premium=user.is_premium,
+                is_verified=user.phone_verified,
+                last_seen_at=user.last_seen_at,
+                is_online=user.last_seen_at and (datetime.now(timezone.utc) - user.last_seen_at).seconds < 300
+            )
 
 
 class UserUpdateRequest(BaseModel):

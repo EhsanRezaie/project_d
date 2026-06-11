@@ -1,0 +1,100 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from uuid import UUID
+
+from app.db.session import get_session
+from app.core.deps import get_current_user
+from app.core.limiter import limiter
+from app.models.user import User
+from app.models.notification import Notification
+from app.schemas.notification import (
+    NotificationResponse,
+    NotificationListResponse,
+    MarkReadRequest
+)
+
+router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+
+@router.get("", response_model=NotificationListResponse)
+@limiter.limit("60/minute")
+async def get_notifications(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Get user's notifications (most recent first)"""
+    
+    # Query notifications
+    query = select(Notification).where(
+        Notification.user_id == current_user.id
+    ).order_by(Notification.created_at.desc())
+    
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await session.scalar(count_query)
+    
+    # Paginate
+    query = query.offset(offset).limit(limit)
+    result = await session.execute(query)
+    notifications = result.scalars().all()
+    
+    return NotificationListResponse(
+        notifications=[NotificationResponse.model_validate(n) for n in notifications],
+        total=total or 0,
+        next_offset=offset + limit if offset + limit < total else None
+    )
+
+
+@router.post("/read", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("60/minute")
+async def mark_notifications_read(
+    request: Request,
+    body: MarkReadRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark notification(s) as read"""
+    
+    await session.execute(
+        select(Notification).where(
+            Notification.id.in_(body.notification_ids),
+            Notification.user_id == current_user.id
+        )
+    )
+    
+    await session.execute(
+        Notification.__table__.update()
+        .where(Notification.id.in_(body.notification_ids))
+        .where(Notification.user_id == current_user.id)
+        .values(is_read=True)
+    )
+    await session.commit()
+
+
+@router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_notification(
+    request: Request,
+    notification_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a notification"""
+    
+    result = await session.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id
+        )
+    )
+    notification = result.scalar_one_or_none()
+    
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    await session.delete(notification)
+    await session.commit()

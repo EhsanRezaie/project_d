@@ -13,10 +13,11 @@ class Report(Base):
     reporter_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     reported_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reason = Column(Text, nullable=False)
-    status = Column(String(20), default="pending")
+    status = Column(String(20), default="pending")  # pending, reviewed, action_taken
     admin_note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     resolved_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Relationships
     reporter = relationship("User", foreign_keys=[reporter_id], back_populates="sent_reports")
     reported = relationship("User", foreign_keys=[reported_id], back_populates="received_reports")

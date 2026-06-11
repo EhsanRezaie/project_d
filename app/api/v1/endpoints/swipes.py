@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.core.config import settings
 from app.services.reward_service import RewardService
+from app.services.notification_service import NotificationService
 from app.db.session import get_session
 from app.models.user import User
 from app.models.swipe import Swipe
@@ -119,6 +120,16 @@ async def swipe(
     session.add(new_swipe)
     await session.flush()
     
+    # Send like notification (only if recipient is premium)
+    if body.direction == "like":
+        notification_service = NotificationService(session)
+        await notification_service.notify_like(
+            liker_id=current_user.id,
+            liked_user_id=target_user.id,
+            liker_name=current_user.name,
+            liker_age=current_user.age
+        )
+    
     # Check for match (if both liked each other)
     matched = False
     match_id = None
@@ -146,6 +157,14 @@ async def swipe(
             
             matched = True
             match_id = new_match.id
+            
+            # Send match notifications to both users
+            notification_service = NotificationService(session)
+            await notification_service.notify_match(
+                user1_id=current_user.id,
+                user2_id=target_user.id,
+                match_id=new_match.id
+            )
             
             # Send WebSocket notification to both users
             user1_data = {
