@@ -128,7 +128,7 @@ iranian-dating-app/
 │   │   │
 │   │   ├── api/v1/endpoints/
 │   │   │   ├── auth.py                    # 3-step registration: init → verify → complete
-│   │   │   ├── users.py
+│   │   │   ├── users.py                   # GET /me returns UserProfileResponse
 │   │   │   ├── photos.py
 │   │   │   ├── admin_photos.py
 │   │   │   ├── discover.py
@@ -167,7 +167,7 @@ iranian-dating-app/
 │   │   ├── core/
 │   │   │   ├── config.py
 │   │   │   ├── security.py
-│   │   │   ├── deps.py
+│   │   │   ├── deps.py                    # get_current_user with profile & settings
 │   │   │   ├── limiter.py
 │   │   │   ├── logging.py
 │   │   │   └── redis.py                   # Refresh tokens + Verification codes
@@ -180,7 +180,7 @@ iranian-dating-app/
 │   ├── tests/
 │   │   ├── conftest.py
 │   │   ├── test_auth.py                   # ✅ All tests passing
-│   │   ├── test_users.py
+│   │   ├── test_users.py                  # ✅ All tests passing
 │   │   ├── test_photos.py
 │   │   ├── test_swipes.py
 │   │   ├── test_matches.py
@@ -212,6 +212,35 @@ iranian-dating-app/
 │   └── Dockerfile
 │
 └── mobile/                                # Flutter app (Session 16+)
+    ├── lib/
+    │   ├── main.dart
+    │   ├── config/
+    │   │   ├── app_constants.dart
+    │   │   └── app_theme.dart
+    │   ├── models/
+    │   │   └── user.dart                  # Full Badoo fields
+    │   ├── services/
+    │   │   ├── api_service.dart           # Dio + interceptors
+    │   │   ├── auth_service.dart          # 3-step registration
+    │   │   └── storage_service.dart       # Token storage + userId
+    │   ├── providers/
+    │   │   ├── auth_provider.dart         # Auth state + token persistence
+    │   │   ├── language_provider.dart
+    │   │   └── onboarding_provider.dart   # Multi-step profile data
+    │   └── screens/
+    │       ├── splash_screen.dart
+    │       ├── login_screen.dart          # Welcome + Login combined
+    │       ├── main_screen.dart           # Bottom nav + onboarding check
+    │       ├── auth/
+    │       │   ├── sign_up_screen.dart    # Step 1: Email + Password
+    │       │   └── verify_code_screen.dart # Step 2: OTP + Referral
+    │       └── onboarding/
+    │           ├── personal_info_screen.dart  # Step 3a: Name, Birth Date, Gender
+    │           ├── lifestyle_screen.dart      # Step 3b: (TODO)
+    │           ├── interests_screen.dart      # Step 3c: (TODO)
+    │           └── location_screen.dart       # Step 3d: (TODO)
+    ├── pubspec.yaml
+    └── .env
 ```
 
 ---
@@ -529,6 +558,15 @@ Step 3: POST /auth/register/complete (Authenticated)
 | `send_password_reset_code(email, code)` | Send password reset code |
 | `send_welcome_email(email, name)` | Send welcome email |
 
+### Backend Fixes (Session 18)
+
+| Fix | Description |
+|-----|-------------|
+| `deps.py` | `get_current_user` now loads `profile` and `settings` with `selectinload` |
+| `users.py` | `GET /me` returns `UserProfileResponse` with all fields |
+| `user.py` schema | Added `model_validator` to extract `is_premium` and `is_profile_complete` from `profile` |
+| `users.py` | All PUT/PATCH endpoints now use `profile` for profile fields |
+
 ---
 
 ## 9. Business Rules
@@ -583,43 +621,11 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 13 | Admin Panel (Tickets + Reports + User management + Dashboard + Announcements) | ✅ |
 | 14 | Location fields + Referral complete + Reverse geocoding + Search by country | ✅ |
 | **15** | **Push notifications + Real Payment + Production** | 🔲 |
-| **16-17** | **Flutter mobile app - Auth screens (Splash, Welcome, Login, Sign Up)** | ✅ |
-| **18** | **Flutter - Onboarding Flow (4 steps)** | 🔲 |
-| **19** | **Flutter - Main App Features** | 🔲 |
-| **20** | **Flutter - Polish & Production** | 🔲 |
-
-### ✅ Session 16-17 Complete (Flutter)
-
-| Feature | Status |
-|---------|--------|
-| Flutter project setup | ✅ |
-| Dependencies installed | ✅ |
-| Folder structure created | ✅ |
-| Environment variables (.env) | ✅ |
-| API Service (Dio) with interceptors | ✅ |
-| Auth Service (login, register, healthCheck) | ✅ |
-| Storage Service (secure token storage) | ✅ |
-| Auth Provider (state management) | ✅ |
-| Onboarding Provider | ✅ |
-| Language Provider | ✅ |
-| App Theme (Light/Dark mode ready) | ✅ |
-| Splash Screen (with progress bar & random target) | ✅ |
-| Welcome Screen (enhanced) | ✅ |
-| Login Screen (with validation) | ✅ |
-| Sign Up Screen (with validation) | ✅ |
-| Email & Password validation | ✅ |
-| Password visibility toggle | ✅ |
-| Language selection (English/Persian) | ✅ |
-| Google Sign-In button with custom icon | ✅ |
-| Input filtering (English only) | ✅ |
-| Real-time validation with localized errors | ✅ |
-| Password min length: 8 characters | ✅ |
-| Health Check on Splash | ✅ |
-| Retry button on connection error | ✅ |
-| Token refresh interceptor | ✅ |
-| Theme-aware colors (Light/Dark ready) | ✅ |
-| Keyboard handling (resize & dismiss on tap) | ✅ |
-| All auth tests passing ✅ | ✅ |
+| **16-17** | **Flutter mobile app - Auth screens (Splash, Login, Sign Up, Verify)** | ✅ |
+| **18** | **Flutter - Token persistence + Backend compatibility fixes** | ✅ |
+| **19** | **Flutter - Onboarding Flow (Lifestyle, Interests, Location)** | 🔲 |
+| **20** | **Flutter - Main App Features (Discover, Search, Chats, Profile)** | 🔲 |
+| **21** | **Flutter - Polish & Production** | 🔲 |
 
 ---
 
@@ -646,16 +652,6 @@ Real push notifications via Firebase Cloud Messaging, real ZarinPal integration,
 | `app/services/notification_service.py` | Call push_service after creating DB notification |
 | `app/api/v1/endpoints/notifications.py` | Add POST /device-token endpoint |
 
-**Implementation:**
-
-```python
-# POST /notifications/device-token
-{
-    "device_token": "fcm_token_string",
-    "device_type": "android"  # or ios
-}
-```
-
 #### 2. Real Payment Integration (ZarinPal)
 
 **Files to Update:**
@@ -665,14 +661,7 @@ Real push notifications via Firebase Cloud Messaging, real ZarinPal integration,
 | `app/api/v1/endpoints/subscriptions.py` | Replace mock with real ZarinPal calls |
 | `app/services/payment_service.py` | NEW - real ZarinPal API integration |
 
-**ZarinPal API Endpoints:**
-
-```python
-ZARINPAL_REQUEST_URL = "https://api.zarinpal.com/pg/v4/payment/request.json"
-ZARINPAL_VERIFY_URL = "https://api.zarinpal.com/pg/v4/payment/verify.json"
-```
-
-**Flow:**
+**ZarinPal Flow:**
 1. User selects plan → POST /subscriptions/purchase
 2. Backend calls ZarinPal API → gets redirect URL
 3. User pays on ZarinPal
@@ -690,35 +679,6 @@ CREATE INDEX idx_users_city ON users(city);
 CREATE INDEX idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
 CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 ```
-
-**Other Optimizations:**
-- Add DB connection pooling (pool_size=20, max_overflow=40)
-- Add Redis connection pool limits
-- Review slow queries with logging
-- Add response compression (gzip)
-
-#### 4. API Documentation
-
-- Ensure all endpoints have proper OpenAPI `summary`, `description`, `response_model`
-- Add example request/response bodies
-- Export final OpenAPI spec as `openapi.json`
-
-#### 5. Production Checklist
-
-| Item | Status |
-|------|--------|
-| Real ZarinPal integration (replace mock) | 🔲 |
-| FCM push notifications | 🔲 |
-| Device token storage | 🔲 |
-| All indexes added | 🔲 |
-| DB connection pooling configured | 🔲 |
-| Redis connection pooling configured | 🔲 |
-| OpenAPI documentation complete | 🔲 |
-| Environment variables documented | 🔲 |
-| CORS configured for production | 🔲 |
-| Rate limiting tuned | 🔲 |
-| Logging configured | 🔲 |
-| Backup strategy for uploads | 🔲 |
 
 ---
 
@@ -739,12 +699,6 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 
 ```bash
 pytest tests/ -v
-```
-
-### Run Specific Test
-
-```bash
-pytest tests/test_auth.py -v
 ```
 
 ---
@@ -805,15 +759,9 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
-### Environment Files
-
-- `.env` - Local development (gitignored)
-- `.env.example` - Template (committed)
-- `.env.test` - Test environment
-
 ---
 
-## Session 11-17 Completion Summary
+## Session 11-18 Completion Summary
 
 ### ✅ Session 11 Complete
 | Feature | Status |
@@ -858,16 +806,29 @@ alembic downgrade -1
 | Location cache with @lru_cache | ✅ |
 | Complete location tests (25 tests) | ✅ |
 
-### ✅ Session 16-17 Complete (Flutter)
+### ✅ Session 16-17 Complete (Flutter Auth)
 | Feature | Status |
 |---------|--------|
 | Flutter project setup | ✅ |
-| Auth screens (Splash, Welcome, Login, Sign Up) | ✅ |
+| Auth screens (Splash, Login, Sign Up, Verify) | ✅ |
 | API integration with Dio | ✅ |
 | State management with Provider | ✅ |
 | Theme system (Light/Dark) | ✅ |
 | Multi-language (English/Persian) | ✅ |
-| All auth tests passing | ✅ |
+
+### ✅ Session 18 Complete (Flutter Auth + Backend Fixes)
+| Feature | Status |
+|---------|--------|
+| Token persistence on app restart | ✅ |
+| 3-step registration flow | ✅ |
+| VerifyCodeScreen with OTP + referral | ✅ |
+| LoginScreen (Welcome + Login combined) | ✅ |
+| MainScreen with bottom nav | ✅ |
+| ProfileScreen with user info + logout | ✅ |
+| Backend `deps.py` fixed (selectinload for profile/settings) | ✅ |
+| Backend `users.py` fixed (UserProfileResponse) | ✅ |
+| Backend `user.py` schema fixed (model_validator) | ✅ |
+| Fixed `initState` notifyListeners error | ✅ |
 
 ### ⚠️ Pending
 
@@ -876,15 +837,15 @@ alembic downgrade -1
 | Real ZarinPal integration | High | 15 |
 | FCM push notifications | High | 15 |
 | Database indexes | Medium | 15 |
-| Onboarding Flow (Flutter) | High | 18 |
-| Main App Features (Flutter) | High | 19 |
-| Polish & Production (Flutter) | Medium | 20 |
+| Onboarding Flow (Flutter) | High | 19 |
+| Main App Features (Flutter) | High | 20 |
+| Polish & Production (Flutter) | Medium | 21 |
 
 ---
 
 **Next: Session 15 - Push Notifications + Real Payment + Production Ready (Backend)**
 
-**Then: Session 18 - Flutter Onboarding Flow**
+**Then: Session 19 - Flutter Onboarding Flow (Lifestyle, Interests, Location)**
 
 Ready to start when you are. 🚀
 ```

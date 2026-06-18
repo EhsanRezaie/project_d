@@ -1,5 +1,5 @@
 from typing import Optional, List
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -175,6 +175,22 @@ class UserProfileResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_profile_fields(cls, values):
+        """
+        Extract is_premium and is_profile_complete from user.profile.
+        This runs BEFORE validation so Pydantic sees these fields as present.
+        """
+        # If values is a User object (SQLAlchemy model)
+        if hasattr(values, 'profile'):
+            profile = values.profile
+            if profile:
+                # Add computed fields to the values dict
+                values.is_premium = profile.is_premium
+                values.is_profile_complete = profile.is_profile_complete
+        return values
 
 
 class PublicUserResponse(BaseModel):

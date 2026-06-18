@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func  
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone  
 
 from app.db.session import get_session
@@ -8,32 +9,38 @@ from app.models.user import User
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.services.location_service import LocationService
-from app.schemas.user import UserResponse, UserUpdateRequest, LocationTextUpdateRequest, LocationTextUpdateResponse
+from app.schemas.user import UserProfileResponse, UserUpdateRequest, LocationTextUpdateRequest, LocationTextUpdateResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=UserProfileResponse)
 @limiter.limit("100/minute")
 async def get_me(
     request: Request,
+    session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-) -> UserResponse:
-    """
-    Get current user's profile.
-    Requires valid access token.
-    """
-    return UserResponse.model_validate(current_user)
+) -> UserProfileResponse:
+    result = await session.execute(
+        select(User)
+        .options(
+            selectinload(User.profile),
+            selectinload(User.settings),
+        )
+        .where(User.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
+    return UserProfileResponse.model_validate(user)
 
 
-@router.put("/me", response_model=UserResponse)
+@router.put("/me", response_model=UserProfileResponse)
 @limiter.limit("30/minute")
 async def update_me(
     request: Request,
     update_data: UserUpdateRequest,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-) -> UserResponse:
+) -> UserProfileResponse:
     """
     Update current user's profile.
     All fields are optional - only provided fields will be updated.
@@ -46,17 +53,46 @@ async def update_me(
             detail="No fields to update",
         )
     
-    for field, value in update_dict.items():
-        setattr(current_user, field, value)
+    # Update profile fields (they are in UserProfile, not User)
+    profile = current_user.profile
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found",
+        )
     
-    if not current_user.is_profile_complete and ("age" in update_dict or "gender" in update_dict):
-        if current_user.age and current_user.gender:
-            current_user.is_profile_complete = True
+    # Fields that belong to UserProfile
+    profile_fields = ['name', 'bio', 'gender', 'height', 'weight', 
+                      'body_type', 'relationship_status', 'living_situation',
+                      'children_status', 'smoking', 'drinking', 'education',
+                      'workplace', 'religion', 'ethnicity', 'political_orientation',
+                      'sexual_orientation']
+    
+    for field, value in update_dict.items():
+        if field in profile_fields:
+            setattr(profile, field, value)
+        else:
+            # Fields that belong to User (like age is computed from birth_date)
+            setattr(current_user, field, value)
+    
+    # Update last_seen
+    current_user.last_seen_at = datetime.now(timezone.utc)
     
     await session.commit()
     await session.refresh(current_user)
     
-    return UserResponse.model_validate(current_user)
+    # Reload with profile and settings
+    result = await session.execute(
+        select(User)
+        .options(
+            selectinload(User.profile),
+            selectinload(User.settings),
+        )
+        .where(User.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
+    
+    return UserProfileResponse.model_validate(user)
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
@@ -100,20 +136,28 @@ async def update_location(
             detail="Longitude must be between -180 and 180",
         )
     
-    current_user.lat = lat
-    current_user.lng = lng
+    # Update location in UserProfile
+    profile = current_user.profile
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found",
+        )
+    
+    profile.lat = lat
+    profile.lng = lng
     current_user.last_seen_at = datetime.now(timezone.utc)
     
     # Auto-fill location text from coordinates (only if user didn't manually set)
-    if not current_user.location_manual:
+    if not profile.location_manual:
         location_data = await LocationService.reverse_geocode(lat, lng)
         if location_data:
             if location_data.get("country"):
-                current_user.country = location_data.get("country")
+                profile.country = location_data.get("country")
             if location_data.get("province"):
-                current_user.province = location_data.get("province")
+                profile.province = location_data.get("province")
             if location_data.get("city"):
-                current_user.city = location_data.get("city")
+                profile.city = location_data.get("city")
     
     await session.commit()
 
@@ -130,6 +174,13 @@ async def update_location_text(
     Update user's location with text fields (country, province, city).
     Validates that province and city exist in Iran.
     """
+    profile = current_user.profile
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found",
+        )
+    
     # Validate if province provided
     if body.province:
         result = LocationService.validate_location(body.province, body.city)
@@ -140,21 +191,21 @@ async def update_location_text(
             )
     
     if body.country is not None:
-        current_user.country = body.country
+        profile.country = body.country
     if body.province is not None:
-        current_user.province = body.province
+        profile.province = body.province
     if body.city is not None:
-        current_user.city = body.city
+        profile.city = body.city
     
     if body.province or body.city or body.country:
-        current_user.location_manual = True
+        profile.location_manual = True
     
     await session.commit()
     await session.refresh(current_user)
     
     return LocationTextUpdateResponse(
-        country=current_user.country,
-        province=current_user.province,
-        city=current_user.city,
-        location_manual=current_user.location_manual
+        country=profile.country,
+        province=profile.province,
+        city=profile.city,
+        location_manual=profile.location_manual
     )

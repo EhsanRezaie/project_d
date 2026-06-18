@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from jose import JWTError, jwt
 import uuid
 
@@ -18,7 +19,7 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     session: AsyncSession = Depends(get_session),
 ) -> User:
-    """Extract and validate Bearer token, return the User object."""
+    """Extract and validate Bearer token, return the User object with profile and settings."""
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -45,7 +46,15 @@ async def get_current_user(
             detail="Invalid token payload",
         )
     
-    result = await session.execute(select(User).where(User.id == user_id))
+    # Load user with profile and settings using selectinload
+    result = await session.execute(
+        select(User)
+        .options(
+            selectinload(User.profile),
+            selectinload(User.settings),
+        )
+        .where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
     
     if not user:
@@ -86,7 +95,7 @@ async def get_current_premium_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """Requires premium subscription."""
-    if not current_user.is_premium:
+    if not current_user.profile or not current_user.profile.is_premium:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Premium subscription required",
