@@ -1,4 +1,6 @@
 from app.models.user import User
+from app.models.user_profile import UserProfile
+from app.models.user_settings import UserSettings
 from app.models.photo import Photo
 from app.models.swipe import Swipe
 from app.models.match import Match
@@ -10,3 +12,8 @@ from app.models.review_reward import ReviewReward
 from app.models.referral_reward import ReferralReward
 from app.models.notification import Notification
 from app.models.ticket import Ticket
+from app.models.block import Block
+from app.models.interest import Interest
+from app.models.user_interest import UserInterest
+from app.models.prompt import Prompt
+from app.models.user_prompt import UserPrompt

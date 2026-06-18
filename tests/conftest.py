@@ -8,11 +8,12 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy import text
 import redis.asyncio as aioredis
 from unittest.mock import AsyncMock, patch
+from datetime import datetime, timedelta
+import uuid
 
 from dotenv import load_dotenv
 load_dotenv(".env.test", override=True)
 
-# Windows: asyncpg needs SelectorEventLoop
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -21,6 +22,10 @@ from app.db.base import Base
 from app.db.session import get_session
 import app.core.redis as redis_module
 from app.core.limiter import limiter
+from app.core.security import hash_password
+from app.models.user import User
+from app.models.user_profile import UserProfile
+from app.models.user_settings import UserSettings
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 TEST_REDIS_URL = os.environ["REDIS_URL"]
@@ -40,9 +45,6 @@ def make_redis():
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_database():
-    from app.core.security import hash_password
-    import uuid
-    
     engine = make_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -50,22 +52,57 @@ async def setup_database():
         
         # Create admin user for tests
         admin_id = uuid.uuid4()
+        admin_user_id = str(admin_id)
+        
+        # Insert into users table
         await conn.execute(
             text("""
-                INSERT INTO users (id, email, password_hash, name, age, gender, is_active, token_version, is_profile_complete)
+                INSERT INTO users (id, email, password_hash, is_active, token_version, registration_status, created_at)
                 VALUES (
                     :id,
                     'admin@test.com',
                     :password,
-                    'Test Admin',
-                    30,
-                    'male',
                     true,
                     1,
-                    true
+                    'onboarding_complete',
+                    NOW()
                 )
             """),
             {"id": admin_id, "password": hash_password("admin123")}
+        )
+        
+        # Insert into user_profiles table
+        await conn.execute(
+            text("""
+                INSERT INTO user_profiles (id, user_id, name, birth_date, gender, is_verified, created_at, updated_at)
+                VALUES (
+                    :id,
+                    :user_id,
+                    'Test Admin',
+                    '1990-01-01',
+                    'male',
+                    true,
+                    NOW(),
+                    NOW()
+                )
+            """),
+            {"id": uuid.uuid4(), "user_id": admin_id}
+        )
+        
+        # Insert into user_settings table
+        await conn.execute(
+            text("""
+                INSERT INTO user_settings (id, user_id, hide_last_seen, hide_online_status, created_at, updated_at)
+                VALUES (
+                    :id,
+                    :user_id,
+                    false,
+                    false,
+                    NOW(),
+                    NOW()
+                )
+            """),
+            {"id": uuid.uuid4(), "user_id": admin_id}
         )
         
     await engine.dispose()
@@ -83,17 +120,18 @@ async def setup_database():
 @pytest_asyncio.fixture(autouse=True)
 async def reset_state():
     yield
-    # Clean DB but preserve admin user
     engine = make_engine()
     async with engine.begin() as conn:
         # Delete all tables except preserve admin user
         for table in reversed(Base.metadata.sorted_tables):
-            if table.name != 'users':  # Skip users table
+            if table.name not in ['users', 'user_profiles', 'user_settings']:
                 await conn.execute(table.delete())
-        # Delete all non-admin users
+        
+        # Delete non-admin users and their related data
+        await conn.execute(text("DELETE FROM user_profiles WHERE user_id IN (SELECT id FROM users WHERE email != 'admin@test.com')"))
+        await conn.execute(text("DELETE FROM user_settings WHERE user_id IN (SELECT id FROM users WHERE email != 'admin@test.com')"))
         await conn.execute(text("DELETE FROM users WHERE email != 'admin@test.com'"))
     await engine.dispose()
-    # Clean Redis
     r = make_redis()
     await r.flushdb()
     await r.aclose()
@@ -120,7 +158,6 @@ async def db_session() -> AsyncSession:
 async def patch_redis():
     r = make_redis()
     await r.flushdb()
-    # Patch the module-level client so the app uses our fresh instance
     original = redis_module.redis_client
     redis_module.redis_client = r
     yield r
@@ -134,7 +171,6 @@ async def patch_redis():
 
 @pytest_asyncio.fixture(autouse=True)
 def disable_rate_limiting():
-    """Disable rate limiting during tests so we can create many users quickly"""
     original_enabled = getattr(limiter, "_enabled", True)
     limiter._enabled = False
     yield
@@ -147,10 +183,34 @@ def disable_rate_limiting():
 
 @pytest_asyncio.fixture(autouse=True)
 def mock_websocket_manager():
-    """Mock WebSocket manager to avoid Redis pub/sub issues in tests"""
     with patch("app.api.v1.endpoints.swipes.websocket_manager") as mock:
         mock.broadcast_match = AsyncMock()
         yield mock
+
+
+# ---------------------------------------------------------------------------
+# Mock Email Service for tests
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture(autouse=True)
+def mock_email_service():
+    """Mock email service to avoid sending real emails in tests."""
+    with patch("app.services.email_service.send_verification_code", new_callable=AsyncMock) as mock_send:
+        yield mock_send
+
+
+# ---------------------------------------------------------------------------
+# Mock Redis verification code for tests
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture
+async def mock_verification_code():
+    """Helper fixture to store verification code in Redis for testing."""
+    async def _store_code(email: str, code: str = "123456"):
+        r = redis_module.redis_client
+        await r.setex(f"verification:{email}", 300, code)
+        return code
+    return _store_code
 
 
 # ---------------------------------------------------------------------------
