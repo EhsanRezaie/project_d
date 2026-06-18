@@ -23,6 +23,9 @@ redis_client: aioredis.Redis = aioredis.from_url(
 REFRESH_TOKEN_PREFIX = "refresh_token:"
 REFRESH_TOKEN_TTL = 60 * 60 * 24 * 30  # 30 days in seconds
 
+VERIFICATION_CODE_PREFIX = "verification:"
+VERIFICATION_CODE_TTL = 300  # 5 minutes in seconds
+
 
 async def _safe_redis_operation(operation, fallback=None):
     """Wrapper for safe Redis operations with logging."""
@@ -34,6 +37,8 @@ async def _safe_redis_operation(operation, fallback=None):
             return fallback
         raise
 
+
+# ============ Refresh Token Functions ============
 
 async def store_refresh_token(token: str, user_id: str) -> bool:
     """
@@ -95,6 +100,68 @@ async def revoke_all_user_tokens(user_id: str) -> int:
         logger.error(f"Failed to revoke all user tokens: {e}")
         return -1
 
+
+# ============ Verification Code Functions ============
+
+async def store_verification_code(email: str, code: str, ttl: int = VERIFICATION_CODE_TTL) -> bool:
+    """
+    Store verification code in Redis with TTL.
+    
+    Args:
+        email: User's email (used as key)
+        code: 6-digit verification code
+        ttl: Time to live in seconds (default: 300 = 5 minutes)
+    
+    Returns:
+        bool: True if stored successfully
+    """
+    key = f"{VERIFICATION_CODE_PREFIX}{email}"
+    try:
+        await redis_client.set(key, code, ex=ttl)
+        return True
+    except (RedisError, RedisTimeoutError) as e:
+        logger.error(f"Failed to store verification code: {e}")
+        return False
+
+
+async def get_verification_code(email: str) -> Optional[str]:
+    """
+    Get verification code from Redis.
+    
+    Args:
+        email: User's email
+    
+    Returns:
+        str | None: Verification code if exists, else None
+    """
+    key = f"{VERIFICATION_CODE_PREFIX}{email}"
+    try:
+        return await redis_client.get(key)
+    except (RedisError, RedisTimeoutError) as e:
+        logger.error(f"Failed to get verification code: {e}")
+        return None
+
+
+async def delete_verification_code(email: str) -> bool:
+    """
+    Delete verification code from Redis.
+    
+    Args:
+        email: User's email
+    
+    Returns:
+        bool: True if deleted successfully
+    """
+    key = f"{VERIFICATION_CODE_PREFIX}{email}"
+    try:
+        await redis_client.delete(key)
+        return True
+    except (RedisError, RedisTimeoutError) as e:
+        logger.error(f"Failed to delete verification code: {e}")
+        return False
+
+
+# ============ Health Check ============
 
 async def health_check() -> bool:
     """Check if Redis is reachable."""

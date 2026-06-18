@@ -19,7 +19,6 @@ from app.api.v1.endpoints.referrals import router as referrals_router
 from app.api.v1.endpoints.subscriptions import router as subscription_router
 from app.api.v1.endpoints.notifications import router as notifications_router
 from app.api.v1.endpoints.reports import router as reports_router
-from app.api.v1.endpoints.privacy import router as privacy_router
 from app.api.v1.endpoints.tickets import router as tickets_router
 from app.api.v1.endpoints.admin_tickets import router as admin_tickets_router
 from app.api.v1.endpoints.admin_reports import router as admin_reports_router
@@ -29,13 +28,10 @@ from app.api.v1.endpoints.admin_photos import router as admin_photos_router
 from app.api.v1.endpoints.admin_announcements import router as admin_announcements_router
 from app.api.v1.endpoints.locations import router as locations_router
 
-
-
 from app.api.v1.websocket.matches import router as websocket_router
 from app.api.v1.endpoints.matches import router as matches_router
 from app.api.v1.endpoints.messages import router as messages_router
 from app.api.v1.websocket.chat import router as chat_websocket_router
-
 
 from app.core.logging import setup_logging
 setup_logging()
@@ -65,7 +61,7 @@ if not os.path.exists(uploads_dir):
     os.makedirs(uploads_dir)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
-# Routers - USE app.include_router consistently
+# Routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(photos_router, prefix="/api/v1")  
@@ -80,7 +76,6 @@ app.include_router(referrals_router, prefix="/api/v1")
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
-app.include_router(privacy_router, prefix="/api/v1")
 app.include_router(tickets_router, prefix="/api/v1")
 app.include_router(admin_tickets_router, prefix="/api/v1")
 app.include_router(admin_reports_router, prefix="/api/v1")
@@ -89,8 +84,6 @@ app.include_router(admin_dashboard_router, prefix="/api/v1")
 app.include_router(admin_photos_router, prefix="/api/v1")
 app.include_router(admin_announcements_router, prefix="/api/v1")
 app.include_router(locations_router, prefix="/api/v1")
-
-
 
 # WebSocket Routers
 app.include_router(websocket_router)
