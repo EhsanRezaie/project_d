@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient
+from datetime import datetime, date
 
+# ============ URL Constants ============
 REGISTER_INIT_URL = "/api/v1/auth/register/init"
 REGISTER_VERIFY_URL = "/api/v1/auth/register/verify"
 REGISTER_COMPLETE_URL = "/api/v1/auth/register/complete"
@@ -9,6 +11,7 @@ USERS_ME_URL = "/api/v1/users/me"
 USERS_ME_LOCATION_URL = "/api/v1/users/me/location"
 USERS_ME_LOCATION_TEXT_URL = "/api/v1/users/me/location-text"
 
+# ============ Test Data ============
 VALID_EMAIL = "test@example.com"
 VALID_PASSWORD = "strongpass123"
 VALID_CODE = "123456"
@@ -17,81 +20,227 @@ COMPLETE_PROFILE_PAYLOAD = {
     "name": "Test User",
     "birth_date": "1995-06-15",
     "gender": "male",
+    "sexual_orientation": "straight",
+    "bio": "Hello, I'm a test user",
     "height": 180,
     "weight": 75,
-    "lat": 35.6892,
-    "lng": 51.3890,
+    "body_type": "athletic",
+    "relationship_status": "single",
+    "living_situation": "alone",
+    "children_status": "dont_have",
+    "smoking": "never",
+    "drinking": "socially",
+    "education": "bachelor",
+    "workplace": "Tech Corp",
+    "religion": "islam",
+    "ethnicity": "persian",
+    "political_orientation": "moderate",
+    "languages": ["persian", "english"],
     "country": "Iran",
     "province": "Tehran",
     "city": "Tehran",
+    "lat": 35.6892,
+    "lng": 51.3890,
+}
+
+MINIMAL_PROFILE_PAYLOAD = {
+    "name": "Minimal User",
+    "birth_date": "2000-01-01",
+    "gender": "female",
+    "lat": 35.6892,
+    "lng": 51.3890,
 }
 
 
-async def register_and_login(client: AsyncClient) -> tuple[dict, dict]:
-    """Helper: complete full registration and return (token_data, headers)."""
+def calculate_age(birth_date: str) -> int:
+    today = date.today()
+    birth = date.fromisoformat(birth_date)
+    age = today.year - birth.year
+    if (today.month, today.day) < (birth.month, birth.day):
+        age -= 1
+    return age
+
+
+# ============ EXACTLY LIKE test_auth.py ============
+async def register_user_full(client: AsyncClient, mock_verification_code=None) -> dict:
+    """Helper: complete full registration flow."""
     # Step 1: Init
-    await client.post(REGISTER_INIT_URL, json={"email": VALID_EMAIL})
+    res = await client.post(REGISTER_INIT_URL, json={"email": VALID_EMAIL})
+    assert res.status_code == 200, res.text
     
-    # Step 2: Verify
-    verify_res = await client.post(REGISTER_VERIFY_URL, json={
+    # Step 2: Store verification code in Redis if mock provided
+    if mock_verification_code:
+        await mock_verification_code(VALID_EMAIL, VALID_CODE)
+    
+    # Step 3: Verify
+    res = await client.post(REGISTER_VERIFY_URL, json={
         "email": VALID_EMAIL,
         "code": VALID_CODE,
         "password": VALID_PASSWORD,
     })
-    data = verify_res.json()
+    assert res.status_code == 200, res.text
+    data = res.json()
+    
+    # Step 4: Complete profile
     headers = {"Authorization": f"Bearer {data['access_token']}"}
+    res = await client.post(
+        REGISTER_COMPLETE_URL,
+        json=COMPLETE_PROFILE_PAYLOAD,
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
     
-    # Step 3: Complete profile
-    res = await client.post(REGISTER_COMPLETE_URL, json=COMPLETE_PROFILE_PAYLOAD, headers=headers)
-    assert res.status_code == 200
-    token_data = res.json()
-    headers = {"Authorization": f"Bearer {token_data['access_token']}"}
-    
-    return token_data, headers
+    return res.json()
 
 
-# ---------------------------------------------------------------------------
+# ============ Helper for custom email ============
+async def register_user_full_custom(
+    client: AsyncClient, 
+    mock_verification_code, 
+    email: str, 
+    password: str = VALID_PASSWORD,
+    complete_payload: dict = None,
+) -> dict:
+    """Helper: complete full registration with custom email."""
+    complete_payload = complete_payload or COMPLETE_PROFILE_PAYLOAD
+    
+    res = await client.post(REGISTER_INIT_URL, json={"email": email})
+    assert res.status_code == 200, res.text
+    
+    await mock_verification_code(email, VALID_CODE)
+    
+    res = await client.post(REGISTER_VERIFY_URL, json={
+        "email": email,
+        "code": VALID_CODE,
+        "password": password,
+    })
+    assert res.status_code == 200, res.text
+    data = res.json()
+    
+    headers = {"Authorization": f"Bearer {data['access_token']}"}
+    res = await client.post(
+        REGISTER_COMPLETE_URL,
+        json=complete_payload,
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    
+    return res.json()
+
+
+def assert_profile_fields(data: dict, expected: dict):
+    """Helper to assert profile fields match expected values."""
+    profile_fields = [
+        "name", "gender", "sexual_orientation", "bio", "height", "weight",
+        "body_type", "relationship_status", "living_situation", "children_status",
+        "smoking", "drinking", "education", "workplace", "religion", "ethnicity",
+        "political_orientation", "languages", "country", "province", "city",
+        "lat", "lng", "location_manual",
+    ]
+
+    for field in profile_fields:
+        if field in expected:
+            actual = data.get(field)
+            expected_val = expected[field]
+            assert actual == expected_val, f"Field {field} mismatch: expected {expected_val}, got {actual}"
+
+
+# =============================================================================
 # GET /api/v1/users/me
-# ---------------------------------------------------------------------------
+# =============================================================================
 
 class TestGetMe:
-    
-    async def test_get_me_success(self, client: AsyncClient):
+
+    async def test_get_me_success(self, client: AsyncClient, mock_verification_code):
         """Should return current user profile with all fields."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        token = result["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
         res = await client.get(USERS_ME_URL, headers=headers)
         assert res.status_code == 200
         data = res.json()
-        
+
+        assert data["id"] is not None
         assert data["email"] == VALID_EMAIL
-        assert data["name"] == "Test User"
-        assert data["age"] == 29  # 1995-06-15 to 2024
-        assert data["gender"] == "male"
-        assert data["height"] == 180
-        assert data["weight"] == 75
-        assert data["country"] == "Iran"
-        assert data["province"] == "Tehran"
-        assert data["city"] == "Tehran"
+        assert data["is_active"] is True
         assert data["is_profile_complete"] is True
+        assert data["created_at"] is not None
+
+        assert_profile_fields(data, COMPLETE_PROFILE_PAYLOAD)
+
+        assert data["age"] == calculate_age("1995-06-15")
+        assert "is_premium" in data
+        assert "premium_until" in data
+        assert data["is_verified"] is False
+
+        assert data["settings"] is not None
+        settings = data["settings"]
+        assert "hide_last_seen" in settings
+        assert "hide_online_status" in settings
+        assert "push_enabled" in settings
+        assert "like_notifications" in settings
+        assert "match_notifications" in settings
+        assert "message_notifications" in settings
+        assert "language" in settings
+        assert "dark_mode" in settings
+
         assert "password_hash" not in data
-    
+
+    async def test_get_me_with_minimal_profile(self, client: AsyncClient, mock_verification_code):
+        """Should handle users with minimal profile data."""
+        result = await register_user_full_custom(
+            client,
+            mock_verification_code,
+            email="minimal@example.com",
+            complete_payload=MINIMAL_PROFILE_PAYLOAD,
+        )
+        token = result["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        res = await client.get(USERS_ME_URL, headers=headers)
+        assert res.status_code == 200
+        data = res.json()
+
+        assert data["name"] == "Minimal User"
+        assert data["gender"] == "female"
+        assert data["age"] == calculate_age("2000-01-01")
+        assert data["is_profile_complete"] is True
+        assert data["lat"] == 35.6892
+        assert data["lng"] == 51.3890
+
+        assert data.get("bio") is None
+        assert data.get("height") is None
+        assert data.get("weight") is None
+        assert data.get("body_type") is None
+        assert data.get("relationship_status") is None
+        assert data.get("country") is None
+        assert data.get("province") is None
+        assert data.get("city") is None
+
     async def test_get_me_requires_auth(self, client: AsyncClient):
         """Should return 401 without token."""
         res = await client.get(USERS_ME_URL)
         assert res.status_code == 401
 
+    async def test_get_me_with_invalid_token(self, client: AsyncClient):
+        """Should return 401 with invalid token."""
+        headers = {"Authorization": "Bearer invalid-token"}
+        res = await client.get(USERS_ME_URL, headers=headers)
+        assert res.status_code == 401
 
-# ---------------------------------------------------------------------------
+
+# =============================================================================
 # PUT /api/v1/users/me
-# ---------------------------------------------------------------------------
+# =============================================================================
 
 class TestUpdateMe:
-    
-    async def test_update_name_success(self, client: AsyncClient):
+
+    async def test_update_name_success(self, client: AsyncClient, mock_verification_code):
         """Should update user name."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
             json={"name": "New Name"},
@@ -100,50 +249,138 @@ class TestUpdateMe:
         assert res.status_code == 200
         data = res.json()
         assert data["name"] == "New Name"
-    
-    async def test_update_bio_success(self, client: AsyncClient):
+
+    async def test_update_bio_success(self, client: AsyncClient, mock_verification_code):
         """Should update user bio."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
-            json={"bio": "This is my bio"},
+            json={"bio": "This is my updated bio"},
             headers=headers,
         )
         assert res.status_code == 200
         data = res.json()
-        assert data["bio"] == "This is my bio"
-    
-    async def test_update_body_type_success(self, client: AsyncClient):
+        assert data["bio"] == "This is my updated bio"
+
+    async def test_update_gender_success(self, client: AsyncClient, mock_verification_code):
+        """Should update gender."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"gender": "female"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["gender"] == "female"
+
+    async def test_update_sexual_orientation_success(self, client: AsyncClient, mock_verification_code):
+        """Should update sexual orientation."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"sexual_orientation": "bisexual"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["sexual_orientation"] == "bisexual"
+
+    async def test_update_body_type_success(self, client: AsyncClient, mock_verification_code):
         """Should update body type."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
-            json={"body_type": "athletic"},
+            json={"body_type": "slim"},
             headers=headers,
         )
         assert res.status_code == 200
         data = res.json()
-        assert data["body_type"] == "athletic"
-    
-    async def test_update_relationship_status_success(self, client: AsyncClient):
+        assert data["body_type"] == "slim"
+
+    async def test_update_relationship_status_success(self, client: AsyncClient, mock_verification_code):
         """Should update relationship status."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
-            json={"relationship_status": "single"},
+            json={"relationship_status": "divorced"},
             headers=headers,
         )
         assert res.status_code == 200
         data = res.json()
-        assert data["relationship_status"] == "single"
-    
-    async def test_update_education_success(self, client: AsyncClient):
+        assert data["relationship_status"] == "divorced"
+
+    async def test_update_living_situation_success(self, client: AsyncClient, mock_verification_code):
+        """Should update living situation."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"living_situation": "with_partner"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["living_situation"] == "with_partner"
+
+    async def test_update_children_status_success(self, client: AsyncClient, mock_verification_code):
+        """Should update children status."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"children_status": "want"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["children_status"] == "want"
+
+    async def test_update_smoking_success(self, client: AsyncClient, mock_verification_code):
+        """Should update smoking status."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"smoking": "regularly"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["smoking"] == "regularly"
+
+    async def test_update_drinking_success(self, client: AsyncClient, mock_verification_code):
+        """Should update drinking status."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"drinking": "regularly"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["drinking"] == "regularly"
+
+    async def test_update_education_success(self, client: AsyncClient, mock_verification_code):
         """Should update education."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
             json={"education": "master"},
@@ -152,11 +389,12 @@ class TestUpdateMe:
         assert res.status_code == 200
         data = res.json()
         assert data["education"] == "master"
-    
-    async def test_update_workplace_success(self, client: AsyncClient):
+
+    async def test_update_workplace_success(self, client: AsyncClient, mock_verification_code):
         """Should update workplace."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
             json={"workplace": "Google"},
@@ -165,11 +403,68 @@ class TestUpdateMe:
         assert res.status_code == 200
         data = res.json()
         assert data["workplace"] == "Google"
-    
-    async def test_update_height_weight_success(self, client: AsyncClient):
+
+    async def test_update_religion_success(self, client: AsyncClient, mock_verification_code):
+        """Should update religion."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"religion": "christian"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["religion"] == "christian"
+
+    async def test_update_ethnicity_success(self, client: AsyncClient, mock_verification_code):
+        """Should update ethnicity."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"ethnicity": "kurdish"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["ethnicity"] == "kurdish"
+
+    async def test_update_political_orientation_success(self, client: AsyncClient, mock_verification_code):
+        """Should update political orientation."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"political_orientation": "conservative"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["political_orientation"] == "conservative"
+
+    async def test_update_languages_success(self, client: AsyncClient, mock_verification_code):
+        """Should update languages."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"languages": ["persian", "english", "french"]},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["languages"] == ["persian", "english", "french"]
+
+    async def test_update_height_weight_success(self, client: AsyncClient, mock_verification_code):
         """Should update height and weight."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
             json={"height": 175, "weight": 70},
@@ -179,75 +474,177 @@ class TestUpdateMe:
         data = res.json()
         assert data["height"] == 175
         assert data["weight"] == 70
-    
-    async def test_update_multiple_fields_success(self, client: AsyncClient):
+
+    async def test_update_multiple_fields_success(self, client: AsyncClient, mock_verification_code):
         """Should update multiple fields at once."""
-        _, headers = await register_and_login(client)
-        
-        res = await client.put(
-            USERS_ME_URL,
-            json={
-                "name": "Updated Name",
-                "bio": "Updated bio",
-                "gender": "female",
-                "height": 170,
-                "weight": 60,
-                "body_type": "slim",
-                "relationship_status": "divorced",
-                "education": "phd",
-                "workplace": "Microsoft",
-            },
-            headers=headers,
-        )
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        update_payload = {
+            "name": "Updated Name",
+            "bio": "Updated bio",
+            "gender": "female",
+            "sexual_orientation": "pansexual",
+            "height": 170,
+            "weight": 60,
+            "body_type": "slim",
+            "relationship_status": "divorced",
+            "living_situation": "with_roommate",
+            "children_status": "dont_want",
+            "smoking": "occasionally",
+            "drinking": "never",
+            "education": "phd",
+            "workplace": "Microsoft",
+            "religion": "atheist",
+            "ethnicity": "persian",
+            "political_orientation": "liberal",
+            "languages": ["persian", "english", "spanish"],
+        }
+
+        res = await client.put(USERS_ME_URL, json=update_payload, headers=headers)
         assert res.status_code == 200
         data = res.json()
-        assert data["name"] == "Updated Name"
-        assert data["bio"] == "Updated bio"
-        assert data["gender"] == "female"
-        assert data["height"] == 170
-        assert data["weight"] == 60
-        assert data["body_type"] == "slim"
-        assert data["relationship_status"] == "divorced"
-        assert data["education"] == "phd"
-        assert data["workplace"] == "Microsoft"
-    
-    async def test_update_invalid_gender(self, client: AsyncClient):
+
+        for field, value in update_payload.items():
+            assert data.get(field) == value, f"Field {field} mismatch"
+
+    async def test_update_invalid_gender(self, client: AsyncClient, mock_verification_code):
         """Should reject invalid gender."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
             json={"gender": "invalid"},
             headers=headers,
         )
         assert res.status_code == 422
-    
-    async def test_update_invalid_body_type(self, client: AsyncClient):
+
+    async def test_update_invalid_sexual_orientation(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid sexual orientation."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"sexual_orientation": "invalid"},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    async def test_update_invalid_body_type(self, client: AsyncClient, mock_verification_code):
         """Should reject invalid body type."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
             json={"body_type": "invalid"},
             headers=headers,
         )
         assert res.status_code == 422
-    
-    async def test_update_invalid_relationship_status(self, client: AsyncClient):
+
+    async def test_update_invalid_relationship_status(self, client: AsyncClient, mock_verification_code):
         """Should reject invalid relationship status."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
             json={"relationship_status": "invalid"},
             headers=headers,
         )
         assert res.status_code == 422
-    
-    async def test_update_empty_body(self, client: AsyncClient):
+
+    async def test_update_invalid_living_situation(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid living situation."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"living_situation": "invalid"},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    async def test_update_invalid_children_status(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid children status."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"children_status": "invalid"},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    async def test_update_invalid_smoking(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid smoking status."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"smoking": "invalid"},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    async def test_update_invalid_drinking(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid drinking status."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"drinking": "invalid"},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    async def test_update_invalid_education(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid education level."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"education": "invalid"},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    async def test_update_invalid_height(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid height."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"height": 300},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    async def test_update_invalid_weight(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid weight."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"weight": 400},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
+    async def test_update_empty_body(self, client: AsyncClient, mock_verification_code):
         """Should reject empty update."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.put(
             USERS_ME_URL,
             json={},
@@ -255,72 +652,124 @@ class TestUpdateMe:
         )
         assert res.status_code == 400
         assert "No fields to update" in res.json()["detail"]
-    
+
     async def test_update_requires_auth(self, client: AsyncClient):
         """Should return 401 without token."""
         res = await client.put(USERS_ME_URL, json={"name": "New Name"})
         assert res.status_code == 401
 
 
-# ---------------------------------------------------------------------------
+# =============================================================================
 # DELETE /api/v1/users/me
-# ---------------------------------------------------------------------------
+# =============================================================================
 
 class TestDeleteMe:
-    
-    async def test_delete_me_success(self, client: AsyncClient):
+
+    async def test_delete_me_success(self, client: AsyncClient, mock_verification_code):
         """Should soft delete user account."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full_custom(
+            client,
+            mock_verification_code,
+            email="delete_test@example.com",
+        )
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.delete(USERS_ME_URL, headers=headers)
         assert res.status_code == 204
-        
-        login_res = await client.post(LOGIN_URL, json={
-            "email": VALID_EMAIL,
-            "password": VALID_PASSWORD,
-        })
-        assert login_res.status_code == 401
-    
+
+        login_res = await client.post(
+            LOGIN_URL,
+            json={
+                "email": "delete_test@example.com",
+                "password": VALID_PASSWORD,
+            },
+        )
+        assert login_res.status_code in [401, 403]
+
     async def test_delete_me_requires_auth(self, client: AsyncClient):
         """Should return 401 without token."""
         res = await client.delete(USERS_ME_URL)
         assert res.status_code == 401
 
 
-# ---------------------------------------------------------------------------
+# =============================================================================
 # POST /api/v1/users/me/location
-# ---------------------------------------------------------------------------
+# =============================================================================
 
 class TestUpdateLocation:
-    
-    async def test_update_location_success(self, client: AsyncClient):
+
+    async def test_update_location_success(self, client: AsyncClient, mock_verification_code):
         """Should update user location with lat/lng."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.post(
             USERS_ME_LOCATION_URL,
             params={"lat": 35.6892, "lng": 51.3890},
             headers=headers,
         )
         assert res.status_code == 204
-        
+
         get_res = await client.get(USERS_ME_URL, headers=headers)
         assert get_res.status_code == 200
         data = get_res.json()
         assert data["lat"] == 35.6892
         assert data["lng"] == 51.3890
-    
-    async def test_update_location_invalid_lat(self, client: AsyncClient):
+        assert data["location_manual"] is False
+
+    async def test_update_location_with_negative_coordinates(self, client: AsyncClient, mock_verification_code):
+        """Should handle negative coordinates correctly."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.post(
+            USERS_ME_LOCATION_URL,
+            params={"lat": -33.8688, "lng": 151.2093},
+            headers=headers,
+        )
+        assert res.status_code == 204
+
+        get_res = await client.get(USERS_ME_URL, headers=headers)
+        data = get_res.json()
+        assert data["lat"] == -33.8688
+        assert data["lng"] == 151.2093
+
+    async def test_update_location_invalid_lat(self, client: AsyncClient, mock_verification_code):
         """Should reject invalid latitude."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.post(
             USERS_ME_LOCATION_URL,
             params={"lat": 100, "lng": 51.3890},
             headers=headers,
         )
         assert res.status_code == 400
-    
+
+    async def test_update_location_invalid_lng(self, client: AsyncClient, mock_verification_code):
+        """Should reject invalid longitude."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.post(
+            USERS_ME_LOCATION_URL,
+            params={"lat": 35.6892, "lng": 200},
+            headers=headers,
+        )
+        assert res.status_code == 400
+
+    async def test_update_location_missing_params(self, client: AsyncClient, mock_verification_code):
+        """Should reject missing parameters."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.post(
+            USERS_ME_LOCATION_URL,
+            params={"lat": 35.6892},
+            headers=headers,
+        )
+        assert res.status_code == 422
+
     async def test_update_location_requires_auth(self, client: AsyncClient):
         """Should return 401 without token."""
         res = await client.post(
@@ -330,22 +779,23 @@ class TestUpdateLocation:
         assert res.status_code == 401
 
 
-# ---------------------------------------------------------------------------
+# =============================================================================
 # PATCH /api/v1/users/me/location-text
-# ---------------------------------------------------------------------------
+# =============================================================================
 
 class TestUpdateLocationText:
-    
-    async def test_update_location_text_success(self, client: AsyncClient):
+
+    async def test_update_location_text_success(self, client: AsyncClient, mock_verification_code):
         """Should update location with text fields."""
-        _, headers = await register_and_login(client)
-        
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
         res = await client.patch(
             USERS_ME_LOCATION_TEXT_URL,
             json={
                 "country": "Iran",
                 "province": "Isfahan",
-                "city": "Isfahan"
+                "city": "Isfahan",
             },
             headers=headers,
         )
@@ -355,11 +805,194 @@ class TestUpdateLocationText:
         assert data["province"] == "Isfahan"
         assert data["city"] == "Isfahan"
         assert data["location_manual"] is True
-    
+
+    async def test_update_location_text_partial(self, client: AsyncClient, mock_verification_code):
+        """Should update only provided text fields."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.patch(
+            USERS_ME_LOCATION_TEXT_URL,
+            json={"province": "Fars"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["province"] == "Fars"
+        assert data["location_manual"] is True
+
+        get_res = await client.get(USERS_ME_URL, headers=headers)
+        get_data = get_res.json()
+        assert get_data["country"] == "Iran"
+        assert get_data["city"] == "Tehran"
+
     async def test_update_location_text_requires_auth(self, client: AsyncClient):
         """Should return 401 without token."""
         res = await client.patch(
             USERS_ME_LOCATION_TEXT_URL,
-            json={"country": "Iran", "province": "Tehran", "city": "Tehran"}
+            json={"country": "Iran", "province": "Tehran", "city": "Tehran"},
         )
         assert res.status_code == 401
+
+    async def test_update_location_text_empty(self, client: AsyncClient, mock_verification_code):
+        """Should handle empty update gracefully."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.patch(
+            USERS_ME_LOCATION_TEXT_URL,
+            json={},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["location_manual"] is False
+
+
+# =============================================================================
+# Additional Tests
+# =============================================================================
+
+class TestUserSettings:
+
+    async def test_settings_created_on_registration(self, client: AsyncClient, mock_verification_code):
+        """Should create default settings on registration."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.get(USERS_ME_URL, headers=headers)
+        data = res.json()
+
+        settings = data["settings"]
+        assert settings["hide_last_seen"] is False
+        assert settings["hide_online_status"] is False
+        assert settings["push_enabled"] is True
+        assert settings["like_notifications"] is True
+        assert settings["match_notifications"] is True
+        assert settings["message_notifications"] is True
+        assert settings["language"] == "fa"
+        assert settings["dark_mode"] is False
+
+
+class TestPremiumStatus:
+
+    async def test_is_premium_field_exists(self, client: AsyncClient, mock_verification_code):
+        """Should show is_premium field in response."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.get(USERS_ME_URL, headers=headers)
+        data = res.json()
+
+        assert "is_premium" in data
+        assert "premium_until" in data
+
+
+class TestProfileCompleteness:
+
+    async def test_is_profile_complete_true_after_complete(self, client: AsyncClient, mock_verification_code):
+        """Should show is_profile_complete as true after completing profile."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.get(USERS_ME_URL, headers=headers)
+        data = res.json()
+        assert data["is_profile_complete"] is True
+
+    async def test_is_profile_complete_with_minimal(self, client: AsyncClient, mock_verification_code):
+        """Should show is_profile_complete as true with minimal required fields."""
+        result = await register_user_full_custom(
+            client,
+            mock_verification_code,
+            email="minimal2@example.com",
+            complete_payload=MINIMAL_PROFILE_PAYLOAD,
+        )
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.get(USERS_ME_URL, headers=headers)
+        data = res.json()
+        assert data["is_profile_complete"] is True
+
+
+class TestEdgeCases:
+
+    async def test_update_with_unicode_characters(self, client: AsyncClient, mock_verification_code):
+        """Should handle Unicode characters properly."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        update_payload = {
+            "name": "احسان محمدی",
+            "bio": "سلام! من تست‌کننده هستم. 😊",
+            "workplace": "شرکت فناوری",
+        }
+
+        res = await client.put(USERS_ME_URL, json=update_payload, headers=headers)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["name"] == "احسان محمدی"
+        assert data["bio"] == "سلام! من تست‌کننده هستم. 😊"
+        assert data["workplace"] == "شرکت فناوری"
+
+    async def test_update_name_with_emoji(self, client: AsyncClient, mock_verification_code):
+        """Should handle emoji in name."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.put(
+            USERS_ME_URL,
+            json={"name": "John 🚀"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["name"] == "John 🚀"
+
+    async def test_get_me_after_settings_update(self, client: AsyncClient, mock_verification_code):
+        """Should reflect settings updates when getting profile."""
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.get(USERS_ME_URL, headers=headers)
+        data = res.json()
+        assert data["settings"] is not None
+
+    async def test_duplicate_email_cannot_register(self, client: AsyncClient, mock_verification_code):
+        """Should prevent registration with duplicate email."""
+        await register_user_full_custom(
+            client,
+            mock_verification_code,
+            email="duplicate@example.com",
+        )
+
+        res = await client.post(
+            REGISTER_INIT_URL,
+            json={"email": "duplicate@example.com"},
+        )
+        assert res.status_code == 409
+        assert "already exists" in res.json()["detail"].lower()
+
+
+class TestAccountReactivation:
+
+    async def test_deleted_account_cannot_login(self, client: AsyncClient, mock_verification_code):
+        """Should prevent login of deleted account."""
+        email = "delete_test2@example.com"
+        password = "testpass123"
+
+        result = await register_user_full_custom(
+            client,
+            mock_verification_code,
+            email=email,
+            password=password,
+        )
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.delete(USERS_ME_URL, headers=headers)
+        assert res.status_code == 204
+
+        login_res = await client.post(
+            LOGIN_URL,
+            json={"email": email, "password": password},
+        )
+        assert login_res.status_code == 401

@@ -25,7 +25,8 @@ class UserUpdateRequest(BaseModel):
     religion: Optional[str] = None
     ethnicity: Optional[str] = None
     political_orientation: Optional[str] = None
-
+    languages: Optional[List[str]] = None
+    
     @field_validator("gender")
     @classmethod
     def validate_gender(cls, v: str) -> str:
@@ -180,16 +181,48 @@ class UserProfileResponse(BaseModel):
     @classmethod
     def extract_profile_fields(cls, values):
         """
-        Extract is_premium and is_profile_complete from user.profile.
+        Extract all profile fields from user.profile.
         This runs BEFORE validation so Pydantic sees these fields as present.
         """
         # If values is a User object (SQLAlchemy model)
         if hasattr(values, 'profile'):
             profile = values.profile
             if profile:
-                # Add computed fields to the values dict
+                values.name = profile.name
+                values.age = profile.age
+                values.gender = profile.gender
+                values.sexual_orientation = profile.sexual_orientation
+                values.bio = profile.bio
+                values.height = profile.height
+                values.weight = profile.weight
+                values.body_type = profile.body_type
+                values.relationship_status = profile.relationship_status
+                values.living_situation = profile.living_situation
+                values.children_status = profile.children_status
+                values.smoking = profile.smoking
+                values.drinking = profile.drinking
+                values.education = profile.education
+                values.workplace = profile.workplace
+                values.religion = profile.religion
+                values.ethnicity = profile.ethnicity
+                values.political_orientation = profile.political_orientation
+                values.languages = profile.languages
+                values.country = profile.country
+                values.province = profile.province
+                values.city = profile.city
+                values.lat = profile.lat
+                values.lng = profile.lng
+                values.location_manual = profile.location_manual
                 values.is_premium = profile.is_premium
+                values.premium_until = profile.premium_until
+                values.is_verified = profile.is_verified
                 values.is_profile_complete = profile.is_profile_complete
+                values.settings = values.settings
+                
+                # اگه settings از قبل وجود نداره، از user.settings بگیر
+                if hasattr(values, 'settings') and values.settings:
+                    values.settings = values.settings
+                
         return values
 
 

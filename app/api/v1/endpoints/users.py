@@ -21,16 +21,22 @@ async def get_me(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> UserProfileResponse:
-    result = await session.execute(
-        select(User)
-        .options(
-            selectinload(User.profile),
-            selectinload(User.settings),
+
+
+    if not current_user.profile:
+        result = await session.execute(
+            select(User)
+            .options(
+                selectinload(User.profile),
+                selectinload(User.settings),
+            )
+            .where(User.id == current_user.id)
         )
-        .where(User.id == current_user.id)
-    )
-    user = result.scalar_one_or_none()
-    return UserProfileResponse.model_validate(user)
+        user = result.scalar_one_or_none()
+        if user and user.profile:
+            return UserProfileResponse.model_validate(user)
+    
+    return UserProfileResponse.model_validate(current_user)
 
 
 @router.put("/me", response_model=UserProfileResponse)
@@ -63,10 +69,10 @@ async def update_me(
     
     # Fields that belong to UserProfile
     profile_fields = ['name', 'bio', 'gender', 'height', 'weight', 
-                      'body_type', 'relationship_status', 'living_situation',
-                      'children_status', 'smoking', 'drinking', 'education',
-                      'workplace', 'religion', 'ethnicity', 'political_orientation',
-                      'sexual_orientation']
+                  'body_type', 'relationship_status', 'living_situation',
+                  'children_status', 'smoking', 'drinking', 'education',
+                  'workplace', 'religion', 'ethnicity', 'political_orientation',
+                  'sexual_orientation', 'languages']
     
     for field, value in update_dict.items():
         if field in profile_fields:
