@@ -1,0 +1,792 @@
+[
+  {
+    "name": "football",
+    "category": "sports_fitness",
+    "icon": "🏈"
+  },
+  {
+    "name": "basketball",
+    "category": "sports_fitness",
+    "icon": "🏀"
+  },
+  {
+    "name": "volleyball",
+    "category": "sports_fitness",
+    "icon": "🏐"
+  },
+  {
+    "name": "futsal",
+    "category": "sports_fitness",
+    "icon": "🥅"
+  },
+  {
+    "name": "swimming",
+    "category": "sports_fitness",
+    "icon": "🏊"
+  },
+  {
+    "name": "running",
+    "category": "sports_fitness",
+    "icon": "🏃"
+  },
+  {
+    "name": "marathon",
+    "category": "sports_fitness",
+    "icon": "🏅"
+  },
+  {
+    "name": "cycling",
+    "category": "sports_fitness",
+    "icon": "🚴"
+  },
+  {
+    "name": "gym",
+    "category": "sports_fitness",
+    "icon": "🏋️"
+  },
+  {
+    "name": "crossfit",
+    "category": "sports_fitness",
+    "icon": "🏋️‍♀️"
+  },
+  {
+    "name": "yoga",
+    "category": "sports_fitness",
+    "icon": "🧘"
+  },
+  {
+    "name": "pilates",
+    "category": "sports_fitness",
+    "icon": "🤸"
+  },
+  {
+    "name": "martial_arts",
+    "category": "sports_fitness",
+    "icon": "🥋"
+  },
+  {
+    "name": "wrestling",
+    "category": "sports_fitness",
+    "icon": "🤼"
+  },
+  {
+    "name": "boxing",
+    "category": "sports_fitness",
+    "icon": "🥊"
+  },
+  {
+    "name": "hiking",
+    "category": "sports_fitness",
+    "icon": "🥾"
+  },
+  {
+    "name": "rock_climbing",
+    "category": "sports_fitness",
+    "icon": "🧗"
+  },
+  {
+    "name": "skiing",
+    "category": "sports_fitness",
+    "icon": "⛷️"
+  },
+  {
+    "name": "snowboarding",
+    "category": "sports_fitness",
+    "icon": "🏂"
+  },
+  {
+    "name": "skateboarding",
+    "category": "sports_fitness",
+    "icon": "🛹"
+  },
+  {
+    "name": "surfing",
+    "category": "sports_fitness",
+    "icon": "🏄"
+  },
+  {
+    "name": "tennis",
+    "category": "sports_fitness",
+    "icon": "🎾"
+  },
+  {
+    "name": "badminton",
+    "category": "sports_fitness",
+    "icon": "🏸"
+  },
+  {
+    "name": "table_tennis",
+    "category": "sports_fitness",
+    "icon": "🏓"
+  },
+  {
+    "name": "golf",
+    "category": "sports_fitness",
+    "icon": "⛳"
+  },
+  {
+    "name": "horseback_riding",
+    "category": "sports_fitness",
+    "icon": "🏇"
+  },
+  {
+    "name": "archery",
+    "category": "sports_fitness",
+    "icon": "🏹"
+  },
+  {
+    "name": "bodybuilding",
+    "category": "sports_fitness",
+    "icon": "💪"
+  },
+  {
+    "name": "dancing",
+    "category": "sports_fitness",
+    "icon": "💃"
+  },
+  {
+    "name": "parkour",
+    "category": "sports_fitness",
+    "icon": "🤾"
+  },
+  {
+    "name": "pop_music",
+    "category": "music",
+    "icon": "🎤"
+  },
+  {
+    "name": "rock_music",
+    "category": "music",
+    "icon": "🎸"
+  },
+  {
+    "name": "traditional_persian_music",
+    "category": "music",
+    "icon": "🪕"
+  },
+  {
+    "name": "classical_music",
+    "category": "music",
+    "icon": "🎻"
+  },
+  {
+    "name": "jazz",
+    "category": "music",
+    "icon": "🎷"
+  },
+  {
+    "name": "electronic_music",
+    "category": "music",
+    "icon": "🎧"
+  },
+  {
+    "name": "rap_hiphop",
+    "category": "music",
+    "icon": "🎙️"
+  },
+  {
+    "name": "metal",
+    "category": "music",
+    "icon": "🤘"
+  },
+  {
+    "name": "indie_music",
+    "category": "music",
+    "icon": "🎶"
+  },
+  {
+    "name": "playing_guitar",
+    "category": "music",
+    "icon": "🎸"
+  },
+  {
+    "name": "playing_piano",
+    "category": "music",
+    "icon": "🎹"
+  },
+  {
+    "name": "playing_drums",
+    "category": "music",
+    "icon": "🥁"
+  },
+  {
+    "name": "singing",
+    "category": "music",
+    "icon": "🎤"
+  },
+  {
+    "name": "songwriting",
+    "category": "music",
+    "icon": "📝"
+  },
+  {
+    "name": "dj_ing",
+    "category": "music",
+    "icon": "🎚️"
+  },
+  {
+    "name": "concerts",
+    "category": "music",
+    "icon": "🎫"
+  },
+  {
+    "name": "music_festivals",
+    "category": "music",
+    "icon": "🎪"
+  },
+  {
+    "name": "cooking",
+    "category": "food_drink",
+    "icon": "🍳"
+  },
+  {
+    "name": "baking",
+    "category": "food_drink",
+    "icon": "🍰"
+  },
+  {
+    "name": "street_food",
+    "category": "food_drink",
+    "icon": "🌭"
+  },
+  {
+    "name": "persian_cuisine",
+    "category": "food_drink",
+    "icon": "🍲"
+  },
+  {
+    "name": "sushi",
+    "category": "food_drink",
+    "icon": "🍣"
+  },
+  {
+    "name": "coffee",
+    "category": "food_drink",
+    "icon": "☕"
+  },
+  {
+    "name": "tea_culture",
+    "category": "food_drink",
+    "icon": "🍵"
+  },
+  {
+    "name": "fine_dining",
+    "category": "food_drink",
+    "icon": "🍽️"
+  },
+  {
+    "name": "vegan_vegetarian",
+    "category": "food_drink",
+    "icon": "🥗"
+  },
+  {
+    "name": "barbecue",
+    "category": "food_drink",
+    "icon": "🍖"
+  },
+  {
+    "name": "desserts_sweets",
+    "category": "food_drink",
+    "icon": "🍮"
+  },
+  {
+    "name": "wine_tasting",
+    "category": "food_drink",
+    "icon": "🍷"
+  },
+  {
+    "name": "mocktails",
+    "category": "food_drink",
+    "icon": "🍹"
+  },
+  {
+    "name": "food_blogging",
+    "category": "food_drink",
+    "icon": "📸"
+  },
+  {
+    "name": "restaurant_hopping",
+    "category": "food_drink",
+    "icon": "🍴"
+  },
+  {
+    "name": "movies",
+    "category": "movies_tv",
+    "icon": "🎬"
+  },
+  {
+    "name": "tv_series",
+    "category": "movies_tv",
+    "icon": "📺"
+  },
+  {
+    "name": "anime",
+    "category": "movies_tv",
+    "icon": "🎴"
+  },
+  {
+    "name": "documentaries",
+    "category": "movies_tv",
+    "icon": "🎥"
+  },
+  {
+    "name": "stand_up_comedy",
+    "category": "movies_tv",
+    "icon": "🎙️"
+  },
+  {
+    "name": "k_drama",
+    "category": "movies_tv",
+    "icon": "🇰🇷"
+  },
+  {
+    "name": "sci_fi_fantasy",
+    "category": "movies_tv",
+    "icon": "🚀"
+  },
+  {
+    "name": "horror_movies",
+    "category": "movies_tv",
+    "icon": "👻"
+  },
+  {
+    "name": "classic_cinema",
+    "category": "movies_tv",
+    "icon": "🎞️"
+  },
+  {
+    "name": "reality_tv",
+    "category": "movies_tv",
+    "icon": "📹"
+  },
+  {
+    "name": "painting",
+    "category": "arts_creative",
+    "icon": "🎨"
+  },
+  {
+    "name": "drawing_sketching",
+    "category": "arts_creative",
+    "icon": "✏️"
+  },
+  {
+    "name": "photography",
+    "category": "arts_creative",
+    "icon": "📷"
+  },
+  {
+    "name": "videography",
+    "category": "arts_creative",
+    "icon": "🎥"
+  },
+  {
+    "name": "writing",
+    "category": "arts_creative",
+    "icon": "✍️"
+  },
+  {
+    "name": "poetry",
+    "category": "arts_creative",
+    "icon": "📜"
+  },
+  {
+    "name": "calligraphy",
+    "category": "arts_creative",
+    "icon": "🖋️"
+  },
+  {
+    "name": "graphic_design",
+    "category": "arts_creative",
+    "icon": "🖌️"
+  },
+  {
+    "name": "theatre",
+    "category": "arts_creative",
+    "icon": "🎭"
+  },
+  {
+    "name": "sculpture",
+    "category": "arts_creative",
+    "icon": "🗿"
+  },
+  {
+    "name": "pottery_ceramics",
+    "category": "arts_creative",
+    "icon": "🏺"
+  },
+  {
+    "name": "fashion_design",
+    "category": "arts_creative",
+    "icon": "🧵"
+  },
+  {
+    "name": "animation",
+    "category": "arts_creative",
+    "icon": "🎞️"
+  },
+  {
+    "name": "crafts_diy",
+    "category": "arts_creative",
+    "icon": "✂️"
+  },
+  {
+    "name": "camping",
+    "category": "outdoors_nature",
+    "icon": "⛺"
+  },
+  {
+    "name": "fishing",
+    "category": "outdoors_nature",
+    "icon": "🎣"
+  },
+  {
+    "name": "gardening",
+    "category": "outdoors_nature",
+    "icon": "🌱"
+  },
+  {
+    "name": "beach",
+    "category": "outdoors_nature",
+    "icon": "🏖️"
+  },
+  {
+    "name": "astronomy",
+    "category": "outdoors_nature",
+    "icon": "🔭"
+  },
+  {
+    "name": "nature_walks",
+    "category": "outdoors_nature",
+    "icon": "🌿"
+  },
+  {
+    "name": "road_trips",
+    "category": "outdoors_nature",
+    "icon": "🚗"
+  },
+  {
+    "name": "birdwatching",
+    "category": "outdoors_nature",
+    "icon": "🦅"
+  },
+  {
+    "name": "national_parks",
+    "category": "outdoors_nature",
+    "icon": "🏞️"
+  },
+  {
+    "name": "off_roading",
+    "category": "outdoors_nature",
+    "icon": "🚙"
+  },
+  {
+    "name": "video_gaming",
+    "category": "gaming_tech",
+    "icon": "🎮"
+  },
+  {
+    "name": "pc_gaming",
+    "category": "gaming_tech",
+    "icon": "🖥️"
+  },
+  {
+    "name": "mobile_gaming",
+    "category": "gaming_tech",
+    "icon": "📱"
+  },
+  {
+    "name": "board_games",
+    "category": "gaming_tech",
+    "icon": "🎲"
+  },
+  {
+    "name": "chess",
+    "category": "gaming_tech",
+    "icon": "♟️"
+  },
+  {
+    "name": "card_games",
+    "category": "gaming_tech",
+    "icon": "🃏"
+  },
+  {
+    "name": "technology",
+    "category": "gaming_tech",
+    "icon": "💻"
+  },
+  {
+    "name": "programming",
+    "category": "gaming_tech",
+    "icon": "👨‍💻"
+  },
+  {
+    "name": "ai_machine_learning",
+    "category": "gaming_tech",
+    "icon": "🤖"
+  },
+  {
+    "name": "gadgets",
+    "category": "gaming_tech",
+    "icon": "📲"
+  },
+  {
+    "name": "vr_gaming",
+    "category": "gaming_tech",
+    "icon": "🥽"
+  },
+  {
+    "name": "esports",
+    "category": "gaming_tech",
+    "icon": "🏆"
+  },
+  {
+    "name": "meditation",
+    "category": "lifestyle",
+    "icon": "🧘‍♀️"
+  },
+  {
+    "name": "mindfulness",
+    "category": "lifestyle",
+    "icon": "🌸"
+  },
+  {
+    "name": "journaling",
+    "category": "lifestyle",
+    "icon": "📓"
+  },
+  {
+    "name": "minimalism",
+    "category": "lifestyle",
+    "icon": "🪴"
+  },
+  {
+    "name": "self_improvement",
+    "category": "lifestyle",
+    "icon": "📈"
+  },
+  {
+    "name": "entrepreneurship",
+    "category": "lifestyle",
+    "icon": "💼"
+  },
+  {
+    "name": "investing_finance",
+    "category": "lifestyle",
+    "icon": "💹"
+  },
+  {
+    "name": "cars",
+    "category": "lifestyle",
+    "icon": "🚗"
+  },
+  {
+    "name": "motorcycles",
+    "category": "lifestyle",
+    "icon": "🏍️"
+  },
+  {
+    "name": "interior_design",
+    "category": "lifestyle",
+    "icon": "🛋️"
+  },
+  {
+    "name": "nightlife",
+    "category": "lifestyle",
+    "icon": "🌃"
+  },
+  {
+    "name": "home_cooking",
+    "category": "lifestyle",
+    "icon": "🍳"
+  },
+  {
+    "name": "podcasts",
+    "category": "lifestyle",
+    "icon": "🎧"
+  },
+  {
+    "name": "public_speaking",
+    "category": "lifestyle",
+    "icon": "🎤"
+  },
+  {
+    "name": "traveling",
+    "category": "travel",
+    "icon": "✈️"
+  },
+  {
+    "name": "backpacking",
+    "category": "travel",
+    "icon": "🎒"
+  },
+  {
+    "name": "solo_travel",
+    "category": "travel",
+    "icon": "🧳"
+  },
+  {
+    "name": "road_travel",
+    "category": "travel",
+    "icon": "🚐"
+  },
+  {
+    "name": "cultural_exploration",
+    "category": "travel",
+    "icon": "🗺️"
+  },
+  {
+    "name": "island_hopping",
+    "category": "travel",
+    "icon": "🏝️"
+  },
+  {
+    "name": "mountain_trips",
+    "category": "travel",
+    "icon": "⛰️"
+  },
+  {
+    "name": "historical_sites",
+    "category": "travel",
+    "icon": "🏛️"
+  },
+  {
+    "name": "volunteering",
+    "category": "social_causes",
+    "icon": "🤝"
+  },
+  {
+    "name": "environmentalism",
+    "category": "social_causes",
+    "icon": "🌍"
+  },
+  {
+    "name": "animal_welfare",
+    "category": "social_causes",
+    "icon": "🐾"
+  },
+  {
+    "name": "human_rights",
+    "category": "social_causes",
+    "icon": "✊"
+  },
+  {
+    "name": "community_service",
+    "category": "social_causes",
+    "icon": "🏘️"
+  },
+  {
+    "name": "charity_work",
+    "category": "social_causes",
+    "icon": "❤️"
+  },
+  {
+    "name": "reading",
+    "category": "learning",
+    "icon": "📚"
+  },
+  {
+    "name": "languages",
+    "category": "learning",
+    "icon": "🗣️"
+  },
+  {
+    "name": "history",
+    "category": "learning",
+    "icon": "📖"
+  },
+  {
+    "name": "philosophy",
+    "category": "learning",
+    "icon": "🤔"
+  },
+  {
+    "name": "psychology",
+    "category": "learning",
+    "icon": "🧠"
+  },
+  {
+    "name": "science",
+    "category": "learning",
+    "icon": "🔬"
+  },
+  {
+    "name": "politics",
+    "category": "learning",
+    "icon": "🏛️"
+  },
+  {
+    "name": "economics",
+    "category": "learning",
+    "icon": "💰"
+  },
+  {
+    "name": "online_courses",
+    "category": "learning",
+    "icon": "🎓"
+  },
+  {
+    "name": "dogs",
+    "category": "pets_animals",
+    "icon": "🐶"
+  },
+  {
+    "name": "cats",
+    "category": "pets_animals",
+    "icon": "🐱"
+  },
+  {
+    "name": "birds",
+    "category": "pets_animals",
+    "icon": "🦜"
+  },
+  {
+    "name": "aquariums_fish",
+    "category": "pets_animals",
+    "icon": "🐠"
+  },
+  {
+    "name": "horses",
+    "category": "pets_animals",
+    "icon": "🐴"
+  },
+  {
+    "name": "fashion",
+    "category": "fashion_beauty",
+    "icon": "👗"
+  },
+  {
+    "name": "streetwear",
+    "category": "fashion_beauty",
+    "icon": "👟"
+  },
+  {
+    "name": "makeup",
+    "category": "fashion_beauty",
+    "icon": "💄"
+  },
+  {
+    "name": "skincare",
+    "category": "fashion_beauty",
+    "icon": "🧴"
+  },
+  {
+    "name": "shopping",
+    "category": "fashion_beauty",
+    "icon": "🛍️"
+  },
+  {
+    "name": "jewelry_accessories",
+    "category": "fashion_beauty",
+    "icon": "💍"
+  },
+  {
+    "name": "hairstyling",
+    "category": "fashion_beauty",
+    "icon": "💇"
+  },
+  {
+    "name": "persian_calligraphy_art",
+    "category": "arts_creative",
+    "icon": "🖋️"
+  }
+]
