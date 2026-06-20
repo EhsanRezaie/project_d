@@ -1,223 +1,662 @@
-import pytest
-from httpx import AsyncClient
-from pathlib import Path
+"""
+Tests for photo upload, retrieval, deletion, and admin moderation.
+
+Runs against REAL test infrastructure (per docker-compose_test.yml):
+  - Real Postgres (db_test)
+  - Real Redis (redis_test)
+  - Real MinIO (minio_test) — NOT mocked. We genuinely upload bytes,
+    fetch signed/public URLs over HTTP, and verify the objects move
+    between the photos-private-test / photos-public-test buckets.
+
+Before running:
+    docker compose -f docker-compose_test.yml up -d
+    # wait for minio_test_init to finish (creates buckets + sets
+    # photos-public-test to public-read)
+    pytest tests/test_photos.py -v
+"""
+
 import io
+import uuid
+
+import httpx
+import pytest
+import pytest_asyncio
 from PIL import Image
+from sqlalchemy import select
+from httpx import AsyncClient
 
-REGISTER_URL = "/api/v1/auth/register"
-LOGIN_URL = "/api/v1/auth/login"
-PHOTOS_URL = "/api/v1/users/me/photos"
-ADMIN_PENDING_URL = "/api/v1/admin/photos/pending"
-ADMIN_APPROVE_URL = "/api/v1/admin/photos"
-
-VALID_REGISTER_PAYLOAD = {
-    "email": "test@example.com",
-    "password": "strongpass123",
-    "name": "Test User",
-    "age": 25,
-    "gender": "male",
-}
+from app.core.security import create_access_token, hash_password
+from app.core.config import settings
+from app.models.user import User
+from app.models.user_profile import UserProfile
+from app.models.user_settings import UserSettings
+from app.models.photo import Photo
 
 
-async def register_and_login(client: AsyncClient) -> tuple[dict, dict]:
-    """Helper: register user and return (user_data, auth_headers)."""
-    reg_res = await client.post(REGISTER_URL, json=VALID_REGISTER_PAYLOAD)
-    assert reg_res.status_code == 201
-    data = reg_res.json()
-    headers = {"Authorization": f"Bearer {data['access_token']}"}
-    return data, headers
-
-
-def create_test_image(size=(500, 500), format="JPEG") -> bytes:
-    """Create a test image as bytes"""
-    img = Image.new('RGB', size, color=(73, 109, 137))
-    img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format=format)
-    return img_byte_arr.getvalue()
+ADMIN_HEADERS = {"X-Admin-Key": settings.ADMIN_SECRET_KEY}
 
 
 # ---------------------------------------------------------------------------
-# POST /api/v1/users/me/photos
+# Image helpers
 # ---------------------------------------------------------------------------
+
+def make_image_bytes(width=800, height=800, fmt="JPEG") -> bytes:
+    img = Image.new("RGB", (width, height), color=(100, 150, 200))
+    buf = io.BytesIO()
+    img.save(buf, fmt)
+    return buf.getvalue()
+
+
+def make_upload_file(width=800, height=800, fmt="JPEG", filename="photo.jpg"):
+    data = make_image_bytes(width, height, fmt)
+    content_type = f"image/{fmt.lower()}"
+    return {"file": (filename, data, content_type)}
+
+
+# ---------------------------------------------------------------------------
+# User + auth fixtures
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture
+async def test_user(db_session) -> User:
+    """A regular, non-admin user with a complete profile (so they could
+    plausibly upload photos in the real app flow)."""
+    user = User(
+        id=uuid.uuid4(),
+        email=f"user_{uuid.uuid4().hex[:8]}@test.com",
+        password_hash=hash_password("testpass123"),
+        is_active=True,
+        token_version=1,
+        registration_status="onboarding_complete",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    profile = UserProfile(user_id=user.id, name="Test User", gender="male")
+    settings_row = UserSettings(user_id=user.id)
+    db_session.add(profile)
+    db_session.add(settings_row)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def auth_headers(test_user: User) -> dict:
+    token = create_access_token(str(test_user.id), test_user.token_version)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def second_user(db_session) -> User:
+    """A second user, used to test that users can't touch each other's photos."""
+    user = User(
+        id=uuid.uuid4(),
+        email=f"user2_{uuid.uuid4().hex[:8]}@test.com",
+        password_hash=hash_password("testpass123"),
+        is_active=True,
+        token_version=1,
+        registration_status="onboarding_complete",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    profile = UserProfile(user_id=user.id, name="Second User", gender="male")
+    db_session.add(profile)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def second_auth_headers(second_user: User) -> dict:
+    token = create_access_token(str(second_user.id), second_user.token_version)
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def upload_and_get_id(client: AsyncClient, auth_headers: dict, **img_kwargs) -> dict:
+    """Helper: upload one valid photo, return the JSON response."""
+    files = make_upload_file(**img_kwargs)
+    resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+# ===========================================================================
+# UPLOAD
+# ===========================================================================
 
 class TestUploadPhoto:
-    
-    async def test_upload_photo_success(self, client: AsyncClient):
-        """Should upload photo successfully"""
-        _, headers = await register_and_login(client)
-        
-        files = {"file": ("test.jpg", create_test_image(), "image/jpeg")}
-        res = await client.post(PHOTOS_URL, files=files, headers=headers)
-        
-        assert res.status_code == 201
-        data = res.json()
-        assert data["status"] == "pending"
-        assert "id" in data
-        assert "url" in data
-    
-    async def test_upload_photo_requires_auth(self, client: AsyncClient):
-        """Should return 401 without token"""
-        files = {"file": ("test.jpg", create_test_image(), "image/jpeg")}
-        res = await client.post(PHOTOS_URL, files=files)
-        assert res.status_code == 401
-    
-    async def test_upload_photo_too_large(self, client: AsyncClient):
-        """Should reject large files"""
-        _, headers = await register_and_login(client)
-        
-        # Create a 6MB+ image by using minimal compression
-        # Use PNG format which doesn't compress as much
-        large_img = Image.new('RGB', (3000, 3000), color=(73, 109, 137))
-        img_byte_arr = io.BytesIO()
-        # Save with minimal compression to keep size large
-        large_img.save(img_byte_arr, format='PNG', compress_level=0)
-        
-        # Ensure it's actually > 5MB
-        image_data = img_byte_arr.getvalue()
-        size_mb = len(image_data) / (1024 * 1024)
-        print(f"Image size: {size_mb:.2f} MB")
-        
-        files = {"file": ("large.png", image_data, "image/png")}
-        res = await client.post(PHOTOS_URL, files=files, headers=headers)
-        
-        assert res.status_code == 400
-        assert "too large" in res.json()["detail"].lower()
-    
-    async def test_upload_photo_invalid_format(self, client: AsyncClient):
-        """Should reject invalid format"""
-        _, headers = await register_and_login(client)
-        
-        files = {"file": ("test.txt", b"not an image", "text/plain")}
-        res = await client.post(PHOTOS_URL, files=files, headers=headers)
-        
-        assert res.status_code == 400
-    
-    async def test_upload_photo_limit(self, client: AsyncClient):
-        """Should enforce max 6 photos per user"""
-        _, headers = await register_and_login(client)
-        
-        # Upload 6 photos
-        for i in range(6):
-            files = {"file": (f"test{i}.jpg", create_test_image(), "image/jpeg")}
-            res = await client.post(PHOTOS_URL, files=files, headers=headers)
-            assert res.status_code == 201
-        
-        # 7th photo should fail
-        files = {"file": ("test7.jpg", create_test_image(), "image/jpeg")}
-        res = await client.post(PHOTOS_URL, files=files, headers=headers)
-        assert res.status_code == 400
-        assert "Maximum 6 photos" in res.json()["detail"]
+
+    async def test_upload_valid_photo_succeeds(self, client, auth_headers):
+        files = make_upload_file()
+        resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["status"] == "pending"
+        assert "url" in body and body["url"]
+        assert body["message"] == "Photo uploaded. Under review by admin."
+
+    async def test_upload_requires_auth(self, client):
+        files = make_upload_file()
+        resp = await client.post("/api/v1/users/me/photos", files=files)
+        assert resp.status_code == 401
+
+    async def test_upload_rejects_too_small_image(self, client, auth_headers):
+        files = make_upload_file(width=50, height=50)
+        resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
+        assert resp.status_code == 400
+        assert "too small" in resp.json()["detail"].lower()
+
+    async def test_upload_rejects_too_large_dimensions(self, client, auth_headers):
+        files = make_upload_file(width=6000, height=6000)
+        resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
+        assert resp.status_code == 400
+        assert "too large" in resp.json()["detail"].lower()
+
+    async def test_upload_rejects_extreme_aspect_ratio(self, client, auth_headers):
+        files = make_upload_file(width=1500, height=300)  # ratio = 5.0
+        resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
+        assert resp.status_code == 400
+        assert "aspect ratio" in resp.json()["detail"].lower()
+
+    async def test_upload_rejects_invalid_format(self, client, auth_headers):
+        # A GIF is not in ALLOWED_FORMATS (JPEG, PNG, WEBP)
+        img = Image.new("RGB", (800, 800), color=(1, 2, 3))
+        buf = io.BytesIO()
+        img.save(buf, "GIF")
+        files = {"file": ("photo.gif", buf.getvalue(), "image/gif")}
+        resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
+        assert resp.status_code == 400
+        assert "format" in resp.json()["detail"].lower()
+
+    async def test_upload_rejects_corrupted_file(self, client, auth_headers):
+        files = {"file": ("photo.jpg", b"not a real image file", "image/jpeg")}
+        resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
+        assert resp.status_code == 400
+
+    async def test_first_uploaded_photo_becomes_main(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        photos = get_resp.json()
+        assert len(photos) == 1
+        assert photos[0]["is_main"] is True
+
+    async def test_second_uploaded_photo_is_not_main(self, client, auth_headers):
+        await upload_and_get_id(client, auth_headers)
+        await upload_and_get_id(client, auth_headers)
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        photos = sorted(get_resp.json(), key=lambda p: p["order"])
+        assert photos[0]["is_main"] is True
+        assert photos[1]["is_main"] is False
+
+    async def test_upload_enforces_max_six_photos(self, client, auth_headers):
+        for _ in range(6):
+            body = await upload_and_get_id(client, auth_headers)
+        files = make_upload_file()
+        resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
+        assert resp.status_code == 400
+        assert "maximum 6" in resp.json()["detail"].lower()
+
+    async def test_uploaded_photo_url_is_a_real_signed_url_and_is_fetchable(self, client, auth_headers):
+        """End-to-end against REAL MinIO: the URL returned on upload must
+        actually be fetchable and return real image bytes — not just be
+        present as a string."""
+        body = await upload_and_get_id(client, auth_headers)
+        async with httpx.AsyncClient() as raw_client:
+            img_resp = await raw_client.get(body["url"])
+        assert img_resp.status_code == 200, f"Signed URL not fetchable: {img_resp.status_code}"
+        assert img_resp.headers["content-type"].startswith("image/")
+        assert len(img_resp.content) > 0
 
 
-# ---------------------------------------------------------------------------
-# GET /api/v1/users/me/photos
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# GET MY PHOTOS
+# ===========================================================================
 
-class TestGetPhotos:
-    
-    async def test_get_photos_success(self, client: AsyncClient):
-        """Should return user photos"""
-        _, headers = await register_and_login(client)
-        
-        # Upload a photo
-        files = {"file": ("test.jpg", create_test_image(), "image/jpeg")}
-        await client.post(PHOTOS_URL, files=files, headers=headers)
-        
-        # Get photos
-        res = await client.get(PHOTOS_URL, headers=headers)
-        assert res.status_code == 200
-        data = res.json()
-        assert len(data) == 1
-        assert data[0]["status"] == "pending"
-    
-    async def test_get_photos_requires_auth(self, client: AsyncClient):
-        """Should return 401 without token"""
-        res = await client.get(PHOTOS_URL)
-        assert res.status_code == 401
+class TestGetMyPhotos:
+
+    async def test_get_photos_empty_for_new_user(self, client, auth_headers):
+        resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_get_photos_requires_auth(self, client):
+        resp = await client.get("/api/v1/users/me/photos")
+        assert resp.status_code == 401
+
+    async def test_get_photos_returns_all_statuses(self, client, auth_headers, db_session, test_user):
+        await upload_and_get_id(client, auth_headers)
+        resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        photos = resp.json()
+        assert len(photos) == 1
+        assert photos[0]["status"] == "pending"
+        assert photos[0]["reject_reason"] is None
+        assert photos[0]["face_verified"] is False
+
+    async def test_get_photos_only_returns_own_photos(
+        self, client, auth_headers, second_auth_headers
+    ):
+        await upload_and_get_id(client, auth_headers)
+        resp = await client.get("/api/v1/users/me/photos", headers=second_auth_headers)
+        assert resp.json() == []
 
 
-# ---------------------------------------------------------------------------
-# DELETE /api/v1/users/me/photos/{id}
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# DELETE
+# ===========================================================================
 
 class TestDeletePhoto:
-    
-    async def test_delete_photo_success(self, client: AsyncClient):
-        """Should delete photo"""
-        _, headers = await register_and_login(client)
-        
-        # Upload photo
-        files = {"file": ("test.jpg", create_test_image(), "image/jpeg")}
-        upload_res = await client.post(PHOTOS_URL, files=files, headers=headers)
-        photo_id = upload_res.json()["id"]
-        
-        # Delete photo
-        res = await client.delete(f"{PHOTOS_URL}/{photo_id}", headers=headers)
-        assert res.status_code == 204
-        
-        # Verify deleted
-        get_res = await client.get(PHOTOS_URL, headers=headers)
-        assert len(get_res.json()) == 0
-    
-    async def test_delete_nonexistent_photo(self, client: AsyncClient):
-        """Should return 404 for nonexistent photo"""
-        _, headers = await register_and_login(client)
-        
-        res = await client.delete(f"{PHOTOS_URL}/00000000-0000-0000-0000-000000000000", headers=headers)
-        assert res.status_code == 404
+
+    async def test_delete_own_photo_succeeds(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.delete(f"/api/v1/users/me/photos/{body['id']}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        assert get_resp.json() == []
+
+    async def test_delete_requires_auth(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.delete(f"/api/v1/users/me/photos/{body['id']}")
+        assert resp.status_code == 401
+
+    async def test_delete_nonexistent_photo_404s(self, client, auth_headers):
+        fake_id = uuid.uuid4()
+        resp = await client.delete(f"/api/v1/users/me/photos/{fake_id}", headers=auth_headers)
+        assert resp.status_code == 404
+
+    async def test_cannot_delete_another_users_photo(self, client, auth_headers, second_auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.delete(
+            f"/api/v1/users/me/photos/{body['id']}", headers=second_auth_headers
+        )
+        assert resp.status_code == 404  # not 403 — don't leak existence to non-owners
+
+        # Confirm it's untouched
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        assert len(get_resp.json()) == 1
+
+    async def test_deleting_main_photo_promotes_next_one(self, client, auth_headers):
+        first = await upload_and_get_id(client, auth_headers)
+        await upload_and_get_id(client, auth_headers)
+
+        await client.delete(f"/api/v1/users/me/photos/{first['id']}", headers=auth_headers)
+
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        remaining = get_resp.json()
+        assert len(remaining) == 1
+        assert remaining[0]["is_main"] is True
+
+    async def test_delete_actually_removes_object_from_storage(self, client, auth_headers):
+        """Real MinIO check: after delete, the signed URL should no longer work."""
+        body = await upload_and_get_id(client, auth_headers)
+        old_url = body["url"]
+
+        await client.delete(f"/api/v1/users/me/photos/{body['id']}", headers=auth_headers)
+
+        async with httpx.AsyncClient() as raw_client:
+            img_resp = await raw_client.get(old_url)
+        assert img_resp.status_code != 200, "Object should be gone from MinIO after delete"
 
 
-# ---------------------------------------------------------------------------
-# PUT /api/v1/users/me/photos/{id}/main
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# SET MAIN PHOTO
+# ===========================================================================
 
 class TestSetMainPhoto:
-    
-    async def test_set_main_photo_success(self, client: AsyncClient):
-        """Should set photo as main"""
-        _, headers = await register_and_login(client)
-        
-        # Upload two photos
-        files1 = {"file": ("test1.jpg", create_test_image(), "image/jpeg")}
-        res1 = await client.post(PHOTOS_URL, files=files1, headers=headers)
-        photo1_id = res1.json()["id"]
-        
-        files2 = {"file": ("test2.jpg", create_test_image(), "image/jpeg")}
-        res2 = await client.post(PHOTOS_URL, files=files2, headers=headers)
-        photo2_id = res2.json()["id"]
-        
-        # Need admin approval first (for MVP, we'll approve via admin)
-        # For testing, we'll skip approval check or mock it
-    
-    async def test_set_main_photo_requires_auth(self, client: AsyncClient):
-        """Should return 401 without token"""
-        res = await client.put(f"{PHOTOS_URL}/123/main")
-        assert res.status_code == 401
+
+    async def test_cannot_set_pending_photo_as_main(self, client, auth_headers):
+        first = await upload_and_get_id(client, auth_headers)
+        second = await upload_and_get_id(client, auth_headers)
+
+        # second is pending (not approved) — should be rejected
+        resp = await client.put(
+            f"/api/v1/users/me/photos/{second['id']}/main", headers=auth_headers
+        )
+        assert resp.status_code == 400
+        assert "approved" in resp.json()["detail"].lower()
+
+    async def test_set_main_requires_auth(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.put(f"/api/v1/users/me/photos/{body['id']}/main")
+        assert resp.status_code == 401
+
+    async def test_set_main_nonexistent_photo_404s(self, client, auth_headers):
+        resp = await client.put(
+            f"/api/v1/users/me/photos/{uuid.uuid4()}/main", headers=auth_headers
+        )
+        assert resp.status_code == 404
+
+    async def test_set_approved_photo_as_main_succeeds(self, client, auth_headers):
+        first = await upload_and_get_id(client, auth_headers)
+        second = await upload_and_get_id(client, auth_headers)
+
+        # Approve the second photo via the admin endpoint
+        approve_resp = await client.post(
+            f"/api/v1/admin/photos/{second['id']}/approve", headers=ADMIN_HEADERS
+        )
+        assert approve_resp.status_code == 200, approve_resp.text
+
+        resp = await client.put(
+            f"/api/v1/users/me/photos/{second['id']}/main", headers=auth_headers
+        )
+        assert resp.status_code == 200
+        assert resp.json()["is_main"] is True
+
+        # First photo should no longer be main
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        photos = {p["id"]: p for p in get_resp.json()}
+        assert photos[first["id"]]["is_main"] is False
 
 
-# ---------------------------------------------------------------------------
-# Admin Endpoints
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# ADMIN: AUTH
+# ===========================================================================
 
-class TestAdminEndpoints:
-    
-    async def test_admin_get_pending_photos(self, client: AsyncClient):
-        """Admin should get pending photos with valid key"""
-        from app.core.config import settings
-        
-        # Upload a photo as user
-        _, headers = await register_and_login(client)
-        files = {"file": ("test.jpg", create_test_image(), "image/jpeg")}
-        await client.post(PHOTOS_URL, files=files, headers=headers)
-        
-        # Admin gets pending photos
-        admin_headers = {"X-Admin-Key": settings.ADMIN_SECRET_KEY}
-        res = await client.get(ADMIN_PENDING_URL, headers=admin_headers)
-        assert res.status_code == 200
-        data = res.json()
-        assert len(data) >= 1
-    
-    async def test_admin_requires_key(self, client: AsyncClient):
-        """Admin endpoints should require valid key"""
-        res = await client.get(ADMIN_PENDING_URL)
-        assert res.status_code == 403
+class TestAdminAuth:
+
+    async def test_admin_endpoints_require_admin_key(self, client):
+        resp = await client.get("/api/v1/admin/photos/pending")
+        assert resp.status_code == 403
+
+    async def test_admin_endpoints_reject_wrong_key(self, client):
+        resp = await client.get(
+            "/api/v1/admin/photos/pending", headers={"X-Admin-Key": "wrong-key"}
+        )
+        assert resp.status_code == 403
+
+    async def test_user_bearer_token_does_not_grant_admin_access(self, client, auth_headers):
+        """A regular user's JWT should NOT work on admin routes — admin auth
+        is header-based (X-Admin-Key), not JWT-based, per deps.py."""
+        resp = await client.get("/api/v1/admin/photos/pending", headers=auth_headers)
+        assert resp.status_code == 403
+
+
+# ===========================================================================
+# ADMIN: PENDING QUEUE
+# ===========================================================================
+
+class TestAdminPendingQueue:
+
+    async def test_pending_queue_empty_initially(self, client):
+        resp = await client.get("/api/v1/admin/photos/pending", headers=ADMIN_HEADERS)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_pending_queue_lists_uploaded_photo_with_resolved_name(
+        self, client, auth_headers, test_user
+    ):
+        await upload_and_get_id(client, auth_headers)
+        resp = await client.get("/api/v1/admin/photos/pending", headers=ADMIN_HEADERS)
+        assert resp.status_code == 200
+        photos = resp.json()
+        assert len(photos) == 1
+        # Regression check: user_name must come from UserProfile.name,
+        # not a nonexistent User.name attribute.
+        assert photos[0]["user_name"] == "Test User"
+        assert photos[0]["user_email"] == test_user.email
+        assert photos[0]["status"] == "pending"
+
+    async def test_pending_queue_excludes_approved_and_rejected(self, client, auth_headers):
+        a = await upload_and_get_id(client, auth_headers)
+        b = await upload_and_get_id(client, auth_headers)
+        await client.post(f"/api/v1/admin/photos/{a['id']}/approve", headers=ADMIN_HEADERS)
+        await client.post(
+            f"/api/v1/admin/photos/{b['id']}/reject",
+            params={"reason": "inappropriate"},
+            headers=ADMIN_HEADERS,
+        )
+
+        resp = await client.get("/api/v1/admin/photos/pending", headers=ADMIN_HEADERS)
+        assert resp.json() == []
+
+    async def test_pending_photo_url_in_admin_queue_is_fetchable(self, client, auth_headers):
+        """Real MinIO check on the admin side too."""
+        await upload_and_get_id(client, auth_headers)
+        resp = await client.get("/api/v1/admin/photos/pending", headers=ADMIN_HEADERS)
+        url = resp.json()[0]["url"]
+
+        async with httpx.AsyncClient() as raw_client:
+            img_resp = await raw_client.get(url)
+        assert img_resp.status_code == 200
+
+
+# ===========================================================================
+# ADMIN: APPROVE
+# ===========================================================================
+
+class TestAdminApprove:
+
+    async def test_approve_changes_status(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.post(
+            f"/api/v1/admin/photos/{body['id']}/approve", headers=ADMIN_HEADERS
+        )
+        assert resp.status_code == 200
+
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        photo = get_resp.json()[0]
+        assert photo["status"] == "approved"
+
+    async def test_approve_nonexistent_photo_404s(self, client):
+        resp = await client.post(
+            f"/api/v1/admin/photos/{uuid.uuid4()}/approve", headers=ADMIN_HEADERS
+        )
+        assert resp.status_code == 404
+
+    async def test_cannot_approve_already_approved_photo(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        await client.post(f"/api/v1/admin/photos/{body['id']}/approve", headers=ADMIN_HEADERS)
+        resp = await client.post(
+            f"/api/v1/admin/photos/{body['id']}/approve", headers=ADMIN_HEADERS
+        )
+        assert resp.status_code == 400
+
+    async def test_approve_requires_admin_key(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.post(f"/api/v1/admin/photos/{body['id']}/approve")
+        assert resp.status_code == 403
+
+    async def test_approved_photo_moves_to_real_public_url_no_signature(
+        self, client, auth_headers
+    ):
+        """The core real-MinIO regression test: after approval, the photo's
+        URL must be a PLAIN public URL (no AWS signature query params) and
+        must be fetchable by a totally fresh client with no auth at all —
+        proving the bucket policy (not just bucket *name*) actually grants
+        anonymous reads on photos-public-test."""
+        body = await upload_and_get_id(client, auth_headers)
+        old_signed_url = body["url"]
+        assert "X-Amz-Signature" in old_signed_url or "Signature" in old_signed_url
+
+        await client.post(f"/api/v1/admin/photos/{body['id']}/approve", headers=ADMIN_HEADERS)
+
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        new_url = get_resp.json()[0]["url"]
+        assert "Signature" not in new_url, (
+            "Approved photo should resolve to a plain public URL, not a signed one"
+        )
+        assert settings.S3_PUBLIC_BUCKET in new_url
+
+        # Fetch with a bare client — no cookies, no auth, nothing.
+        async with httpx.AsyncClient() as anon_client:
+            img_resp = await anon_client.get(new_url)
+        assert img_resp.status_code == 200, (
+            f"Public bucket did not actually grant anonymous read access "
+            f"(got {img_resp.status_code}) — check that minio_test_init ran "
+            f"`mc anonymous set download` on {settings.S3_PUBLIC_BUCKET}"
+        )
+        assert img_resp.headers["content-type"].startswith("image/")
+
+        # Old private signed URL should now be dead (object moved buckets)
+        async with httpx.AsyncClient() as anon_client:
+            old_resp = await anon_client.get(old_signed_url)
+        assert old_resp.status_code != 200
+
+
+# ===========================================================================
+# ADMIN: REJECT
+# ===========================================================================
+
+class TestAdminReject:
+
+    async def test_reject_sets_status_and_reason(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.post(
+            f"/api/v1/admin/photos/{body['id']}/reject",
+            params={"reason": "Face not clearly visible"},
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 200
+
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        photo = get_resp.json()[0]
+        assert photo["status"] == "rejected"
+        assert photo["reject_reason"] == "Face not clearly visible"
+
+    async def test_user_can_still_view_own_rejected_photo(self, client, auth_headers):
+        """Per product requirement: users must be able to see their own
+        rejected photo (not just the reason) so they understand what to fix."""
+        body = await upload_and_get_id(client, auth_headers)
+        await client.post(
+            f"/api/v1/admin/photos/{body['id']}/reject",
+            params={"reason": "blurry"},
+            headers=ADMIN_HEADERS,
+        )
+
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        url = get_resp.json()[0]["url"]
+
+        async with httpx.AsyncClient() as raw_client:
+            img_resp = await raw_client.get(url)
+        assert img_resp.status_code == 200, "Owner should still be able to view rejected photo"
+
+    async def test_rejected_photo_not_publicly_fetchable_without_signature(
+        self, client, auth_headers
+    ):
+        body = await upload_and_get_id(client, auth_headers)
+        await client.post(
+            f"/api/v1/admin/photos/{body['id']}/reject",
+            params={"reason": "blurry"},
+            headers=ADMIN_HEADERS,
+        )
+
+        # Strip query params (the signature) and try the bare object URL —
+        # should NOT be fetchable, since rejected photos stay private.
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        signed_url = get_resp.json()[0]["url"]
+        bare_url = signed_url.split("?")[0]
+
+        async with httpx.AsyncClient() as raw_client:
+            img_resp = await raw_client.get(bare_url)
+        assert img_resp.status_code != 200, "Rejected photo must NOT be publicly readable"
+
+    async def test_cannot_reject_already_rejected_photo(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        await client.post(
+            f"/api/v1/admin/photos/{body['id']}/reject",
+            params={"reason": "first reason"},
+            headers=ADMIN_HEADERS,
+        )
+        resp = await client.post(
+            f"/api/v1/admin/photos/{body['id']}/reject",
+            params={"reason": "second reason"},
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 400
+
+    async def test_reject_nonexistent_photo_404s(self, client):
+        resp = await client.post(
+            f"/api/v1/admin/photos/{uuid.uuid4()}/reject",
+            params={"reason": "n/a"},
+            headers=ADMIN_HEADERS,
+        )
+        assert resp.status_code == 404
+
+
+# ===========================================================================
+# ADMIN: STATS
+# ===========================================================================
+
+class TestAdminStats:
+
+    async def test_stats_all_zero_initially(self, client):
+        resp = await client.get("/api/v1/admin/photos/stats", headers=ADMIN_HEADERS)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"pending": 0, "approved": 0, "rejected": 0, "total": 0}
+
+    async def test_stats_reflect_mixed_statuses(self, client, auth_headers):
+        a = await upload_and_get_id(client, auth_headers)
+        b = await upload_and_get_id(client, auth_headers)
+        c = await upload_and_get_id(client, auth_headers)
+
+        await client.post(f"/api/v1/admin/photos/{a['id']}/approve", headers=ADMIN_HEADERS)
+        await client.post(
+            f"/api/v1/admin/photos/{b['id']}/reject",
+            params={"reason": "x"},
+            headers=ADMIN_HEADERS,
+        )
+        # c stays pending
+
+        resp = await client.get("/api/v1/admin/photos/stats", headers=ADMIN_HEADERS)
+        body = resp.json()
+        assert body == {"pending": 1, "approved": 1, "rejected": 1, "total": 3}
+
+
+# ===========================================================================
+# ADMIN: GET SINGLE PHOTO / USER PHOTOS
+# ===========================================================================
+
+class TestAdminGetPhoto:
+
+    async def test_get_photo_detail_with_resolved_name(self, client, auth_headers, test_user):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.get(f"/api/v1/admin/photos/{body['id']}", headers=ADMIN_HEADERS)
+        assert resp.status_code == 200
+        detail = resp.json()
+        assert detail["user_name"] == "Test User"
+        assert detail["user_email"] == test_user.email
+
+    async def test_get_photo_detail_404_for_missing(self, client):
+        resp = await client.get(f"/api/v1/admin/photos/{uuid.uuid4()}", headers=ADMIN_HEADERS)
+        assert resp.status_code == 404
+
+    async def test_get_user_photos_for_admin(self, client, auth_headers, test_user):
+        await upload_and_get_id(client, auth_headers)
+        await upload_and_get_id(client, auth_headers)
+        resp = await client.get(
+            f"/api/v1/admin/photos/users/{test_user.id}/photos", headers=ADMIN_HEADERS
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()) == 2
+
+    async def test_get_user_photos_404_for_missing_user(self, client):
+        resp = await client.get(
+            f"/api/v1/admin/photos/users/{uuid.uuid4()}/photos", headers=ADMIN_HEADERS
+        )
+        assert resp.status_code == 404
+
+
+# ===========================================================================
+# ADMIN: VERIFY FACE
+# ===========================================================================
+
+class TestAdminVerifyFace:
+
+    async def test_verify_face_sets_flag(self, client, auth_headers):
+        body = await upload_and_get_id(client, auth_headers)
+        resp = await client.post(
+            f"/api/v1/admin/photos/{body['id']}/verify-face", headers=ADMIN_HEADERS
+        )
+        assert resp.status_code == 200
+        assert resp.json()["face_verified"] is True
+
+        get_resp = await client.get("/api/v1/users/me/photos", headers=auth_headers)
+        assert get_resp.json()[0]["face_verified"] is True
+
+    async def test_verify_face_nonexistent_404s(self, client):
+        resp = await client.post(
+            f"/api/v1/admin/photos/{uuid.uuid4()}/verify-face", headers=ADMIN_HEADERS
+        )
+        assert resp.status_code == 404

@@ -296,6 +296,7 @@ async def register_complete(
     profile.country = body.country
     profile.province = body.province
     profile.city = body.city
+    profile.languages = body.languages
     
     if not profile.premium_until or profile.premium_until < datetime.now(timezone.utc):
         profile.premium_until = datetime.now(timezone.utc) + timedelta(days=settings.WELCOME_BONUS_DAYS)

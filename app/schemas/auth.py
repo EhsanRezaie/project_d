@@ -138,6 +138,7 @@ class OnboardingCompleteRequest(BaseModel):
     religion: Optional[str] = Field(None, max_length=50)
     ethnicity: Optional[str] = Field(None, max_length=50)
     political_orientation: Optional[PoliticalOrientation] = None
+    languages: Optional[List[str]] = None
     
     # Location (required)
     lat: float = Field(..., ge=-90, le=90)
