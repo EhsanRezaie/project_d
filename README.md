@@ -85,7 +85,10 @@ docker compose up -d
 # 7. Run database migrations
 alembic upgrade head
 
-# 8. Start the development server
+# 8. Seed reference data (interests, etc.)
+python -m app.db.scripts.seed_interests
+
+# 9. Start the development server
 uvicorn app.main:app --reload
 ```
 
@@ -126,7 +129,10 @@ docker compose up -d
 # 9. Run database migrations
 alembic upgrade head
 
-# 10. Start the development server
+# 10. Seed reference data (interests, etc.)
+python -m app.db.scripts.seed_interests
+
+# 11. Start the development server
 uvicorn app.main:app --reload
 ```
 
@@ -170,7 +176,10 @@ docker compose up -d
 # 9. Run database migrations
 alembic upgrade head
 
-# 10. Start the development server
+# 10. Seed reference data (interests, etc.)
+python -m app.db.scripts.seed_interests
+
+# 11. Start the development server
 uvicorn app.main:app --reload
 ```
 
@@ -261,6 +270,19 @@ alembic upgrade head
 
 ---
 
+## Seeding Reference Data
+
+Static reference tables (e.g. `interests`) are populated from JSON files under `app/db/seed_data/` using idempotent seed scripts in `app/db/scripts/`. Safe to re-run anytime — existing rows are updated in place, new rows are inserted, nothing is duplicated or deleted.
+
+```bash
+# Seed / update interests from app/db/seed_data/interests.json
+python -m app.db.scripts.seed_interests
+```
+
+Run this after migrations on first setup, and again any time `interests.json` is edited (e.g. adding a new interest, changing an icon).
+
+---
+
 ## Project Structure
 
 ```
@@ -268,7 +290,9 @@ dating-app/
 ├── app/
 │   ├── api/v1/endpoints/   # Route handlers
 │   ├── core/               # Config, security, dependencies
-│   ├── db/                 # Database engine and session
+│   ├── db/                 # Database engine, session, seed data & scripts
+│   │   ├── seed_data/      # JSON reference data (interests, etc.)
+│   │   └── scripts/        # Idempotent seed/sync scripts
 │   ├── models/             # SQLAlchemy models
 │   ├── schemas/            # Pydantic schemas (request/response)
 │   ├── services/           # Business logic
