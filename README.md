@@ -23,6 +23,7 @@ A modern Persian-language dating app for the Iranian market. Free to use, with o
 | Backend | FastAPI (Python) |
 | Database | PostgreSQL + PostGIS |
 | Cache / Realtime | Redis |
+| File storage | MinIO (S3-compatible) |
 | Task Queue | Celery |
 | Mobile | Flutter |
 | Containers | Docker + Docker Compose |
@@ -79,8 +80,11 @@ sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 sudo usermod -aG docker $USER
 newgrp docker
 
-# 6. Start database and Redis
+# 6. Start database, Redis, and MinIO
 docker compose up -d
+
+# Verify MinIO buckets were created (should show "MinIO buckets ready")
+docker compose logs minio-init
 
 # 7. Run database migrations
 alembic upgrade head
@@ -123,8 +127,11 @@ nano .env
 # Download from: https://www.docker.com/products/docker-desktop/
 # After installing, open Docker Desktop and wait for it to start
 
-# 8. Start database and Redis
+# 8. Start database, Redis, and MinIO
 docker compose up -d
+
+# Verify MinIO buckets were created (should show "MinIO buckets ready")
+docker compose logs minio-init
 
 # 9. Run database migrations
 alembic upgrade head
@@ -170,8 +177,11 @@ notepad .env
 # Download from: https://www.docker.com/products/docker-desktop/
 # Enable WSL2 backend during installation
 
-# 8. Start database and Redis (in PowerShell with Docker running)
+# 8. Start database, Redis, and MinIO (in PowerShell with Docker running)
 docker compose up -d
+
+# Verify MinIO buckets were created (should show "MinIO buckets ready")
+docker compose logs minio-init
 
 # 9. Run database migrations
 alembic upgrade head
@@ -192,6 +202,7 @@ After starting the server, open your browser:
 - **Health check:** http://localhost:8000/health → should return `{"status": "ok"}`
 - **API docs (Swagger):** http://localhost:8000/docs
 - **API docs (ReDoc):** http://localhost:8000/redoc
+- **MinIO console:** http://localhost:9001 (login `minioadmin` / `minioadmin`) → browse uploaded photos, confirm `photos-public` and `photos-private` buckets exist
 
 ---
 
@@ -213,9 +224,22 @@ SECRET_KEY=your-secret-key-here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=10080
 
+# Admin panel access
+ADMIN_SECRET_KEY=your-admin-key-here
+
 # Google OAuth (get from https://console.cloud.google.com)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+
+# MinIO / S3-compatible object storage
+S3_ENDPOINT_URL=http://localhost:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_REGION=us-east-1
+S3_PUBLIC_BUCKET=photos-public
+S3_PRIVATE_BUCKET=photos-private
+S3_PUBLIC_BASE_URL=http://localhost:9000/photos-public
+S3_SIGNED_URL_EXPIRE_SECONDS=900
 
 # App
 APP_NAME=DatingApp
@@ -225,6 +249,17 @@ DEBUG=True
 ---
 
 ## Running Tests
+
+Tests require the test infrastructure (Postgres, Redis, **and MinIO**) running first:
+
+```bash
+docker compose -f docker-compose_test.yml up -d
+
+# Confirm MinIO test buckets were created (should show "Test MinIO buckets ready")
+docker compose -f docker-compose_test.yml logs minio-test-init
+```
+
+Then:
 
 ```bash
 # Make sure venv is activated
@@ -243,6 +278,8 @@ pytest tests/test_auth.py -v
 
 > Tests run against an isolated database that is created fresh and destroyed after each run.
 
+> **Current status:** `test_auth.py`, `test_users.py`, and `test_photos.py` are verified passing against the MinIO-based setup. Other test files haven't been re-run since the MinIO migration and should be re-verified — see `dev.md` § Testing Strategy for the full per-file status.
+
 ---
 
 ## Docker Services
@@ -251,6 +288,7 @@ pytest tests/test_auth.py -v
 |---------|------|-------------|
 | PostgreSQL + PostGIS | 5432 | Main database |
 | Redis | 6379 | Cache + realtime |
+| MinIO | 9000 (API), 9001 (console) | Photo storage (S3-compatible) |
 
 ```bash
 # Start services
@@ -262,10 +300,14 @@ docker compose down
 # View logs
 docker compose logs -f
 
-# Reset database (WARNING: deletes all data)
+# View MinIO init logs specifically (bucket creation/policy setup)
+docker compose logs minio-init
+
+# Reset everything (WARNING: deletes all data, including uploaded photos)
 docker compose down -v
 docker compose up -d
 alembic upgrade head
+python -m app.db.scripts.seed_interests
 ```
 
 ---
@@ -300,7 +342,8 @@ dating-app/
 │   └── main.py             # FastAPI app entry point
 ├── alembic/                # Database migrations
 ├── tests/                  # Unit and integration tests
-├── docker-compose.yml
+├── docker-compose.yml      # db, redis, minio, minio-init
+├── docker-compose_test.yml # db_test, redis_test, minio-test, minio-test-init
 ├── .env.example
 ├── requirements.txt
 ├── dev.md                  # Developer session documentation

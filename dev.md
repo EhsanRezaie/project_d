@@ -63,7 +63,7 @@ A **Persian-language dating app** for the Iranian market, similar to Badoo.
 | Migrations | Alembic |
 | Cache | Redis 7 (tokens, rate limiting, verification codes) + LRU cache (static location data) |
 | Realtime | WebSocket |
-| File storage | Local disk (`uploads/`) |
+| File storage | MinIO (S3-compatible, self-hosted) — public/private bucket split by moderation status |
 | Containerization | Docker + Docker Compose |
 | Mobile | Flutter |
 | Payment | ZarinPal (MOCKED - real integration needed) |
@@ -83,6 +83,14 @@ iranian-dating-app/
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── redis_client.py
+│   │   │
+│   │   ├── db/
+│   │   │   ├── base.py
+│   │   │   ├── session.py
+│   │   │   ├── seed_data/
+│   │   │   │   └── interests.json             # 158 interests, 13 categories
+│   │   │   └── scripts/
+│   │   │       └── seed_interests.py          # Idempotent upsert seed/sync script
 │   │   │
 │   │   ├── models/
 │   │   │   ├── user.py                    # Core user model (auth only)
@@ -160,7 +168,7 @@ iranian-dating-app/
 │   │   │   ├── reward_service.py
 │   │   │   ├── notification_service.py
 │   │   │   ├── chat_service.py
-│   │   │   ├── photo_service.py
+│   │   │   ├── photo_service.py           # MinIO/S3 storage — upload, public/private bucket move, signed URLs
 │   │   │   ├── websocket_manager.py
 │   │   │   └── location_service.py
 │   │   │
@@ -179,35 +187,35 @@ iranian-dating-app/
 │   ├── alembic/versions/
 │   ├── tests/
 │   │   ├── conftest.py
-│   │   ├── test_auth.py                   # ✅ All tests passing
-│   │   ├── test_users.py                  # ✅ All tests passing
-│   │   ├── test_photos.py
-│   │   ├── test_swipes.py
-│   │   ├── test_matches.py
-│   │   ├── test_messages.py
-│   │   ├── test_search.py
-│   │   ├── test_blocks.py
-│   │   ├── test_rewards.py
-│   │   ├── test_referrals.py
-│   │   ├── test_subscriptions.py
-│   │   ├── test_daily_limits.py
-│   │   ├── test_notifications.py
-│   │   ├── test_reports.py
-│   │   ├── test_tickets.py
-│   │   ├── test_admin_tickets.py
-│   │   ├── test_admin_reports.py
-│   │   ├── test_admin_users.py
-│   │   ├── test_admin_dashboard.py
-│   │   ├── test_admin_photos.py
-│   │   ├── test_admin_messages.py
-│   │   └── test_location.py
+│   │   ├── test_auth.py                   # ✅ Passing (re-verified post-MinIO migration)
+│   │   ├── test_users.py                  # ✅ Passing (re-verified post-MinIO migration)
+│   │   ├── test_photos.py                 # ✅ Passing — real MinIO round-trip tests, no mocking
+│   │   ├── test_swipes.py                 # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_matches.py                # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_messages.py               # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_search.py                 # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_blocks.py                 # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_rewards.py                # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_referrals.py              # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_subscriptions.py          # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_daily_limits.py           # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_notifications.py          # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_reports.py                # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_tickets.py                # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_admin_tickets.py          # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_admin_reports.py          # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_admin_users.py            # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_admin_dashboard.py        # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   ├── test_admin_photos.py           # ⚠️ Needs re-run (admin_photos.py changed — name-field bug fix, publish/unpublish wiring)
+│   │   ├── test_admin_messages.py         # ⚠️ Needs re-run (not verified since MinIO migration)
+│   │   └── test_location.py               # ⚠️ Needs re-run (not verified since MinIO migration)
 │   │
 │   ├── uploads/
 │   ├── .env
 │   ├── .env.example
 │   ├── .env.test
-│   ├── docker-compose.yml
-│   ├── docker-compose.test.yml
+│   ├── docker-compose.yml                 # db, redis, minio, minio-init
+│   ├── docker-compose_test.yml            # db_test, redis_test, minio-test, minio-test-init
 │   ├── requirements.txt
 │   └── Dockerfile
 │
@@ -290,10 +298,21 @@ ZARINPAL_MERCHANT_ID=
 ZARINPAL_SANDBOX=true
 ZARINPAL_CALLBACK_URL=
 
-# File Uploads
+# File Uploads (legacy — superseded by MinIO below; UPLOADS_DIR/local
+# static mount in main.py can be removed once fully migrated)
 UPLOADS_DIR=uploads
 MAX_PHOTO_SIZE_MB=5
 MAX_PHOTOS_PER_USER=6
+
+# MinIO / S3-compatible object storage (NO DEFAULTS — must be in .env)
+S3_ENDPOINT_URL=http://localhost:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_REGION=us-east-1
+S3_PUBLIC_BUCKET=photos-public
+S3_PRIVATE_BUCKET=photos-private
+S3_PUBLIC_BASE_URL=http://localhost:9000/photos-public
+S3_SIGNED_URL_EXPIRE_SECONDS=900
 ```
 
 ### `.env.test`
@@ -331,6 +350,16 @@ ZARINPAL_CALLBACK_URL=
 UPLOADS_DIR=uploads
 MAX_PHOTO_SIZE_MB=5
 MAX_PHOTOS_PER_USER=6
+
+# MinIO / S3 — points at the minio-test service (docker-compose_test.yml)
+S3_ENDPOINT_URL=http://localhost:9090
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_REGION=us-east-1
+S3_PUBLIC_BUCKET=photos-public-test
+S3_PRIVATE_BUCKET=photos-private-test
+S3_PUBLIC_BASE_URL=http://localhost:9090/photos-public-test
+S3_SIGNED_URL_EXPIRE_SECONDS=900
 ```
 
 ---
@@ -445,11 +474,24 @@ MAX_PHOTOS_PER_USER=6
 | prompt_id | UUID (FK → prompts) |
 | answer | TEXT |
 
+#### `photos` Table
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | |
+| user_id | UUID (FK → users) | |
+| url | VARCHAR | Stores the object **key** (e.g. `users/{id}/{photo_id}.jpg`), NOT a full URL — resolved to a real URL at read time via `PhotoService.get_photo_url()` based on `status` |
+| order | SMALLINT | |
+| is_main | BOOLEAN | |
+| status | VARCHAR(20) | `pending` / `approved` / `rejected` — also determines which bucket the object lives in |
+| reject_reason | TEXT | |
+| face_verified | BOOLEAN | Currently auto-set True on upload (see TODO in `admin_photos.py`) until real face-match API is wired in |
+| created_at | TIMESTAMPTZ | |
+
 ### Other Tables (Unchanged)
 
 | Table | Purpose |
 |-------|---------|
-| photos | User photos with moderation |
 | swipes | Like/pass records |
 | matches | Mutual likes |
 | blocks | Blocked users |
@@ -503,6 +545,23 @@ MAX_PHOTOS_PER_USER=6
 ---
 
 ## 8. Architecture Decisions
+
+### Photo Storage Architecture (MinIO / S3)
+
+Replaced local-disk `uploads/` storage with MinIO (self-hosted, S3-compatible), chosen over managed cloud storage (S3/R2) because the app deploys to a self-managed VPS — MinIO runs in the same Docker Compose stack as Postgres/Redis, no external account or cross-border data dependency.
+
+**Two-bucket split by moderation status** (not a single bucket with ACL flags):
+
+| Bucket | Holds | Access |
+|--------|-------|--------|
+| `photos-private` | `pending`, `rejected` photos | Signed URLs only (15 min expiry), owner can still view their own |
+| `photos-public` | `approved` photos | Plain public URL, anonymous read (bucket policy via `mc anonymous set download`) |
+
+- `Photo.url` stores the object **key** only (e.g. `users/{id}/{photo_id}.jpg`), never a full URL — the key is identical regardless of which bucket the object is currently in.
+- On admin approval, `PhotoService.publish_photo()` copies the object from `photos-private` → `photos-public` and deletes the original — status flip in the DB happens only after the move succeeds, so `status="approved"` never points at a non-public object.
+- `PhotoService.get_photo_url(key, status)` resolves the correct URL at read time: public URL if `approved`, signed private URL otherwise.
+- **Known gotcha:** MinIO's S3 hostname validation rejects underscores in service hostnames (`minio_test` → `Invalid Request (invalid hostname)`). Any new MinIO-related Docker Compose service must use hyphens (`minio-test`, not `minio_test`).
+- **Known gotcha:** bucket *naming* (e.g. `photos-public`) does not itself grant public access — `mc anonymous set download <bucket>` (a real bucket policy) is required; per-object ACLs are legacy/unreliable on MinIO specifically.
 
 ### Authentication Flow (3-Step)
 
@@ -686,19 +745,29 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 
 ### Test Files by Session
 
-| Session | Test Files | Tests |
-|---------|------------|-------|
-| 1-10 | test_auth, test_users, test_photos, test_swipes, test_matches, test_messages, test_search, test_blocks | ~50 |
-| 11 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 32 |
-| 12 | test_notifications, test_reports, test_privacy | 31 |
-| 13 | test_tickets, test_admin_tickets, test_admin_reports, test_admin_users, test_admin_dashboard, test_admin_photos, test_admin_messages | 57 |
-| 14 | test_location | 25 |
-| **16-17** | **test_auth (updated), test_users (updated)** | **✅ All passing** |
+| Session | Test Files | Tests | Status |
+|---------|------------|-------|--------|
+| 1-10 | test_auth, test_users, test_photos | ~50+ | ✅ Re-verified passing post-MinIO migration |
+| 1-10 (cont.) | test_swipes, test_matches, test_messages, test_search, test_blocks | — | ⚠️ Not re-run since MinIO migration |
+| 11 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 32 | ⚠️ Not re-run since MinIO migration |
+| 12 | test_notifications, test_reports, test_privacy | 31 | ⚠️ Not re-run since MinIO migration |
+| 13 | test_tickets, test_admin_tickets, test_admin_reports, test_admin_users, test_admin_dashboard, test_admin_photos, test_admin_messages | 57 | ⚠️ Not re-run since MinIO migration (test_admin_photos.py especially — admin_photos.py logic changed) |
+| 14 | test_location | 25 | ⚠️ Not re-run since MinIO migration |
+| **16-17** | **test_auth, test_users** | — | **✅ Passing** |
+| **MinIO migration** | **test_photos.py** | **62** | **✅ Passing — real MinIO round-trips, no mocking** |
+
+**Action item:** run the full suite (`pytest tests/ -v`) against the current MinIO-based setup to re-confirm the ⚠️ files. The MinIO/config/docker-compose changes touched shared infrastructure (`config.py` gained required `S3_*` fields with no defaults — app won't even start without them in `.env`/`.env.test`), so any test file is at risk of failing purely on settings load, independent of its own logic.
 
 ### Run All Tests
 
 ```bash
 pytest tests/ -v
+```
+
+### Run a Single File
+
+```bash
+pytest tests/test_photos.py -v
 ```
 
 ---
@@ -726,9 +795,49 @@ services:
     container_name: dating_redis
     ports:
       - "6379:6379"
+
+  minio:
+    image: minio/minio:latest
+    container_name: dating_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: creates buckets, sets photos-public to anonymous-read.
+  # NOTE: keep service names hyphenated, not underscored — MinIO rejects
+  # underscored hostnames ("Invalid Request (invalid hostname)").
+  minio-init:
+    image: minio/mc:latest
+    container_name: dating_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/photos-public &&
+      mc mb --ignore-existing local/photos-private &&
+      mc anonymous set download local/photos-public &&
+      echo 'MinIO buckets ready'
+      "
+
+volumes:
+  postgres_data:
+  minio_data:
 ```
 
-### Docker Compose (Testing)
+### Docker Compose (Testing) — `docker-compose_test.yml`
 
 ```yaml
 services:
@@ -749,6 +858,52 @@ services:
     container_name: dating_redis_test
     ports:
       - "6380:6379"
+
+  minio-test:
+    image: minio/minio:latest
+    container_name: dating_minio_test
+    command: server /data --console-address ":9091"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9090:9000"   # S3 API
+      - "9091:9091"   # Web console
+    volumes:
+      - minio_test_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-test-init:
+    image: minio/mc:latest
+    container_name: dating_minio_test_init
+    depends_on:
+      minio-test:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio-test:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/photos-public-test &&
+      mc mb --ignore-existing local/photos-private-test &&
+      mc anonymous set download local/photos-public-test &&
+      echo 'Test MinIO buckets ready'
+      "
+
+volumes:
+  postgres_test_data:
+  minio_test_data:
+```
+
+To run/reset the test stack:
+
+```bash
+docker compose -f docker-compose_test.yml down -v --remove-orphans
+docker compose -f docker-compose_test.yml up -d
+docker compose -f docker-compose_test.yml logs minio-test-init   # confirm "Test MinIO buckets ready"
+pytest tests/ -v
 ```
 
 ### Alembic Commands
@@ -830,13 +985,28 @@ alembic downgrade -1
 | Backend `user.py` schema fixed (model_validator) | ✅ |
 | Fixed `initState` notifyListeners error | ✅ |
 
+### ✅ Photo Storage Migration Complete (Local Disk → MinIO)
+| Feature | Status |
+|---------|--------|
+| MinIO added to docker-compose.yml + docker-compose_test.yml | ✅ |
+| `photo_service.py` rewritten for MinIO/S3 (aioboto3) | ✅ |
+| Public/private bucket split by moderation status | ✅ |
+| `admin_photos.py` — approve now calls `publish_photo()`, name-field bug fixed (was `user.name`, now correctly `profile.name` via join) | ✅ |
+| `photos.py` — responses resolve object key to real URL via `get_photo_url()` | ✅ |
+| `test_photos.py` — 62 tests, real MinIO round-trips (no mocking) | ✅ Passing |
+| `test_auth.py`, `test_users.py` — re-verified post-migration | ✅ Passing |
+| Remaining test files (swipes, matches, messages, search, blocks, rewards, referrals, subscriptions, daily_limits, notifications, reports, tickets, admin_*, location) | ⚠️ Not yet re-run |
+| TODO: real face-match API integration (currently all uploads auto-verified — see TODO block in `admin_photos.py`) | 🔲 |
+
 ### ⚠️ Pending
 
 | Item | Priority | Session |
 |------|----------|---------|
+| Re-run full test suite against MinIO setup (swipes, matches, messages, search, blocks, rewards, referrals, subscriptions, daily_limits, notifications, reports, tickets, admin_*, location) | High | — |
 | Real ZarinPal integration | High | 15 |
 | FCM push notifications | High | 15 |
 | Database indexes | Medium | 15 |
+| Real face-match API (photo verification) | Medium | — |
 | Onboarding Flow (Flutter) | High | 19 |
 | Main App Features (Flutter) | High | 20 |
 | Polish & Production (Flutter) | Medium | 21 |
