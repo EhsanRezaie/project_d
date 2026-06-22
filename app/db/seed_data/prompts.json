@@ -1,0 +1,582 @@
+[
+  {
+    "question": "دو تا راست یکی دروغ درباره‌ام...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "Two truths and a lie about me are...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "دوستام میگن من آدمی هستم که...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "My friends would describe me as...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "یه استعداد پنهونم اینه که...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "I'm secretly really good at...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "راه دل من اینه که...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "The way to win me over is...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "بحث‌برانگیزترین نظرم اینه که...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "My most controversial opinion is...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "مشتری ثابت یه جا هستم به اسم...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "I'm a regular at...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "یکی از هدف‌های زندگیم اینه که...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "A life goal of mine is...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "وقتی پای این موضوع وسط میاد، حرف نزن: ...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "I geek out on...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "زبان عشق من اینه که...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "My love language is...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "اگه یه چیز ازم بدونی، بهتره این باشه که...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "The one thing I'd want you to know about me is...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "بیش از حد رقابتی میشم وقتی پای ... وسطه",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "I'm overly competitive about...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "بزرگ‌ترین ترسم اینه که...",
+    "category": "about_me",
+    "language": "fa"
+  },
+  {
+    "question": "My biggest fear is...",
+    "category": "about_me",
+    "language": "en"
+  },
+  {
+    "question": "یه یکشنبه‌ی معمولیم اینجوریه که...",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "A typical Sunday for me looks like...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "لذت‌های ساده‌ی زندگیم اینان...",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "My simple pleasures are...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "بیش از حد پول خرج ... میکنم",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "I spend way too much money on...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "آخر هفته‌ی ایده‌آلم شامل ... میشه",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "My ideal weekend involves...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "آخرین سریالی که یه‌نفس دیدم...",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "The last thing I binge-watched was...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "نمیتونم درباره‌ی ... ساکت بمونم",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "I won't shut up about...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "توی کارائوکه همیشه این آهنگو میخونم...",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "My go-to karaoke song is...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "قهوه/چاییمو این‌جوری میخورم...",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "I take my coffee/tea...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "بهترین غذایی که تا حالا خوردم...",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "The best meal I've ever had was...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "روتین صبحم شامل ... میشه",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "My morning routine includes...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "این روزا دارم ... میخونم یا میبینم",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "I'm currently reading/watching...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "فلسفه‌ی تعادل کار و زندگیم اینه که...",
+    "category": "lifestyle",
+    "language": "fa"
+  },
+  {
+    "question": "My work-life balance philosophy is...",
+    "category": "lifestyle",
+    "language": "en"
+  },
+  {
+    "question": "دنبال کسی‌ام که...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "I'm looking for someone who...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "کلید یه رابطه‌ی خوب اینه که...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "The key to a good relationship is...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "اولین قرار ایده‌آلم این شکلیه...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "My ideal first date would be...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "فهمیدم عاشق شدم وقتی که...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "I knew it was love when...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "یه نشونه‌ی خوب که توی طرف مقابل دنبالشم...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "A green flag I look for is...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "بزرگ‌ترین خط قرمزم توی رابطه...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "My biggest relationship dealbreaker is...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "اهمیت دادنمو این‌جوری نشون میدم...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "I show I care by...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "با همدیگه میتونیم...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "Together, we could...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "دنبال یه رابطه‌ی ... هستم",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "I'm looking for...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "غیرمنطقی‌ترین ترسم توی دوست‌یابی اینه که...",
+    "category": "relationships",
+    "language": "fa"
+  },
+  {
+    "question": "My most irrational fear in dating is...",
+    "category": "relationships",
+    "language": "en"
+  },
+  {
+    "question": "بدترین هدیه‌ای که گرفتم...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "Worst gift I ever received...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "پراستفاده‌ترین ایموجیم...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "My most used emoji is...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "اگه میتونستم با یه نفر شام بخورم، اون آدم...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "If I could have dinner with anyone, it would be...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "اگه یه ابرقدرت داشتم...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "My superpower would be...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "عجیب‌ترین ترکیب غذایی که دوست دارم...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "The weirdest food combo I love is...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "هیچوقت ... رو رد نمیکنم",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "I will never turn down...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "یه هنر نمایشیم اینه که...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "My party trick is...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "آخرین پیامی که فرستادم...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "The last text I sent was...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "اگه زندگیم یه آهنگ تیتراژ داشت...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "If my life had a theme song, it would be...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "کاملا مطمئنم که...",
+    "category": "fun",
+    "language": "fa"
+  },
+  {
+    "question": "I'm convinced that...",
+    "category": "fun",
+    "language": "en"
+  },
+  {
+    "question": "چیزی که دارم روی خودم کار میکنم...",
+    "category": "deep",
+    "language": "fa"
+  },
+  {
+    "question": "Something I'm working on about myself is...",
+    "category": "deep",
+    "language": "en"
+  },
+  {
+    "question": "بهترین نصیحتی که تا حالا گرفتم...",
+    "category": "deep",
+    "language": "fa"
+  },
+  {
+    "question": "The best advice I've ever received was...",
+    "category": "deep",
+    "language": "en"
+  },
+  {
+    "question": "بیشتر از همیشه خودمم وقتی که...",
+    "category": "deep",
+    "language": "fa"
+  },
+  {
+    "question": "I feel most like myself when...",
+    "category": "deep",
+    "language": "en"
+  },
+  {
+    "question": "یه هدفی که واقعا برام مهمه...",
+    "category": "deep",
+    "language": "fa"
+  },
+  {
+    "question": "A cause I really care about is...",
+    "category": "deep",
+    "language": "en"
+  },
+  {
+    "question": "مهم‌ترین درسی که یاد گرفتم...",
+    "category": "deep",
+    "language": "fa"
+  },
+  {
+    "question": "The most important lesson I've learned is...",
+    "category": "deep",
+    "language": "en"
+  },
+  {
+    "question": "قدردان ... هستم",
+    "category": "deep",
+    "language": "fa"
+  },
+  {
+    "question": "I'm grateful for...",
+    "category": "deep",
+    "language": "en"
+  },
+  {
+    "question": "چیزی که دیدگاهمو نسبت به زندگی عوض کرد...",
+    "category": "deep",
+    "language": "fa"
+  },
+  {
+    "question": "Something that changed my perspective on life was...",
+    "category": "deep",
+    "language": "en"
+  },
+  {
+    "question": "لحظه‌ای که بیشتر از همه بهش افتخار میکنم...",
+    "category": "deep",
+    "language": "fa"
+  },
+  {
+    "question": "My proudest moment was...",
+    "category": "deep",
+    "language": "en"
+  },
+  {
+    "question": "بیش از حد درگیر ... میشم",
+    "category": "interests",
+    "language": "fa"
+  },
+  {
+    "question": "I get way too invested in...",
+    "category": "interests",
+    "language": "en"
+  },
+  {
+    "question": "بهترین جور گذروندن آخر هفته‌م...",
+    "category": "interests",
+    "language": "fa"
+  },
+  {
+    "question": "My favorite way to spend a weekend is...",
+    "category": "interests",
+    "language": "en"
+  },
+  {
+    "question": "سرگرمی‌ای که دوست دارم توش بهتر بشم...",
+    "category": "interests",
+    "language": "fa"
+  },
+  {
+    "question": "The hobby I'd love to get better at is...",
+    "category": "interests",
+    "language": "en"
+  },
+  {
+    "question": "توی لیست آرزوهای سفرم...",
+    "category": "interests",
+    "language": "fa"
+  },
+  {
+    "question": "My travel bucket list includes...",
+    "category": "interests",
+    "language": "en"
+  },
+  {
+    "question": "آخرین کنسرت یا رویدادی که رفتم...",
+    "category": "interests",
+    "language": "fa"
+  },
+  {
+    "question": "The last concert/event I went to was...",
+    "category": "interests",
+    "language": "en"
+  },
+  {
+    "question": "میتونم ساعت‌ها درباره‌ی ... حرف بزنم",
+    "category": "interests",
+    "language": "fa"
+  },
+  {
+    "question": "I could talk for hours about...",
+    "category": "interests",
+    "language": "en"
+  }
+]

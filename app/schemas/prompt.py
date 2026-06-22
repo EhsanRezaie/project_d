@@ -1,33 +1,19 @@
+from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel
-from uuid import UUID
 
 
 class PromptResponse(BaseModel):
+    """A single prompt question, in the language it was requested in.
+
+    Unlike Interest, the `question` text here IS the actual display text
+    (already localized server-side) — no client-side translation needed,
+    since the same logical prompt exists as separate rows per language.
+    """
     id: UUID
     question: str
     category: Optional[str] = None
-    is_active: bool = True
+    language: str
 
     class Config:
         from_attributes = True
-
-
-class PromptCreateRequest(BaseModel):
-    question: str
-    category: Optional[str] = None
-
-
-class UserPromptResponse(BaseModel):
-    id: UUID
-    prompt_id: UUID
-    question: str
-    answer: str
-
-    class Config:
-        from_attributes = True
-
-
-class UserPromptCreateRequest(BaseModel):
-    prompt_id: UUID
-    answer: str
