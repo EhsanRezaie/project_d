@@ -27,6 +27,8 @@ from app.api.v1.endpoints.admin_dashboard import router as admin_dashboard_route
 from app.api.v1.endpoints.admin_photos import router as admin_photos_router
 from app.api.v1.endpoints.admin_announcements import router as admin_announcements_router
 from app.api.v1.endpoints.locations import router as locations_router
+from app.api.v1.endpoints.interests import router as interests_router
+from app.api.v1.endpoints.prompts import router as prompts_router
 
 from app.api.v1.websocket.matches import router as websocket_router
 from app.api.v1.endpoints.matches import router as matches_router
@@ -84,6 +86,8 @@ app.include_router(admin_dashboard_router, prefix="/api/v1")
 app.include_router(admin_photos_router, prefix="/api/v1")
 app.include_router(admin_announcements_router, prefix="/api/v1")
 app.include_router(locations_router, prefix="/api/v1")
+app.include_router(interests_router, prefix="/api/v1")
+app.include_router(prompts_router, prefix="/api/v1")
 
 # WebSocket Routers
 app.include_router(websocket_router)
