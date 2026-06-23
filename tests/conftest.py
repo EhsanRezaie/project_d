@@ -273,3 +273,9 @@ async def client(db_session: AsyncSession) -> AsyncClient:
         yield ac
 
     app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture
+def admin_headers() -> dict:
+    """Create admin auth headers."""
+    from app.core.config import settings
+    return {"X-Admin-Key": settings.ADMIN_SECRET_KEY}

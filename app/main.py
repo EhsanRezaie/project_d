@@ -5,6 +5,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import os
 
+
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.api.v1.endpoints.auth import router as auth_router
@@ -30,6 +31,7 @@ from app.api.v1.endpoints.locations import router as locations_router
 from app.api.v1.endpoints.interests import router as interests_router
 from app.api.v1.endpoints.prompts import router as prompts_router
 from app.api.v1.endpoints.admin_messages import router as admin_messages_router
+from app.api.v1.endpoints.system import router as admin_system_router
 
 
 from app.api.v1.websocket.matches import router as websocket_router
@@ -85,6 +87,7 @@ app.include_router(locations_router, prefix="/api/v1")
 app.include_router(interests_router, prefix="/api/v1")
 app.include_router(prompts_router, prefix="/api/v1")
 app.include_router(admin_messages_router, prefix="/api/v1")
+app.include_router(admin_system_router, prefix="/api/v1")
 
 # WebSocket Routers
 app.include_router(websocket_router)
