@@ -1,4 +1,5 @@
-from datetime import date, datetime, timedelta ,timezone
+# app/services/reward_service.py
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -7,6 +8,9 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.daily_limit import DailyLimit
 from app.models.subscription import Subscription
+from app.core.logging import get_logger
+
+logger = get_logger("reward_service")
 
 
 class RewardService:
@@ -41,7 +45,8 @@ class RewardService:
     
     async def get_remaining_likes(self, user: User) -> int:
         """Get remaining likes for today. Returns -1 for unlimited."""
-        if user.profile.is_premium:
+        # ✅ FIX: Check profile exists and is_premium
+        if user.profile and user.profile.is_premium:
             return -1
         
         today = date.today()
@@ -52,6 +57,7 @@ class RewardService:
     
     async def get_remaining_chats(self, user: User) -> int:
         """Get remaining new chats for today. Returns -1 for unlimited."""
+        # ✅ FIX: Check profile exists and is_premium
         if user.profile and user.profile.is_premium:
             return -1
         
@@ -63,7 +69,8 @@ class RewardService:
     
     async def consume_like(self, user: User) -> bool:
         """Consume one like. Returns True if successful."""
-        if user.profile.is_premium:
+        # ✅ FIX: Check profile exists and is_premium
+        if user.profile and user.profile.is_premium:
             return True
         
         remaining = await self.get_remaining_likes(user)
@@ -79,7 +86,8 @@ class RewardService:
     
     async def consume_chat(self, user: User) -> bool:
         """Consume one new chat. Returns True if successful."""
-        if user.profile.is_premium:
+        # ✅ FIX: Check profile exists and is_premium
+        if user.profile and user.profile.is_premium:
             return True
         
         remaining = await self.get_remaining_chats(user)
@@ -133,10 +141,11 @@ class RewardService:
         today = date.today()
         daily_limit = await self.get_or_create_daily_limit(user.id, today)
         
-        if user.profile.is_premium:
+        # ✅ FIX: Check profile exists and is_premium
+        if user.profile and user.profile.is_premium:
             return {
                 'is_premium': True,
-                'premium_expires_at': user.premium_until.isoformat() if user.premium_until else None,
+                'premium_expires_at': user.profile.premium_until.isoformat() if user.profile.premium_until else None,
                 'likes_used_today': daily_limit.likes_used,
                 'likes_remaining_today': -1,
                 'chats_used_today': daily_limit.chats_used,
@@ -145,8 +154,8 @@ class RewardService:
                 'max_ads_per_day': settings.MAX_AD_REWARDS_PER_DAY,
                 'daily_likes_limit': -1,
                 'daily_chats_limit': -1,
-                'ad_reward_likes_bonus': settings.AD_REWARD_LIKES_BONUS,  # ADD THIS
-                'ad_reward_chats_bonus': settings.AD_REWARD_CHATS_BONUS,  # ADD THIS
+                'ad_reward_likes_bonus': settings.AD_REWARD_LIKES_BONUS,
+                'ad_reward_chats_bonus': settings.AD_REWARD_CHATS_BONUS,
             }
         
         likes_limit = settings.FREE_USER_DAILY_LIKES + daily_limit.ad_likes_bonus
@@ -163,19 +172,25 @@ class RewardService:
             'max_ads_per_day': settings.MAX_AD_REWARDS_PER_DAY,
             'daily_likes_limit': likes_limit,
             'daily_chats_limit': chats_limit,
-            'ad_reward_likes_bonus': settings.AD_REWARD_LIKES_BONUS,  # ADD THIS
-            'ad_reward_chats_bonus': settings.AD_REWARD_CHATS_BONUS,  # ADD THIS
+            'ad_reward_likes_bonus': settings.AD_REWARD_LIKES_BONUS,
+            'ad_reward_chats_bonus': settings.AD_REWARD_CHATS_BONUS,
         }
     
-    async def grant_premium_days(self, user: User, days: int, source: str, payment_id: str = None):
+    async def grant_premium_days(self, user: User, days: int, source: str, payment_id: str = None) -> datetime:
         """Grant premium days to user and create subscription record."""
         now = datetime.now(timezone.utc)
         
+        # ✅ FIX: Use user.profile.premium_until
+        profile = user.profile
+        if not profile:
+            logger.error(f"User {user.id} has no profile")
+            raise ValueError("User profile not found")
+        
         # Calculate new expiry
-        if user.premium_until is None or user.premium_until < now:
-            user.premium_until = now + timedelta(days=days)
+        if profile.premium_until is None or profile.premium_until < now:
+            profile.premium_until = now + timedelta(days=days)
         else:
-            user.premium_until = user.premium_until + timedelta(days=days)
+            profile.premium_until = profile.premium_until + timedelta(days=days)
         
         # Create subscription record
         subscription = Subscription(
@@ -183,11 +198,11 @@ class RewardService:
             plan=f"{days}_days",
             status="active",
             started_at=now,
-            expires_at=user.premium_until,
+            expires_at=profile.premium_until,
             source=source,
             payment_id=payment_id,
         )
         self.db.add(subscription)
         await self.db.commit()
         
-        return user.premium_until
+        return profile.premium_until

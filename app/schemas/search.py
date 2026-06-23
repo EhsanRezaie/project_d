@@ -1,21 +1,63 @@
+# app/schemas/search.py
 from uuid import UUID
 from typing import Optional, List
 from pydantic import BaseModel, Field
 
+from app.schemas.auth import (
+    Gender,
+    SexualOrientation,
+    BodyType,
+    RelationshipStatus,
+    LivingSituation,
+    ChildrenStatus,
+    SmokingStatus,
+    DrinkingStatus,
+    EducationLevel,
+    PoliticalOrientation,
+)
+
 
 class SearchProfileResponse(BaseModel):
-    """Response schema for search results"""
+    """Response schema for search results - includes ALL profile fields."""
+    # Basic
     id: UUID
     name: str
     age: int
     gender: str
     bio: Optional[str] = None
+    
+    # Appearance
     height: Optional[int] = None
     weight: Optional[int] = None
+    body_type: Optional[str] = None
+    
+    # Lifestyle
+    relationship_status: Optional[str] = None
+    living_situation: Optional[str] = None
+    children_status: Optional[str] = None
+    smoking: Optional[str] = None
+    drinking: Optional[str] = None
+    
+    # Background
+    education: Optional[str] = None
+    workplace: Optional[str] = None
+    religion: Optional[str] = None
+    ethnicity: Optional[str] = None
+    political_orientation: Optional[str] = None
+    languages: Optional[List[str]] = None
+    
+    # Location
+    country: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
     distance_km: Optional[float] = None
+    
+    # Photos & Premium
     main_photo_url: Optional[str] = None
     is_premium: bool
     is_verified: bool = False
+    
+    # Privacy
     last_seen_at: Optional[str] = None
     hide_last_seen: bool = False
     hide_online_status: bool = False
@@ -25,14 +67,14 @@ class SearchProfileResponse(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    """Response for search endpoint"""
+    """Response for search endpoint."""
     users: List[SearchProfileResponse]
     total: int
     next_offset: Optional[int] = None
 
 
 class SearchFilters(BaseModel):
-    """Search filters"""
+    """Search filters."""
     age_min: int = Field(18, ge=18, le=100)
     age_max: int = Field(100, ge=18, le=100)
     distance_km: Optional[int] = Field(None, ge=1, le=500)
@@ -46,6 +88,16 @@ class SearchFilters(BaseModel):
     country: Optional[str] = Field(None, max_length=100)
     province: Optional[str] = Field(None, max_length=100)
     city: Optional[str] = Field(None, max_length=100)
+    religion: Optional[str] = Field(None, max_length=50)
+    ethnicity: Optional[str] = Field(None, max_length=50)
+    relationship_status: Optional[str] = Field(None, max_length=50)
+    body_type: Optional[str] = Field(None, max_length=50)
+    education: Optional[str] = Field(None, max_length=50)
+    smoking: Optional[str] = Field(None, max_length=50)
+    drinking: Optional[str] = Field(None, max_length=50)
+    political_orientation: Optional[str] = Field(None, max_length=50)
+    languages: Optional[str] = Field(None, max_length=200, description="Comma-separated language codes")
+    interests: Optional[str] = Field(None, max_length=500, description="Comma-separated interest names")
     sort_by: str = Field("recent", pattern="^(recent|distance|age|name)$")
     sort_order: str = Field("desc", pattern="^(asc|desc)$")
     limit: int = Field(20, ge=1, le=100)
@@ -53,8 +105,11 @@ class SearchFilters(BaseModel):
 
 
 class BlockResponse(BaseModel):
-    """Response for block list"""
+    """Response for block list."""
     id: UUID
     blocked_user_id: UUID
     blocked_user_name: str
     blocked_at: str
+    
+    class Config:
+        from_attributes = True
