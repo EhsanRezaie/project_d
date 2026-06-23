@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient
-from tests.test_auth import register_user, VALID_REGISTER_PAYLOAD
+from tests.done.test_auth import register_user, VALID_REGISTER_PAYLOAD
 
 REFERRAL_CODE_URL = "/api/v1/referrals/my-code"
 REFERRAL_CLAIM_URL = "/api/v1/referrals/claim"

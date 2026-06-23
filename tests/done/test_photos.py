@@ -392,7 +392,7 @@ class TestAdminPendingQueue:
         photos = resp.json()
         assert len(photos) == 1
         # Regression check: user_name must come from UserProfile.name,
-        # not a nonexistent User.name attribute.
+        # not a nonexistent current_user.profile.name attribute.
         assert photos[0]["user_name"] == "Test User"
         assert photos[0]["user_email"] == test_user.email
         assert photos[0]["status"] == "pending"

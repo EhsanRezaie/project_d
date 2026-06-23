@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient
-from tests.test_auth import register_user, VALID_REGISTER_PAYLOAD
+from tests.done.test_auth import register_user, VALID_REGISTER_PAYLOAD
 
 SWIPE_URL = "/api/v1/swipes"
 REWARDS_LIMITS_URL = "/api/v1/rewards/my-limits"

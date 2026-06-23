@@ -1,35 +1,28 @@
-import os
-import uuid
-from pathlib import Path
+# app/services/media_service.py
+import io
 from typing import Tuple, Optional
 from PIL import Image
-import io
 
+from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger("media_service")
 
-# Upload directories
-CHAT_PHOTO_DIR = Path("uploads/chat/photo")
-CHAT_VOICE_DIR = Path("uploads/chat/voice")
-
-CHAT_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
-CHAT_VOICE_DIR.mkdir(parents=True, exist_ok=True)
-
 
 class MediaService:
-    """Handle media uploads for chat"""
+    """Handle media uploads for chat using MinIO"""
 
-    MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5MB
-    MAX_VOICE_SIZE = 2 * 1024 * 1024  # 2MB
-    MAX_VOICE_DURATION = 120  # 2 minutes
-    ALLOWED_IMAGE_FORMATS = ["JPEG", "PNG", "WEBP", "JPG"]
+    MAX_PHOTO_SIZE = settings.MAX_CHAT_PHOTO_SIZE_MB * 1024 * 1024
+    MAX_VOICE_SIZE = settings.MAX_CHAT_VOICE_SIZE_MB * 1024 * 1024
+    MAX_VOICE_DURATION = settings.MAX_CHAT_VOICE_DURATION
+    ALLOWED_IMAGE_FORMATS = [fmt.strip() for fmt in settings.ALLOWED_CHAT_IMAGE_FORMATS.split(",")]
+
 
     @staticmethod
     async def save_photo(file_data: bytes, match_id: str, message_id: str) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        Save photo message.
-        Returns: (success, file_path, error_message)
+        Save photo message to MinIO.
+        Returns: (success, file_url, error_message)
         """
         # Check size
         if len(file_data) > MediaService.MAX_PHOTO_SIZE:
@@ -40,14 +33,7 @@ class MediaService:
             image = Image.open(io.BytesIO(file_data))
 
             if image.format not in MediaService.ALLOWED_IMAGE_FORMATS:
-                return False, None, f"Invalid format. Allowed: JPEG, PNG, WEBP"
-
-            # Create directory
-            match_dir = CHAT_PHOTO_DIR / match_id
-            match_dir.mkdir(parents=True, exist_ok=True)
-
-            # Save file
-            file_path = match_dir / f"{message_id}.jpg"
+                return False, None, f"Invalid format. Allowed: {', '.join(MediaService.ALLOWED_IMAGE_FORMATS)}"
 
             # Convert to RGB if needed
             if image.mode in ('RGBA', 'LA', 'P'):
@@ -60,10 +46,46 @@ class MediaService:
             if image.width > max_size or image.height > max_size:
                 image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
 
-            # Save as JPEG with 85% quality
-            image.save(file_path, 'JPEG', quality=85, optimize=True)
+            # Save to bytes
+            output = io.BytesIO()
+            image.save(output, 'JPEG', quality=85, optimize=True)
+            file_data = output.getvalue()
 
-            return True, f"/uploads/chat/photo/{match_id}/{message_id}.jpg", None
+            # Upload to MinIO
+            import aioboto3
+            
+            key = f"chat/photos/{match_id}/{message_id}.jpg"
+            
+            async with aioboto3.Session().client(
+                "s3",
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.S3_ACCESS_KEY,
+                aws_secret_access_key=settings.S3_SECRET_KEY,
+                region_name=settings.S3_REGION,
+            ) as s3:
+                await s3.put_object(
+                    Bucket=settings.S3_PRIVATE_BUCKET,
+                    Key=key,
+                    Body=file_data,
+                    ContentType="image/jpeg",
+                )
+
+            # Generate signed URL
+            async with aioboto3.Session().client(
+                "s3",
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.S3_ACCESS_KEY,
+                aws_secret_access_key=settings.S3_SECRET_KEY,
+                region_name=settings.S3_REGION,
+            ) as s3:
+                url = await s3.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": settings.S3_PRIVATE_BUCKET, "Key": key},
+                    ExpiresIn=settings.S3_SIGNED_URL_EXPIRE_SECONDS,
+                )
+
+            logger.info(f"Uploaded chat photo to MinIO: {key}")
+            return True, url, None
 
         except Exception as e:
             logger.error(f"Failed to save photo: {e}")
@@ -72,8 +94,8 @@ class MediaService:
     @staticmethod
     async def save_voice(file_data: bytes, match_id: str, message_id: str, duration: int) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        Save voice message.
-        Returns: (success, file_path, error_message)
+        Save voice message to MinIO.
+        Returns: (success, file_url, error_message)
         """
         # Check size
         if len(file_data) > MediaService.MAX_VOICE_SIZE:
@@ -84,17 +106,41 @@ class MediaService:
             return False, None, f"Voice message too long. Max {MediaService.MAX_VOICE_DURATION} seconds"
 
         try:
-            # Create directory
-            match_dir = CHAT_VOICE_DIR / match_id
-            match_dir.mkdir(parents=True, exist_ok=True)
+            # Upload to MinIO
+            import aioboto3
+            
+            key = f"chat/voice/{match_id}/{message_id}.mp3"
+            
+            async with aioboto3.Session().client(
+                "s3",
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.S3_ACCESS_KEY,
+                aws_secret_access_key=settings.S3_SECRET_KEY,
+                region_name=settings.S3_REGION,
+            ) as s3:
+                await s3.put_object(
+                    Bucket=settings.S3_PRIVATE_BUCKET,
+                    Key=key,
+                    Body=file_data,
+                    ContentType="audio/mpeg",
+                )
 
-            # Save file
-            file_path = match_dir / f"{message_id}.mp3"
+            # Generate signed URL
+            async with aioboto3.Session().client(
+                "s3",
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.S3_ACCESS_KEY,
+                aws_secret_access_key=settings.S3_SECRET_KEY,
+                region_name=settings.S3_REGION,
+            ) as s3:
+                url = await s3.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": settings.S3_PRIVATE_BUCKET, "Key": key},
+                    ExpiresIn=settings.S3_SIGNED_URL_EXPIRE_SECONDS,
+                )
 
-            with open(file_path, "wb") as f:
-                f.write(file_data)
-
-            return True, f"/uploads/chat/voice/{match_id}/{message_id}.mp3", None
+            logger.info(f"Uploaded chat voice to MinIO: {key}")
+            return True, url, None
 
         except Exception as e:
             logger.error(f"Failed to save voice: {e}")
@@ -102,15 +148,38 @@ class MediaService:
 
     @staticmethod
     async def delete_media(match_id: str, message_id: str, media_type: str) -> bool:
-        """Delete media file"""
+        """Delete media file from MinIO"""
         if media_type == "photo":
-            file_path = CHAT_PHOTO_DIR / match_id / f"{message_id}.jpg"
+            key = f"chat/photos/{match_id}/{message_id}.jpg"
         elif media_type == "voice":
-            file_path = CHAT_VOICE_DIR / match_id / f"{message_id}.mp3"
+            key = f"chat/voice/{match_id}/{message_id}.mp3"
         else:
             return False
 
-        if file_path.exists():
-            file_path.unlink()
+        try:
+            import aioboto3
+            
+            async with aioboto3.Session().client(
+                "s3",
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.S3_ACCESS_KEY,
+                aws_secret_access_key=settings.S3_SECRET_KEY,
+                region_name=settings.S3_REGION,
+            ) as s3:
+                # Delete from private bucket
+                try:
+                    await s3.delete_object(Bucket=settings.S3_PRIVATE_BUCKET, Key=key)
+                except Exception:
+                    pass
+                
+                # Delete from public bucket too
+                try:
+                    await s3.delete_object(Bucket=settings.S3_PUBLIC_BUCKET, Key=key)
+                except Exception:
+                    pass
+                
+            logger.info(f"Deleted chat media: {key}")
             return True
-        return False
+        except Exception as e:
+            logger.error(f"Failed to delete media: {e}")
+            return False

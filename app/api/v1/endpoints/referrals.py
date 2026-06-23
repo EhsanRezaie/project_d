@@ -145,6 +145,6 @@ async def get_referral_stats(
         "total_premium_days_earned": total_days_earned,
         "inviter_reward_days": settings.REFERRAL_INVITER_DAYS,
         "invited_reward_days": settings.REFERRAL_INVITED_DAYS,
-        "is_premium": current_user.is_premium,
+        "is_premium": current_user.profile.is_premium,
         "premium_until": premium_until
     }

@@ -1,3 +1,4 @@
+# app/api/v1/endpoints/users.py
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
@@ -21,8 +22,6 @@ async def get_me(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> UserProfileResponse:
-
-
     if not current_user.profile:
         result = await session.execute(
             select(User)
@@ -188,7 +187,7 @@ async def update_location_text(
         )
     
     # Validate if province provided
-    if body.province:
+    if body.province or body.city:
         result = LocationService.validate_location(body.province, body.city)
         if not result["valid"]:
             raise HTTPException(
@@ -203,8 +202,10 @@ async def update_location_text(
     if body.city is not None:
         profile.city = body.city
     
-    if body.province or body.city or body.country:
-        profile.location_manual = True
+    # Set location_manual to True only if any text field was updated
+    if body.province is not None or body.city is not None or body.country is not None:
+        if body.province or body.city or body.country:
+            profile.location_manual = True
     
     await session.commit()
     await session.refresh(current_user)

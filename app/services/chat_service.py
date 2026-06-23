@@ -1,6 +1,7 @@
+# app/services/chat_service.py
 from datetime import date, datetime, timedelta
 from uuid import UUID
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, update
 
@@ -12,6 +13,7 @@ from app.models.match import Match
 from app.models.message import Message
 from app.models.daily_limit import DailyLimit
 from app.core.logging import get_logger
+from app.core.encryption import encrypt_message, decrypt_message
 
 logger = get_logger("chat_service")
 
@@ -73,7 +75,6 @@ async def can_start_new_chat(
         return True, None, None
 
     # This is a new chat - check daily limit using RewardService
-    from app.models.user import User
     result = await session.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     
@@ -100,6 +101,7 @@ async def check_unmatched_message_limit(
     if match_id:
         return True, None, True
 
+    # Count messages sent in this unmatched chat
     result = await session.execute(
         select(func.count(Message.id)).where(
             Message.sender_id == sender_id,
@@ -111,6 +113,7 @@ async def check_unmatched_message_limit(
     )
     message_count = result.scalar() or 0
 
+    # Check if receiver has accepted
     result = await session.execute(
         select(Message.is_accepted).where(
             Message.sender_id == receiver_id,
@@ -121,6 +124,7 @@ async def check_unmatched_message_limit(
     )
     is_accepted_by_receiver = result.scalar_one_or_none() or False
 
+    # Check if sender has accepted
     result = await session.execute(
         select(Message.is_accepted).where(
             Message.sender_id == sender_id,
@@ -184,7 +188,6 @@ async def increment_new_chat_count(
     user_id: UUID
 ) -> None:
     """Increment the new chats counter for a user using RewardService"""
-    from app.models.user import User
     result = await session.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     
@@ -193,34 +196,71 @@ async def increment_new_chat_count(
         await reward_service.consume_chat(user)
 
 
-async def send_message_with_notification(
+async def create_encrypted_message(
+    session: AsyncSession,
+    match_id: Optional[UUID],
+    sender_id: UUID,
+    receiver_id: UUID,
+    content: str,
+    message_type: str = "text",
+    reply_to_id: Optional[UUID] = None,
+    is_accepted: bool = True,
+    media_url: Optional[str] = None,
+    media_duration: Optional[int] = None,
+) -> Message:
+    """
+    Create a new message with encrypted content.
+    """
+    # Create message object
+    new_message = Message(
+        match_id=match_id,
+        sender_id=sender_id,
+        receiver_id=receiver_id,
+        message_type=message_type,
+        reply_to_id=reply_to_id,
+        is_sent=True,
+        is_accepted=is_accepted,
+        media_url=media_url,
+        media_duration=media_duration,
+    )
+    
+    # Set content (will be encrypted via property setter if match_id exists)
+    if content and match_id:
+        new_message.content = content
+    else:
+        new_message._content = content  # Store as-is if no match_id
+    
+    session.add(new_message)
+    await session.flush()
+    return new_message
+
+
+async def send_message_with_encryption(
     session: AsyncSession,
     sender_id: UUID,
     receiver_id: UUID,
     match_id: Optional[UUID],
     sender_name: str,
     content: str,
-    message_type: str = "text"
+    message_type: str = "text",
+    reply_to_id: Optional[UUID] = None,
 ) -> Message:
     """
-    Send a message and create notification if recipient is offline.
-    Returns the created message.
+    Send a message with encryption and create notification.
     """
-    # Create message
-    new_message = Message(
+    # Create message with encryption
+    new_message = await create_encrypted_message(
+        session=session,
         match_id=match_id,
         sender_id=sender_id,
         receiver_id=receiver_id,
-        message_type=message_type,
         content=content,
-        is_sent=True,
+        message_type=message_type,
+        reply_to_id=reply_to_id,
         is_accepted=match_id is not None,
     )
-    session.add(new_message)
-    await session.flush()
     
-    # Check if recipient is online (you can implement this with WebSocket manager)
-    # For MVP, always send notification
+    # Send notification
     notification_service = NotificationService(session)
     await notification_service.notify_message(
         receiver_id=receiver_id,
@@ -229,6 +269,59 @@ async def send_message_with_notification(
     )
     
     return new_message
+
+
+async def get_decrypted_message_for_client(
+    session: AsyncSession,
+    message: Message,
+    current_user_id: UUID
+) -> Dict[str, Any]:
+    """
+    Get message data with decrypted content for client delivery.
+    """
+    # Decrypt content (uses property getter)
+    decrypted_content = message.content if message.match_id else message._content
+    
+    return {
+        "id": str(message.id),
+        "match_id": str(message.match_id) if message.match_id else None,
+        "sender_id": str(message.sender_id),
+        "receiver_id": str(message.receiver_id),
+        "message_type": message.message_type,
+        "content": decrypted_content,
+        "media_url": message.media_url,
+        "media_duration": message.media_duration,
+        "reply_to_id": str(message.reply_to_id) if message.reply_to_id else None,
+        "is_sent": message.is_sent,
+        "is_delivered": message.is_delivered,
+        "is_read": message.is_read,
+        "is_accepted": message.is_accepted,
+        "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        "delivered_at": message.delivered_at.isoformat() if message.delivered_at else None,
+        "read_at": message.read_at.isoformat() if message.read_at else None,
+    }
+
+
+async def get_message_for_admin(
+    session: AsyncSession,
+    message_id: UUID
+) -> Tuple[Optional[Message], Optional[str]]:
+    """
+    Get a message with decrypted content for admin review.
+    Returns: (message, decrypted_content)
+    """
+    result = await session.execute(
+        select(Message).where(Message.id == message_id)
+    )
+    message = result.scalar_one_or_none()
+    
+    if not message:
+        return None, None
+    
+    # Decrypt using admin method
+    decrypted_content = message.get_decrypted_content_for_admin() if message.match_id else message._content
+    
+    return message, decrypted_content
 
 
 async def mark_messages_as_delivered(
@@ -295,7 +388,7 @@ async def delete_message(
 
         message.is_deleted_for_all = True
         message.deleted_at = datetime.utcnow()
-        message.content = "[Message deleted]"
+        message._content = "[Message deleted]"  # Store as-is (not encrypted)
     else:
         if message.sender_id == user_id:
             message.is_deleted_for_sender = True
@@ -337,21 +430,21 @@ async def forward_message(
 
     receiver_id = target_match.user2_id if target_match.user1_id == user_id else target_match.user1_id
 
-    forwarded_content = f"📨 Forwarded: {original.content}" if original.content else "📨 Forwarded message"
+    # Get decrypted content for forwarding
+    original_content = original.content if original.match_id else original._content
+    forwarded_content = f"📨 Forwarded: {original_content}" if original_content else "📨 Forwarded message"
 
-    new_message = Message(
+    # Create new message with encryption for new chat
+    new_message = await create_encrypted_message(
+        session=session,
         match_id=target_match_id,
         sender_id=user_id,
         receiver_id=receiver_id,
-        message_type=original.message_type,
         content=forwarded_content,
+        message_type=original.message_type,
+        is_accepted=True,
         media_url=original.media_url,
         media_duration=original.media_duration,
-        is_sent=True,
-        is_accepted=True,
     )
-
-    session.add(new_message)
-    await session.flush()
 
     return new_message, None

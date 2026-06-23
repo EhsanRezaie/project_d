@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient
-from tests.test_auth import register_user
+from tests.done.test_auth import register_user
 
 TICKETS_URL = "/api/v1/tickets"
 

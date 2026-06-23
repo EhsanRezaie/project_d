@@ -66,7 +66,7 @@ async def discover(
         User.gender == opposite_gender,
         User.is_active == True,
         User.id != current_user.id,
-        User.age.between(age_min, age_max),
+        current_user.profile.age.between(age_min, age_max),
         User.id.not_in(select(swiped_user_ids.c.to_user)),
     )
     
@@ -111,15 +111,15 @@ async def discover(
         
         response_users.append(ProfileResponse(
             id=user.id,
-            name=user.name,
-            age=user.age,
+            name=current_user.profile.name,
+            age=current_user.profile.age,
             gender=user.gender,
             bio=user.bio,
             height=user.height,
             weight=user.weight,
             distance_km=round(distance, 1) if distance else None,
             main_photo_url=main_photo_url,
-            is_premium=user.is_premium,
+            is_premium=user.profile.is_premium,
             is_verified=user.phone_verified,
         ))
     

@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     # ============================================
     # App Settings
     # ============================================
-    APP_NAME: str = "DatingApp"
+    APP_NAME: str = "Bondi"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
     TESTING: bool = False
@@ -71,9 +71,16 @@ class Settings(BaseSettings):
     # ============================================
     # File Uploads
     # ============================================
-    UPLOADS_DIR: str = "uploads"
-    MAX_PHOTO_SIZE_MB: int = 5
-    MAX_PHOTOS_PER_USER: int = 6
+    MAX_PHOTO_SIZE_MB: int = 10
+    MAX_PHOTOS_PER_USER: int = 9
+    
+    # ============================================
+    # Chat Media Settings
+    # ============================================
+    MAX_CHAT_PHOTO_SIZE_MB: int = 5
+    MAX_CHAT_VOICE_SIZE_MB: int = 2
+    MAX_CHAT_VOICE_DURATION: int = 120
+    ALLOWED_CHAT_IMAGE_FORMATS: str = "JPEG,PNG,WEBP,JPG"
 
     # ============================================
     # MinIO / S3 Settings (NO DEFAULTS - MUST BE IN .env)
@@ -86,6 +93,11 @@ class Settings(BaseSettings):
     S3_PRIVATE_BUCKET: str
     S3_PUBLIC_BASE_URL: str
     S3_SIGNED_URL_EXPIRE_SECONDS: int
+    
+    # ===========================================
+    # Encryption
+    # ===========================================
+    ENCRYPTION_SECRET: str
 
     # ============================================
     # Pydantic Config

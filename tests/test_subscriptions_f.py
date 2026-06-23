@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient
-from tests.test_auth import register_user, VALID_REGISTER_PAYLOAD
+from tests.done.test_auth import register_user, VALID_REGISTER_PAYLOAD
 
 SUBSCRIPTION_PLANS_URL = "/api/v1/subscriptions/plans"
 SUBSCRIPTION_PURCHASE_URL = "/api/v1/subscriptions/purchase"

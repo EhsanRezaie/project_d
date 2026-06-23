@@ -69,7 +69,7 @@ class NotificationService:
                 user_id=user1_id,
                 type="match",
                 title="It's a match!",
-                body=f"You matched with {user2.name}! Start chatting now.",
+                body=f"You matched with {user2.profile.name}! Start chatting now.",
                 data={"match_id": str(match_id), "user_id": str(user2_id)}
             )
 
@@ -78,7 +78,7 @@ class NotificationService:
                 user_id=user2_id,
                 type="match",
                 title="It's a match!",
-                body=f"You matched with {user1.name}! Start chatting now.",
+                body=f"You matched with {user1.profile.name}! Start chatting now.",
                 data={"match_id": str(match_id), "user_id": str(user1_id)}
             )
 

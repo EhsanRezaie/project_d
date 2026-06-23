@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient
-from tests.test_auth import register_user
+from tests.done.test_auth import register_user
 from app.core.config import settings
 
 ADMIN_DASHBOARD_URL = "/api/v1/admin/dashboard"

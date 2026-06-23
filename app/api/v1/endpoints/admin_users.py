@@ -37,7 +37,7 @@ async def admin_list_users(
     if search:
         query = query.where(
             or_(
-                User.name.ilike(f"%{search}%"),
+                current_user.profile.name.ilike(f"%{search}%"),
                 User.email.ilike(f"%{search}%")
             )
         )
@@ -64,11 +64,11 @@ async def admin_list_users(
         response_users.append(AdminUserResponse(
             id=user.id,
             email=user.email,
-            name=user.name,
-            age=user.age,
+            name=current_user.profile.name,
+            age=current_user.profile.age,
             gender=user.gender,
             is_active=user.is_active,
-            is_premium=user.is_premium,
+            is_premium=user.profile.is_premium,
             premium_until=user.premium_until,
             phone_verified=user.phone_verified if user.phone_verified is not None else False,
             created_at=user.created_at,
@@ -135,11 +135,11 @@ async def admin_get_user(
     return AdminUserResponse(
         id=user.id,
         email=user.email,
-        name=user.name,
-        age=user.age,
+        name=current_user.profile.name,
+        age=current_user.profile.age,
         gender=user.gender,
         is_active=user.is_active,
-        is_premium=user.is_premium,
+        is_premium=user.profile.is_premium,
         premium_until=user.premium_until,
         phone_verified=user.phone_verified if user.phone_verified is not None else False,
         created_at=user.created_at,
@@ -184,11 +184,11 @@ async def admin_update_user(
     return AdminUserResponse(
         id=user.id,
         email=user.email,
-        name=user.name,
-        age=user.age,
+        name=current_user.profile.name,
+        age=current_user.profile.age,
         gender=user.gender,
         is_active=user.is_active,
-        is_premium=user.is_premium,
+        is_premium=user.profile.is_premium,
         premium_until=user.premium_until,
         phone_verified=user.phone_verified if user.phone_verified is not None else False,
         created_at=user.created_at,
@@ -258,11 +258,11 @@ async def admin_grant_premium(
     return AdminUserResponse(
         id=user.id,
         email=user.email,
-        name=user.name,
-        age=user.age,
+        name=current_user.profile.name,
+        age=current_user.profile.age,
         gender=user.gender,
         is_active=user.is_active,
-        is_premium=user.is_premium,
+        is_premium=user.profile.is_premium,
         premium_until=user.premium_until,
         phone_verified=user.phone_verified if user.phone_verified is not None else False,
         created_at=user.created_at,
@@ -370,7 +370,7 @@ async def admin_message_user(
     
     return AdminMessageResponse(
         success=True,
-        message=f"Message sent to {user.name}",
+        message=f"Message sent to {current_user.profile.name}",
         user_id=user_id,
-        user_name=user.name
+        user_name=current_user.profile.name
     )
