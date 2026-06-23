@@ -1,4 +1,4 @@
-# 📁 **Complete `dev.md` - Updated with Message Encryption**
+# 📁 **Complete `dev.md` - Updated with All Sessions**
 
 ```markdown
 # dev.md — Iranian Dating App (Badoo-style)
@@ -140,9 +140,9 @@ iranian-dating-app/
 │   │   │   ├── users.py                   # GET /me returns UserProfileResponse
 │   │   │   ├── photos.py
 │   │   │   ├── admin_photos.py
-│   │   │   ├── discover.py
+│   │   │   ├── discover.py                # ✅ Updated with gender filter, profile.age
 │   │   │   ├── swipes.py
-│   │   │   ├── search.py
+│   │   │   ├── search.py                  # ✅ Updated with profile.age
 │   │   │   ├── matches.py
 │   │   │   ├── blocks.py
 │   │   │   ├── messages.py                # ✅ Updated with encryption
@@ -190,26 +190,28 @@ iranian-dating-app/
 │   │
 │   ├── alembic/versions/
 │   ├── tests/
-│   │   ├── conftest.py
+│   │   ├── conftest.py                    # ✅ Auto-seeds interests
 │   │   ├── test_auth.py                   # ✅ Passing
 │   │   ├── test_users.py                  # ✅ Passing
 │   │   ├── test_photos.py                 # ✅ Passing
 │   │   ├── test_messages_encryption.py    # ✅ Passing (14 tests)
 │   │   ├── test_messages.py               # ✅ Passing (19 tests)
 │   │   ├── test_locations.py              # ✅ Passing
-│   │   ├── test_swipes.py                 # ⚠️ Needs re-run
-│   │   ├── test_matches.py                # ⚠️ Needs re-run
-│   │   ├── test_search.py                 # ⚠️ Needs re-run
-│   │   ├── test_blocks.py                 # ⚠️ Needs re-run
-│   │   ├── test_rewards.py                # ⚠️ Needs re-run
-│   │   ├── test_referrals.py              # ⚠️ Needs re-run
-│   │   ├── test_subscriptions.py          # ⚠️ Needs re-run
-│   │   ├── test_daily_limits.py           # ⚠️ Needs re-run
-│   │   ├── test_notifications.py          # ⚠️ Needs re-run
-│   │   ├── test_reports.py                # ⚠️ Needs re-run
-│   │   ├── test_tickets.py                # ⚠️ Needs re-run
-│   │   ├── test_admin_*.py                # ⚠️ Needs re-run
-│   │   └── test_location.py               # ⚠️ Needs re-run
+│   │   ├── test_blocks.py                 # ✅ Passing (12 tests)
+│   │   ├── test_search.py                 # ✅ Passing (38 tests)
+│   │   ├── test_discover.py               # ✅ Passing (23 tests)
+│   │   ├── test_daily_limits.py           # ✅ Passing (4 tests)
+│   │   ├── test_interests.py              # ✅ Passing (21 tests)
+│   │   ├── test_swipes.py                 # ⚠️ Needs update
+│   │   ├── test_matches.py                # ⚠️ Needs update
+│   │   ├── test_rewards.py                # ⚠️ Needs update
+│   │   ├── test_referrals.py              # ⚠️ Needs update
+│   │   ├── test_subscriptions.py          # ⚠️ Needs update
+│   │   ├── test_notifications.py          # ⚠️ Needs update
+│   │   ├── test_reports.py                # ⚠️ Needs update
+│   │   ├── test_tickets.py                # ⚠️ Needs update
+│   │   ├── test_admin_*.py                # ⚠️ Needs update
+│   │   └── test_location.py               # ⚠️ Needs update
 │   │
 │   ├── uploads/
 │   ├── .env
@@ -530,6 +532,28 @@ ALLOWED_CHAT_IMAGE_FORMATS=JPEG,PNG,WEBP,JPG
 | `/auth/password-reset/verify` | POST | Verify reset code + set new password |
 | `/auth/health` | GET | Health check |
 
+### Discover Endpoints (Updated)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/discover` | GET | Discover users with filters (gender optional, age, distance) |
+| `/discover` | GET | Supports `gender` filter (male/female) - if not provided, shows all genders |
+
+### Search Endpoints (Updated)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/search` | GET | Search users with advanced filters |
+| `/search` | GET | Supports all profile fields: age, gender, height, weight, country, province, city, religion, ethnicity, relationship_status, body_type, education, smoking, drinking, political_orientation, languages, interests |
+| `/search` | GET | Supports pagination with `limit` and `offset` |
+| `/search` | GET | Supports sorting by recent, distance, age, name |
+
+### Interests Endpoint
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/interests` | GET | Public endpoint, returns all 158 interests sorted by category, name |
+
 ### Messages Endpoints (Updated)
 
 | Endpoint | Method | Description |
@@ -615,6 +639,44 @@ Replaced local-disk `uploads/` storage with MinIO (self-hosted, S3-compatible), 
 - On admin approval, `PhotoService.publish_photo()` copies the object from `photos-private` → `photos-public` and deletes the original
 - `PhotoService.get_photo_url(key, status)` resolves the correct URL at read time: public URL if `approved`, signed private URL otherwise
 
+### Discover & Search Architecture (Session 23)
+
+**Discover Endpoint (`/discover`):**
+- Returns users for swiping
+- Optional `gender` filter - if not provided, shows all genders
+- Age filter using `birth_date.between()` with `profile.age` for response
+- Excludes: swiped users (like/pass), blocked users, users who blocked you, already matched users
+- Pagination with `limit` and `offset`
+- Distance filter using Haversine formula
+
+**Search Endpoint (`/search`):**
+- Advanced filters: age, gender, height, weight, country, province, city, religion, ethnicity, relationship_status, body_type, education, smoking, drinking, political_orientation, languages, interests
+- Multi-value filters: languages (AND condition), interests (AND condition)
+- Excludes: blocked users (both directions)
+- Sorting: recent, distance, age, name
+- Pagination with `limit` and `offset`
+- Uses `profile.age` property for response age display
+
+**Files Updated (Session 23):**
+- `app/api/v1/endpoints/discover.py` - Gender filter, profile.age, block exclusions, matched exclusions
+- `app/api/v1/endpoints/search.py` - profile.age, block exclusions (both directions)
+- `tests/test_discover.py` - 23 tests passing
+- `tests/test_search.py` - 38 tests passing
+- `tests/test_blocks.py` - All passing
+
+### Interests Endpoint (Session 23)
+
+- Public endpoint (no auth required)
+- Returns all 158 interests from `interests.json`
+- Sorted by `category` then `name`
+- Used during onboarding before user has a token
+- Flutter resolves localized display names client-side
+
+**Test Strategy:**
+- `conftest.py` auto-seeds interests in `setup_database`
+- `reset_state` re-seeds interests after each test
+- `test_interests.py` - 21 tests passing
+
 ### Authentication Flow (3-Step)
 
 ```
@@ -683,6 +745,14 @@ Step 3: POST /auth/register/complete (Authenticated)
 | Quarterly | 90 days | 15% |
 | Yearly | 365 days | 30% |
 
+### Block Rules
+
+| Scenario | Result |
+|----------|--------|
+| You block someone | ❌ They are excluded from your search/discover |
+| Someone blocks you | ❌ They are excluded from your search/discover |
+| No block relationship | ✅ They appear in your search/discover |
+
 ---
 
 ## 10. Session Progress
@@ -709,6 +779,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 20 | Flutter - Main App Features (Discover, Search, Chats, Profile) | 🔲 |
 | 21 | Flutter - Polish & Production | 🔲 |
 | **22** | **Message Encryption (AES-256-GCM)** | ✅ |
+| **23** | **Discover & Search Updates, Interests Endpoint, Test Coverage** | ✅ |
 
 ---
 
@@ -772,15 +843,23 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 | Session | Test Files | Tests | Status |
 |---------|------------|-------|--------|
 | 1-10 | test_auth, test_users, test_photos | ~50+ | ✅ Passing |
-| 1-10 (cont.) | test_swipes, test_matches, test_search, test_blocks | — | ⚠️ Needs re-run |
-| 11 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 32 | ⚠️ Needs re-run |
-| 12 | test_notifications, test_reports | 31 | ⚠️ Needs re-run |
-| 13 | test_tickets, test_admin_* | 57 | ⚠️ Needs re-run |
-| 14 | test_location | 25 | ⚠️ Needs re-run |
+| 11 | test_daily_limits | 4 | ✅ Passing |
+| 12 | test_notifications, test_reports | 31 | ⚠️ Needs update |
+| 13 | test_tickets, test_admin_* | 57 | ⚠️ Needs update |
+| 14 | test_location | 25 | ⚠️ Needs update |
 | 16-18 | test_auth, test_users | — | ✅ Passing |
 | **22** | **test_messages_encryption.py** | **14** | **✅ Passing** |
 | **22** | **test_messages.py** | **19** | **✅ Passing** |
 | **22** | **test_locations.py** | **19** | **✅ Passing** |
+| **23** | **test_blocks.py** | **12** | **✅ Passing** |
+| **23** | **test_search.py** | **38** | **✅ Passing** |
+| **23** | **test_discover.py** | **23** | **✅ Passing** |
+| **23** | **test_interests.py** | **21** | **✅ Passing** |
+| **23** | **test_swipes.py** | — | ⚠️ Needs update |
+| **23** | **test_matches.py** | — | ⚠️ Needs update |
+| **23** | **test_rewards.py** | — | ⚠️ Needs update |
+| **23** | **test_referrals.py** | — | ⚠️ Needs update |
+| **23** | **test_subscriptions.py** | — | ⚠️ Needs update |
 
 ### Run All Tests
 
@@ -868,3 +947,130 @@ version: '3.9'
 services:
   db_test:
     image: postgis/postgis:15-3.3
+    container_name: dating_db_test
+    environment:
+      POSTGRES_USER: dating_user
+      POSTGRES_PASSWORD: dating_pass
+      POSTGRES_DB: dating_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
+  redis_test:
+    image: redis:7-alpine
+    container_name: dating_redis_test
+    ports:
+      - "6380:6379"
+
+  minio-test:
+    image: minio/minio:latest
+    container_name: dating_minio_test
+    command: server /data --console-address ":9091"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9090:9000"   # S3 API
+      - "9091:9091"   # Web console
+    volumes:
+      - minio_test_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-test-init:
+    image: minio/mc:latest
+    container_name: dating_minio_test_init
+    depends_on:
+      minio-test:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio-test:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/photos-public-test &&
+      mc mb --ignore-existing local/photos-private-test &&
+      mc anonymous set download local/photos-public-test &&
+      echo 'Test MinIO buckets ready'
+      "
+
+volumes:
+  postgres_test_data:
+  minio_test_data:
+```
+
+### Alembic Commands
+
+```bash
+alembic revision --autogenerate -m "description"
+alembic upgrade head
+alembic downgrade -1
+```
+
+---
+
+## Session 22-23 Completion Summary
+
+### ✅ Session 22 Complete - Message Encryption
+
+| Feature | Status |
+|---------|--------|
+| AES-256-GCM server-side encryption | ✅ |
+| Per-chat encryption keys from match_id + ENCRYPTION_SECRET | ✅ |
+| SQLAlchemy model property for auto encrypt/decrypt | ✅ |
+| Admin decryption endpoints | ✅ |
+| Photo/voice caption encryption | ✅ |
+| `test_messages_encryption.py` (14 tests passing) | ✅ |
+| `test_messages.py` (19 tests passing) | ✅ |
+| ENCRYPTION_SECRET in .env | ✅ |
+| Chat media settings in config | ✅ |
+
+### ✅ Session 23 Complete - Discover, Search, Interests & Tests
+
+| Feature | Status |
+|---------|--------|
+| Discover endpoint - gender filter (optional) | ✅ |
+| Discover endpoint - block exclusions (both directions) | ✅ |
+| Discover endpoint - matched user exclusions | ✅ |
+| Discover endpoint - uses profile.age property | ✅ |
+| Search endpoint - uses profile.age property | ✅ |
+| Search endpoint - block exclusions (both directions) | ✅ |
+| Interests endpoint - public, no auth | ✅ |
+| Interests endpoint - returns 158 interests sorted | ✅ |
+| `test_blocks.py` (12 tests passing) | ✅ |
+| `test_search.py` (38 tests passing) | ✅ |
+| `test_discover.py` (23 tests passing) | ✅ |
+| `test_interests.py` (21 tests passing) | ✅ |
+| `conftest.py` - auto-seeds interests | ✅ |
+| `conftest.py` - re-seeds interests after each test | ✅ |
+
+---
+
+### ⚠️ Pending
+
+| Item | Priority | Session |
+|------|----------|---------|
+| Re-run full test suite against MinIO setup | High | — |
+| Real ZarinPal integration | High | 15 |
+| FCM push notifications | High | 15 |
+| Database indexes | Medium | 15 |
+| `test_swipes.py` update | Medium | — |
+| `test_matches.py` update | Medium | — |
+| `test_rewards.py` update | Medium | — |
+| `test_referrals.py` update | Medium | — |
+| `test_subscriptions.py` update | Medium | — |
+| Real face-match API (photo verification) | Medium | — |
+| Flutter Onboarding Flow | High | 19 |
+| Flutter Main App Features | High | 20 |
+| Flutter Polish & Production | Medium | 21 |
+
+---
+
+**Next: Session 15 - Push Notifications + Real Payment + Production Ready (Backend)**
+
+**Then: Session 19 - Flutter Onboarding Flow (Lifestyle, Interests, Location)**
+
+Ready to start when you are. 🚀
+```

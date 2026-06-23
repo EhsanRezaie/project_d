@@ -1,3 +1,4 @@
+# tests/conftest.py
 import os
 import sys
 import asyncio
@@ -10,6 +11,8 @@ import redis.asyncio as aioredis
 from unittest.mock import AsyncMock, patch
 from datetime import datetime, timedelta
 import uuid
+import json
+from pathlib import Path
 
 from dotenv import load_dotenv
 load_dotenv(".env.test", override=True)
@@ -40,6 +43,40 @@ def make_redis():
 
 
 # ---------------------------------------------------------------------------
+# Seed interests into the database
+# ---------------------------------------------------------------------------
+
+async def seed_interests(conn):
+    """Seed interests from JSON file into the database."""
+    json_path = Path(__file__).parent.parent / "app" / "db" / "seed_data" / "interests.json"
+    
+    if not json_path.exists():
+        print(f"⚠️ Interests file not found: {json_path}")
+        return
+    
+    with open(json_path, "r", encoding="utf-8") as f:
+        interests_data = json.load(f)
+    
+    # First, delete all existing interests (clean slate)
+    await conn.execute(text("DELETE FROM interests"))
+    
+    for item in interests_data:
+        await conn.execute(
+            text("""
+                INSERT INTO interests (id, name, category, icon)
+                VALUES (gen_random_uuid(), :name, :category, :icon)
+            """),
+            {
+                "name": item["name"],
+                "category": item["category"],
+                "icon": item.get("icon"),
+            }
+        )
+    
+    print(f"✅ Seeded {len(interests_data)} interests")
+
+
+# ---------------------------------------------------------------------------
 # Create tables once at session start, drop at session end
 # ---------------------------------------------------------------------------
 
@@ -50,9 +87,11 @@ async def setup_database():
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
         
+        # ✅ Seed interests after tables are created
+        await seed_interests(conn)
+        
         # Create admin user for tests
         admin_id = uuid.uuid4()
-        admin_user_id = str(admin_id)
         
         # Insert into users table
         await conn.execute(
@@ -126,6 +165,9 @@ async def reset_state():
         for table in reversed(Base.metadata.sorted_tables):
             if table.name not in ['users', 'user_profiles', 'user_settings']:
                 await conn.execute(table.delete())
+        
+        # ✅ Re-seed interests after deletion
+        await seed_interests(conn)
         
         # Delete non-admin users and their related data
         await conn.execute(text("DELETE FROM user_profiles WHERE user_id IN (SELECT id FROM users WHERE email != 'admin@test.com')"))

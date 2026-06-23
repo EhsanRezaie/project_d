@@ -1,21 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+# app/api/v1/endpoints/search.py
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+from sqlalchemy.dialects.postgresql import JSONB
 from math import radians, sin, cos, sqrt, atan2
+from datetime import datetime, timedelta, date
 
 from app.db.session import get_session
 from app.models.user import User
+from app.models.user_profile import UserProfile
+from app.models.user_interest import UserInterest
+from app.models.interest import Interest
 from app.models.photo import Photo
 from app.models.block import Block
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
-from app.schemas.search import SearchProfileResponse, SearchResponse, SearchFilters
+from app.schemas.search import SearchProfileResponse, SearchResponse
 
 router = APIRouter(prefix="/search", tags=["search"])
 
 
 def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """Calculate distance in km between two coordinates"""
+    """Calculate distance in km between two coordinates."""
     if not lat1 or not lng1 or not lat2 or not lng2:
         return None
     
@@ -48,6 +55,16 @@ async def search_users(
     country: str = Query(None, max_length=100),
     province: str = Query(None, max_length=100),
     city: str = Query(None, max_length=100),
+    religion: str = Query(None, max_length=50),
+    ethnicity: str = Query(None, max_length=50),
+    relationship_status: str = Query(None, max_length=50),
+    body_type: str = Query(None, max_length=50),
+    education: str = Query(None, max_length=50),
+    smoking: str = Query(None, max_length=50),
+    drinking: str = Query(None, max_length=50),
+    political_orientation: str = Query(None, max_length=50),
+    languages: str = Query(None, max_length=200),
+    interests: str = Query(None, max_length=500),
     sort_by: str = Query("recent", pattern="^(recent|distance|age|name)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(20, ge=1, le=100),
@@ -58,100 +75,165 @@ async def search_users(
     """
     Search users with advanced filters.
     Users who blocked you are excluded.
-    
-    Filters available:
-    - age_min, age_max: Age range
-    - distance_km: Maximum distance in kilometers
-    - gender: male/female
-    - height_min, height_max: Height in cm
-    - weight_min, weight_max: Weight in kg
-    - has_photos: Only users with photos
-    - is_verified: Only phone-verified users
-    - country: Filter by country (e.g., "Iran")
-    - province: Filter by province (e.g., "Tehran")
-    - city: Filter by city (e.g., "Shiraz")
-    - sort_by: recent, distance, age, name
-    - sort_order: asc, desc
+    Users you blocked are excluded.
     """
     
-    # Base query - exclude self and blocked users
+    # Get current user's profile
+    user_result = await session.execute(
+        select(User)
+        .options(
+            selectinload(User.profile),
+            selectinload(User.settings),
+            selectinload(User.photos),
+            selectinload(User.user_interests).selectinload(UserInterest.interest),
+        )
+        .where(User.id == current_user.id)
+    )
+    current_user_full = user_result.scalar_one_or_none()
+    
+    if not current_user_full or not current_user_full.profile:
+        return SearchResponse(users=[], total=0, next_offset=None)
+    
+    current_profile = current_user_full.profile
+    
+    # Calculate birth date range from age
+    today = date.today()
+    
+    # For age_min: max_birth_date = today - age_min years (youngest)
+    # For age_max: min_birth_date = today - (age_max + 1) years (oldest)
+    max_birth_date = today - timedelta(days=age_min * 365)
+    min_birth_date = today - timedelta(days=(age_max + 1) * 365)
+    
+    # Users who YOU blocked
     blocked_user_ids = select(Block.blocked_id).where(Block.blocker_id == current_user.id)
     
-    query = select(User).where(
+    # Users who blocked YOU
+    blocked_by_user_ids = select(Block.blocker_id).where(Block.blocked_id == current_user.id)
+    
+    # Base query with eager loading
+    query = select(User).options(
+        selectinload(User.profile),
+        selectinload(User.settings),
+        selectinload(User.photos),
+        selectinload(User.user_interests).selectinload(UserInterest.interest),
+    ).where(
         User.is_active == True,
         User.id != current_user.id,
-        User.id.not_in(blocked_user_ids),
+        User.id.not_in(blocked_user_ids),      # ← Users you blocked
+        User.id.not_in(blocked_by_user_ids),   # ← Users who blocked you
     )
     
-    # Gender filter (optional)
+    # Join with UserProfile for filtering
+    query = query.join(UserProfile, User.id == UserProfile.user_id)
+    
+    # Filters
+    query = query.where(UserProfile.birth_date.between(min_birth_date, max_birth_date))
+    
     if gender:
-        query = query.where(User.gender == gender)
-    
-    # Age filter
-    query = query.where(current_user.profile.age.between(age_min, age_max))
-    
-    # Height filter
+        query = query.where(UserProfile.gender == gender)
     if height_min:
-        query = query.where(User.height >= height_min)
+        query = query.where(UserProfile.height >= height_min)
     if height_max:
-        query = query.where(User.height <= height_max)
-    
-    # Weight filter
+        query = query.where(UserProfile.height <= height_max)
     if weight_min:
-        query = query.where(User.weight >= weight_min)
+        query = query.where(UserProfile.weight >= weight_min)
     if weight_max:
-        query = query.where(User.weight <= weight_max)
-    
-    # Phone verified filter
+        query = query.where(UserProfile.weight <= weight_max)
     if is_verified is not None:
-        query = query.where(User.phone_verified == is_verified)
-    
-    # Country filter
+        query = query.where(UserProfile.is_verified == is_verified)
     if country:
-        query = query.where(User.country == country)
-    
-    # Province filter
+        query = query.where(UserProfile.country == country)
     if province:
-        query = query.where(User.province == province)
-    
-    # City filter
+        query = query.where(UserProfile.province == province)
     if city:
-        query = query.where(User.city == city)
+        query = query.where(UserProfile.city == city)
+    if religion:
+        query = query.where(UserProfile.religion == religion)
+    if ethnicity:
+        query = query.where(UserProfile.ethnicity == ethnicity)
+    if relationship_status:
+        query = query.where(UserProfile.relationship_status == relationship_status)
+    if body_type:
+        query = query.where(UserProfile.body_type == body_type)
+    if education:
+        query = query.where(UserProfile.education == education)
+    if smoking:
+        query = query.where(UserProfile.smoking == smoking)
+    if drinking:
+        query = query.where(UserProfile.drinking == drinking)
+    if political_orientation:
+        query = query.where(UserProfile.political_orientation == political_orientation)
+    
+    # Languages filter (multi-value - AND condition)
+    if languages:
+        lang_list = [lang.strip() for lang in languages.split(",") if lang.strip()]
+        if lang_list:
+            query = query.where(
+                UserProfile.languages.cast(JSONB).contains(lang_list)
+            )
+    
+    # Interests filter (multi-value - AND condition)
+    if interests:
+        interest_list = [i.strip() for i in interests.split(",") if i.strip()]
+        if interest_list:
+            interest_count_subquery = (
+                select(
+                    UserInterest.user_id,
+                    func.count(UserInterest.interest_id).label('match_count')
+                )
+                .join(Interest, UserInterest.interest_id == Interest.id)
+                .where(Interest.name.in_(interest_list))
+                .group_by(UserInterest.user_id)
+                .having(func.count(UserInterest.interest_id) == len(interest_list))
+                .subquery()
+            )
+            
+            query = query.where(
+                User.id.in_(
+                    select(interest_count_subquery.c.user_id)
+                )
+            )
     
     # Has photos filter
     if has_photos is not None:
         if has_photos:
-            query = query.where(User.photos.any(Photo.status == "approved"))
+            query = query.where(
+                select(func.count(Photo.id))
+                .where(Photo.user_id == User.id, Photo.status == "approved")
+                .as_scalar() > 0
+            )
         else:
-            query = query.where(~User.photos.any(Photo.status == "approved"))
+            query = query.where(
+                select(func.count(Photo.id))
+                .where(Photo.user_id == User.id, Photo.status == "approved")
+                .as_scalar() == 0
+            )
     
-    # Get all users first (for distance calculation)
+    # Execute query
     result = await session.execute(query)
     users = result.scalars().all()
     
-    # Filter by distance and calculate distances
+    # Process users with distance calculation
     users_with_distance = []
     for user in users:
+        if not user.profile:
+            continue
+            
         distance = None
-        if distance_km and current_user.lat and current_user.lng and user.lat and user.lng:
+        if distance_km and current_profile.lat and current_profile.lng and user.profile.lat and user.profile.lng:
             distance = calculate_distance(
-                current_user.lat, current_user.lng,
-                user.lat, user.lng
+                current_profile.lat, current_profile.lng,
+                user.profile.lat, user.profile.lng
             )
             if distance > distance_km:
                 continue
-        else:
-            distance = 999999  # Far away for sorting
         
         # Get main photo URL
         main_photo_url = None
-        main_photo_query = select(Photo.url).where(
-            Photo.user_id == user.id,
-            Photo.is_main == True,
-            Photo.status == "approved"
-        )
-        main_photo = await session.execute(main_photo_query)
-        main_photo_url = main_photo.scalar_one_or_none()
+        if user.photos:
+            main_photo = next((p for p in user.photos if p.is_main and p.status == "approved"), None)
+            if main_photo:
+                main_photo_url = main_photo.url
         
         users_with_distance.append({
             "user": user,
@@ -165,32 +247,62 @@ async def search_users(
     elif sort_by == "distance":
         users_with_distance.sort(key=lambda x: x["distance"] if x["distance"] else 999999)
     elif sort_by == "age":
-        users_with_distance.sort(key=lambda x: x["user"].age, reverse=(sort_order == "desc"))
+        users_with_distance.sort(key=lambda x: x["user"].profile.age, reverse=(sort_order == "desc"))
     elif sort_by == "name":
-        users_with_distance.sort(key=lambda x: x["user"].name, reverse=(sort_order == "desc"))
+        users_with_distance.sort(key=lambda x: x["user"].profile.name if x["user"].profile else "", reverse=(sort_order == "desc"))
     
     # Pagination
     total = len(users_with_distance)
     paginated = users_with_distance[offset:offset + limit]
     
+    # Build response with ALL fields
     response_users = []
     for item in paginated:
         user = item["user"]
+        profile = user.profile
+        settings = user.settings
+        
+        if not profile:
+            continue
+        
+        hide_last_seen = settings.hide_last_seen if settings else False
+        hide_online_status = settings.hide_online_status if settings else False
+        
+        # Get user interests
+        user_interests = []
+        if user.user_interests:
+            user_interests = [ui.interest.name for ui in user.user_interests if ui.interest]
+        
         response_users.append(SearchProfileResponse(
             id=user.id,
-            name=current_user.profile.name,
-            age=current_user.profile.age,
-            gender=user.gender,
-            bio=user.bio,
-            height=user.height,
-            weight=user.weight,
+            name=profile.name,
+            age=profile.age,  # ✅ Uses profile.age property
+            gender=profile.gender,
+            bio=profile.bio,
+            height=profile.height,
+            weight=profile.weight,
+            body_type=profile.body_type,
+            relationship_status=profile.relationship_status,
+            living_situation=profile.living_situation,
+            children_status=profile.children_status,
+            smoking=profile.smoking,
+            drinking=profile.drinking,
+            education=profile.education,
+            workplace=profile.workplace,
+            religion=profile.religion,
+            ethnicity=profile.ethnicity,
+            political_orientation=profile.political_orientation,
+            languages=profile.languages,
+            country=profile.country,
+            province=profile.province,
+            city=profile.city,
             distance_km=round(item["distance"], 1) if item["distance"] and item["distance"] != 999999 else None,
             main_photo_url=item["main_photo_url"],
-            is_premium=user.profile.is_premium,
-            is_verified=user.phone_verified if user.phone_verified is not None else False,
+            is_premium=profile.is_premium,
+            is_verified=profile.is_verified if profile.is_verified is not None else False,
             last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else None,
-            hide_last_seen=user.hide_last_seen if user.hide_last_seen is not None else False,
-            hide_online_status=user.hide_online_status if user.hide_online_status is not None else False
+            hide_last_seen=hide_last_seen,
+            hide_online_status=hide_online_status
         ))
     
     return SearchResponse(
