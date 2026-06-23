@@ -80,8 +80,8 @@ class Settings(BaseSettings):
     MAX_CHAT_PHOTO_SIZE_MB: int = 5
     MAX_CHAT_VOICE_SIZE_MB: int = 2
     MAX_CHAT_VOICE_DURATION: int = 120
-    ALLOWED_CHAT_IMAGE_FORMATS: str = "JPEG,PNG,WEBP,JPG"
-
+    ALLOWED_CHAT_IMAGE_FORMATS: str
+    
     # ============================================
     # MinIO / S3 Settings (NO DEFAULTS - MUST BE IN .env)
     # ============================================
@@ -98,6 +98,25 @@ class Settings(BaseSettings):
     # Encryption
     # ===========================================
     ENCRYPTION_SECRET: str
+    
+    # ============================================
+    # App Version
+    # ============================================
+    APP_VERSION: str
+    MIN_ANDROID_VERSION: str
+    MIN_IOS_VERSION: str
+    
+    # ============================================
+    # App Store Links
+    # ============================================
+    PLAY_STORE_URL: str
+    APP_STORE_URL: str
+    
+    # ============================================
+    # Force Update
+    # ============================================
+    FORCE_UPDATE_ENABLED: bool
+    FORCE_UPDATE_MESSAGE: str
 
     # ============================================
     # Pydantic Config

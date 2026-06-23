@@ -133,7 +133,8 @@ iranian-dating-app/
 │   │   │   ├── ticket.py
 │   │   │   ├── admin.py
 │   │   │   ├── dashboard.py
-│   │   │   └── location.py
+│   │   │   ├── location.py
+│   │   │   └── system.py                  # ✅ System status schemas
 │   │   │
 │   │   ├── api/v1/endpoints/
 │   │   │   ├── auth.py                    # 3-step registration: init → verify → complete
@@ -159,7 +160,8 @@ iranian-dating-app/
 │   │   │   ├── admin_dashboard.py
 │   │   │   ├── admin_announcements.py
 │   │   │   ├── admin_photos.py
-│   │   │   └── locations.py
+│   │   │   ├── locations.py
+│   │   │   └── system.py                  # ✅ System status & version check endpoints
 │   │   │
 │   │   ├── api/v1/websocket/
 │   │   │   ├── matches.py
@@ -202,6 +204,7 @@ iranian-dating-app/
 │   │   ├── test_discover.py               # ✅ Passing (23 tests)
 │   │   ├── test_daily_limits.py           # ✅ Passing (4 tests)
 │   │   ├── test_interests.py              # ✅ Passing (21 tests)
+│   │   ├── test_system.py                 # ✅ Passing (24 tests)
 │   │   ├── test_swipes.py                 # ⚠️ Needs update
 │   │   ├── test_matches.py                # ⚠️ Needs update
 │   │   ├── test_rewards.py                # ⚠️ Needs update
@@ -274,6 +277,8 @@ ADMIN_SECRET_KEY=your-admin-key
 # App
 APP_NAME=DatingApp
 DEBUG=True
+APP_VERSION=1.0.0
+ENVIRONMENT=development
 
 # Daily Limits (ONLY restrictions in the app)
 FREE_USER_DAILY_LIKES=20
@@ -327,6 +332,16 @@ MAX_CHAT_PHOTO_SIZE_MB=5
 MAX_CHAT_VOICE_SIZE_MB=2
 MAX_CHAT_VOICE_DURATION=120
 ALLOWED_CHAT_IMAGE_FORMATS=JPEG,PNG,WEBP,JPG
+
+# ============================================
+# Version Control
+# ============================================
+MIN_ANDROID_VERSION=1.0.0
+MIN_IOS_VERSION=1.0.0
+PLAY_STORE_URL=https://play.google.com/store/apps/details?id=your.app.id
+APP_STORE_URL=https://apps.apple.com/app/your-app-id
+FORCE_UPDATE_ENABLED=false
+FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue using the app.
 ```
 
 ### `.env.test`
@@ -342,6 +357,8 @@ ADMIN_SECRET_KEY=test-admin-key
 
 APP_NAME=DatingApp
 DEBUG=True
+APP_VERSION=1.0.0-test
+ENVIRONMENT=test
 
 FREE_USER_DAILY_LIKES=20
 FREE_USER_DAILY_CHATS=10
@@ -386,6 +403,16 @@ MAX_CHAT_PHOTO_SIZE_MB=5
 MAX_CHAT_VOICE_SIZE_MB=2
 MAX_CHAT_VOICE_DURATION=120
 ALLOWED_CHAT_IMAGE_FORMATS=JPEG,PNG,WEBP,JPG
+
+# ============================================
+# Version Control - Test
+# ============================================
+MIN_ANDROID_VERSION=1.0.0
+MIN_IOS_VERSION=1.0.0
+PLAY_STORE_URL=https://play.google.com/store/apps/details?id=your.app.id
+APP_STORE_URL=https://apps.apple.com/app/your-app-id
+FORCE_UPDATE_ENABLED=false
+FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue using the app.
 ```
 
 ---
@@ -554,6 +581,20 @@ ALLOWED_CHAT_IMAGE_FORMATS=JPEG,PNG,WEBP,JPG
 |----------|--------|-------------|
 | `/interests` | GET | Public endpoint, returns all 158 interests sorted by category, name |
 
+### System Endpoints (NEW - Session 24)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/system/status` | GET | System status (services, maintenance, version) - splash screen |
+| `/system/version-check` | POST | Check app version compatibility |
+| `/system/maintenance/enable` | POST | Admin - enable maintenance mode |
+| `/system/maintenance/disable` | POST | Admin - disable maintenance mode |
+| `/system/maintenance/status` | GET | Admin - get maintenance status |
+| `/system/version/set-minimum` | POST | Admin - set minimum version per platform |
+| `/system/version/force-update` | POST | Admin - enable/disable force update |
+| `/system/version/config` | GET | Admin - get version configuration |
+| `/system/version/override` | DELETE | Admin - clear version overrides |
+
 ### Messages Endpoints (Updated)
 
 | Endpoint | Method | Description |
@@ -580,6 +621,44 @@ ALLOWED_CHAT_IMAGE_FORMATS=JPEG,PNG,WEBP,JPG
 ---
 
 ## 8. Architecture Decisions
+
+### System Status & Version Check Architecture (Session 24)
+
+**System Status Endpoint (`/system/status`):**
+- Public endpoint for splash screen
+- Checks: Database, Redis, MinIO connectivity
+- Returns maintenance mode status
+- Returns app version and environment
+- Rate limited: 60/minute
+
+**Version Check Endpoint (`/system/version-check`):**
+- Called on splash screen before app loads
+- Checks if app version meets minimum requirements
+- Supports: `android` and `ios` platforms
+- Returns: `ok`, `update_required`, or `maintenance`
+- Force update capability for critical updates
+- Runtime overrides via `version_override.json`
+
+**Maintenance Mode:**
+- Admin-controlled via `X-Admin-Key` header
+- Persisted in `maintenance.json` file
+- Blocks all API requests when enabled
+- Shows maintenance message to users
+
+**Version Control:**
+- Settings-based: `MIN_ANDROID_VERSION`, `MIN_IOS_VERSION`
+- Runtime overrides: `version_override.json`
+- Admin API for dynamic version management
+- Store links: Play Store & App Store URLs
+
+**Files Created:**
+- `app/schemas/system.py` - System schemas
+- `app/api/v1/endpoints/system.py` - System endpoints
+- `tests/test_system.py` - 24 tests passing
+
+**Files Modified:**
+- `app/core/config.py` - Added version settings
+- `.env` / `.env.test` - Added version variables
 
 ### Message Encryption Architecture (Session 22)
 
@@ -780,6 +859,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 21 | Flutter - Polish & Production | 🔲 |
 | **22** | **Message Encryption (AES-256-GCM)** | ✅ |
 | **23** | **Discover & Search Updates, Interests Endpoint, Test Coverage** | ✅ |
+| **24** | **System Status & Version Check API** | ✅ |
 
 ---
 
@@ -855,6 +935,7 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 | **23** | **test_search.py** | **38** | **✅ Passing** |
 | **23** | **test_discover.py** | **23** | **✅ Passing** |
 | **23** | **test_interests.py** | **21** | **✅ Passing** |
+| **24** | **test_system.py** | **24** | **✅ Passing** |
 | **23** | **test_swipes.py** | — | ⚠️ Needs update |
 | **23** | **test_matches.py** | — | ⚠️ Needs update |
 | **23** | **test_rewards.py** | — | ⚠️ Needs update |
@@ -1011,7 +1092,7 @@ alembic downgrade -1
 
 ---
 
-## Session 22-23 Completion Summary
+## Session 22-24 Completion Summary
 
 ### ✅ Session 22 Complete - Message Encryption
 
@@ -1045,6 +1126,22 @@ alembic downgrade -1
 | `test_interests.py` (21 tests passing) | ✅ |
 | `conftest.py` - auto-seeds interests | ✅ |
 | `conftest.py` - re-seeds interests after each test | ✅ |
+
+### ✅ Session 24 Complete - System Status & Version Check API
+
+| Feature | Status |
+|---------|--------|
+| `/system/status` - System health check | ✅ |
+| `/system/version-check` - App version compatibility | ✅ |
+| Maintenance mode with admin control | ✅ |
+| Force update capability | ✅ |
+| Runtime version overrides | ✅ |
+| `app/schemas/system.py` - System schemas | ✅ |
+| `app/api/v1/endpoints/system.py` - System endpoints | ✅ |
+| `tests/test_system.py` (24 tests passing) | ✅ |
+| `APP_VERSION`, `MIN_ANDROID_VERSION`, `MIN_IOS_VERSION` in .env | ✅ |
+| `version_override.json` for runtime overrides | ✅ |
+| `maintenance.json` for maintenance mode | ✅ |
 
 ---
 
