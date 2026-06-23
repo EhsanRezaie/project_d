@@ -103,8 +103,8 @@ async def get_matches(
             matched_at=match.matched_at,
             user=MatchUserResponse(
                 id=other_user.id,
-                name=other_user.name,
-                age=other_user.age,
+                name=other_current_user.profile.name,
+                age=other_current_user.profile.age,
                 main_photo_url=main_photo_url,
             ),
             last_message=LastMessageResponse(

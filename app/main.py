@@ -29,6 +29,8 @@ from app.api.v1.endpoints.admin_announcements import router as admin_announcemen
 from app.api.v1.endpoints.locations import router as locations_router
 from app.api.v1.endpoints.interests import router as interests_router
 from app.api.v1.endpoints.prompts import router as prompts_router
+from app.api.v1.endpoints.admin_messages import router as admin_messages_router
+
 
 from app.api.v1.websocket.matches import router as websocket_router
 from app.api.v1.endpoints.matches import router as matches_router
@@ -57,12 +59,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve uploaded files
-uploads_dir = "uploads"
-if not os.path.exists(uploads_dir):
-    os.makedirs(uploads_dir)
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
-
 # Routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
@@ -88,6 +84,7 @@ app.include_router(admin_announcements_router, prefix="/api/v1")
 app.include_router(locations_router, prefix="/api/v1")
 app.include_router(interests_router, prefix="/api/v1")
 app.include_router(prompts_router, prefix="/api/v1")
+app.include_router(admin_messages_router, prefix="/api/v1")
 
 # WebSocket Routers
 app.include_router(websocket_router)

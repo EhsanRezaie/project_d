@@ -41,7 +41,7 @@ class RewardService:
     
     async def get_remaining_likes(self, user: User) -> int:
         """Get remaining likes for today. Returns -1 for unlimited."""
-        if user.is_premium:
+        if user.profile.is_premium:
             return -1
         
         today = date.today()
@@ -52,7 +52,7 @@ class RewardService:
     
     async def get_remaining_chats(self, user: User) -> int:
         """Get remaining new chats for today. Returns -1 for unlimited."""
-        if user.is_premium:
+        if user.profile and user.profile.is_premium:
             return -1
         
         today = date.today()
@@ -63,7 +63,7 @@ class RewardService:
     
     async def consume_like(self, user: User) -> bool:
         """Consume one like. Returns True if successful."""
-        if user.is_premium:
+        if user.profile.is_premium:
             return True
         
         remaining = await self.get_remaining_likes(user)
@@ -79,7 +79,7 @@ class RewardService:
     
     async def consume_chat(self, user: User) -> bool:
         """Consume one new chat. Returns True if successful."""
-        if user.is_premium:
+        if user.profile.is_premium:
             return True
         
         remaining = await self.get_remaining_chats(user)
@@ -133,7 +133,7 @@ class RewardService:
         today = date.today()
         daily_limit = await self.get_or_create_daily_limit(user.id, today)
         
-        if user.is_premium:
+        if user.profile.is_premium:
             return {
                 'is_premium': True,
                 'premium_expires_at': user.premium_until.isoformat() if user.premium_until else None,

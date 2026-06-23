@@ -88,7 +88,7 @@ async def search_users(
         query = query.where(User.gender == gender)
     
     # Age filter
-    query = query.where(User.age.between(age_min, age_max))
+    query = query.where(current_user.profile.age.between(age_min, age_max))
     
     # Height filter
     if height_min:
@@ -178,15 +178,15 @@ async def search_users(
         user = item["user"]
         response_users.append(SearchProfileResponse(
             id=user.id,
-            name=user.name,
-            age=user.age,
+            name=current_user.profile.name,
+            age=current_user.profile.age,
             gender=user.gender,
             bio=user.bio,
             height=user.height,
             weight=user.weight,
             distance_km=round(item["distance"], 1) if item["distance"] and item["distance"] != 999999 else None,
             main_photo_url=item["main_photo_url"],
-            is_premium=user.is_premium,
+            is_premium=user.profile.is_premium,
             is_verified=user.phone_verified if user.phone_verified is not None else False,
             last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else None,
             hide_last_seen=user.hide_last_seen if user.hide_last_seen is not None else False,

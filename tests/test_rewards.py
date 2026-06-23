@@ -1,7 +1,7 @@
 import pytest
 from httpx import AsyncClient
 from datetime import datetime, timedelta
-from tests.test_auth import register_user, VALID_REGISTER_PAYLOAD, LOGIN_URL
+from tests.done.test_auth import register_user, VALID_REGISTER_PAYLOAD, LOGIN_URL
 
 REWARDS_LIMITS_URL = "/api/v1/rewards/my-limits"
 REWARDS_AD_URL = "/api/v1/rewards/ad-watched"

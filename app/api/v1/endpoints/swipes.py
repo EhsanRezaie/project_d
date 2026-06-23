@@ -126,8 +126,8 @@ async def swipe(
         await notification_service.notify_like(
             liker_id=current_user.id,
             liked_user_id=target_user.id,
-            liker_name=current_user.name,
-            liker_age=current_user.age
+            liker_name=current_user.profile.name ,
+            liker_age=current_user.profile.age
         )
     
     # Check for match (if both liked each other)
@@ -169,15 +169,15 @@ async def swipe(
             # Send WebSocket notification to both users
             user1_data = {
                 "id": str(current_user.id),
-                "name": current_user.name,
-                "age": current_user.age,
+                "name": current_user.profile.name,
+                "age": current_user.profile.age,
                 "main_photo_url": await get_user_main_photo_url(session, current_user.id),
             }
             
             user2_data = {
                 "id": str(target_user.id),
-                "name": target_user.name,
-                "age": target_user.age,
+                "name": target_user.profile.name,
+                "age": target_user.profile.age,
                 "main_photo_url": await get_user_main_photo_url(session, target_user.id),
             }
             

@@ -119,7 +119,7 @@ async def list_blocks(
         blocks.append(BlockResponse(
             id=block.id,
             blocked_user_id=user.id,
-            blocked_user_name=user.name,
+            blocked_user_name=current_user.profile.name,
             blocked_at=block.created_at.isoformat(),
         ))
     

@@ -187,7 +187,7 @@ async def get_my_subscription(
     )
     subscription = result.scalar_one_or_none()
     
-    if not subscription or not current_user.is_premium:
+    if not subscription or not current_user.profile.is_premium:
         return SubscriptionStatusResponse(
             is_premium=False,
             plan=None,

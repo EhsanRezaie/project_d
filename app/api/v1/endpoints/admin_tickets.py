@@ -50,7 +50,7 @@ async def admin_list_tickets(
         response_tickets.append(AdminTicketResponse(
             id=ticket.id,
             user_id=ticket.user_id,
-            user_name=user.name if user else "Deleted User",
+            user_name=current_user.profile.name if user else "Deleted User",
             user_email=user.email if user else "deleted@example.com",
             subject=ticket.subject,
             message=ticket.message,
@@ -93,7 +93,7 @@ async def admin_get_ticket(
     return AdminTicketResponse(
         id=ticket.id,
         user_id=ticket.user_id,
-        user_name=user.name if user else "Deleted User",
+        user_name=current_user.profile.name if user else "Deleted User",
         user_email=user.email if user else "deleted@example.com",
         subject=ticket.subject,
         message=ticket.message,
@@ -140,7 +140,7 @@ async def admin_update_ticket(
     return AdminTicketResponse(
         id=ticket.id,
         user_id=ticket.user_id,
-        user_name=user.name if user else "Deleted User",
+        user_name=current_user.profile.name if user else "Deleted User",
         user_email=user.email if user else "deleted@example.com",
         subject=ticket.subject,
         message=ticket.message,

@@ -1,3 +1,4 @@
+# app/api/v1/endpoints/messages.py
 from typing import Optional, Tuple
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File, Form
@@ -20,7 +21,8 @@ from app.schemas.message import (
 from app.services.chat_service import (
     can_start_new_chat, check_unmatched_message_limit, accept_unmatched_chat,
     increment_new_chat_count, mark_messages_as_delivered, mark_messages_as_read,
-    delete_message, forward_message
+    delete_message, forward_message, create_encrypted_message,
+    get_decrypted_message_for_client, get_message_for_admin
 )
 from app.services.media_service import MediaService
 from app.services.websocket_manager import websocket_manager
@@ -56,7 +58,6 @@ async def get_match_or_chat(session: AsyncSession, identifier: UUID, user_id: UU
     
     if target_user:
         # This is an unmatched chat - identifier is the other user's ID
-        # The other user is the identifier itself (not the current user)
         return None, identifier, None
     
     return None, None, None
@@ -76,7 +77,6 @@ async def get_chat_history(
     Get chat history for a match or unmatched chat.
     identifier can be match_id OR user_id (for unmatched chat)
     """
-
     match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
 
     if not match and not other_user_id:
@@ -132,9 +132,15 @@ async def get_chat_history(
     result = await session.execute(query)
     messages = result.scalars().all()
 
-    # Build response
+    # Build response with decrypted content
     message_responses = []
     for msg in reversed(messages):
+        # Get decrypted content for client
+        decrypted_data = await get_decrypted_message_for_client(
+            session, msg, current_user.id
+        )
+        
+        # Get reply_to data if exists
         reply_to_data = None
         if msg.reply_to_id:
             reply_result = await session.execute(
@@ -142,9 +148,11 @@ async def get_chat_history(
             )
             reply_msg = reply_result.scalar_one_or_none()
             if reply_msg:
+                # Decrypt reply content
+                reply_content = reply_msg.content if reply_msg.match_id else reply_msg._content
                 reply_to_data = {
                     "id": reply_msg.id,
-                    "content": reply_msg.content[:100] if reply_msg.content else "[Media]",
+                    "content": reply_content[:100] if reply_content else "[Media]",
                     "sender_name": "You" if reply_msg.sender_id == current_user.id else "Them",
                     "message_type": reply_msg.message_type
                 }
@@ -155,7 +163,7 @@ async def get_chat_history(
             sender_id=msg.sender_id,
             receiver_id=msg.receiver_id,
             message_type=msg.message_type,
-            content=msg.content,
+            content=decrypted_data.get("content"),
             media_url=msg.media_url,
             media_duration=msg.media_duration,
             reply_to=reply_to_data,
@@ -185,7 +193,6 @@ async def send_text_message(
     current_user: User = Depends(get_current_user),
 ) -> SendMessageResponse:
     """Send a text message"""
-
     match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
 
     if not match and not other_user_id:
@@ -194,7 +201,7 @@ async def send_text_message(
     # Check if this is a new chat
     if not match and not match_id:
         can_start, reason, daily_limit = await can_start_new_chat(
-            session, current_user.id, other_user_id, current_user.is_premium
+            session, current_user.id, other_user_id, current_user.profile.is_premium
         )
         if not can_start:
             raise HTTPException(status_code=429, detail=reason)
@@ -206,18 +213,18 @@ async def send_text_message(
     if not can_send:
         raise HTTPException(status_code=403, detail=reason)
 
-    # Create message
-    new_message = Message(
+    # Create message with encryption
+    new_message = await create_encrypted_message(
+        session=session,
         match_id=match_id,
         sender_id=current_user.id,
         receiver_id=other_user_id,
-        message_type="text",
         content=body.content,
+        message_type="text",
         reply_to_id=body.reply_to_id,
-        is_sent=True,
         is_accepted=is_accepted or match_id is not None,
     )
-    session.add(new_message)
+    
     await session.flush()
 
     # Increment new chat counter if this is a new chat
@@ -226,7 +233,10 @@ async def send_text_message(
 
     await session.commit()
 
-    # Send WebSocket notification
+    # Get decrypted content for WebSocket
+    decrypted_content = new_message.content if new_message.match_id else new_message._content
+
+    # Send WebSocket notification with decrypted content
     await websocket_manager.send_to_match(
         str(match_id) if match_id else str(other_user_id),
         str(current_user.id),
@@ -235,7 +245,7 @@ async def send_text_message(
             "data": {
                 "id": str(new_message.id),
                 "message_type": "text",
-                "content": body.content,
+                "content": decrypted_content,
                 "sender_id": str(current_user.id),
                 "sent_at": new_message.sent_at.isoformat(),
             }
@@ -262,7 +272,6 @@ async def send_photo_message(
     current_user: User = Depends(get_current_user),
 ) -> SendMessageResponse:
     """Send a photo message"""
-
     match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
 
     if not match and not other_user_id:
@@ -270,7 +279,6 @@ async def send_photo_message(
 
     # Photos can only be sent in matched chats or accepted unmatched chats
     if not match_id:
-        # Check if chat is accepted
         can_send, reason, is_accepted = await check_unmatched_message_limit(
             session, current_user.id, other_user_id, None
         )
@@ -290,20 +298,22 @@ async def send_photo_message(
     if not success:
         raise HTTPException(status_code=400, detail=error)
 
-    # Create message
-    new_message = Message(
-        id=message_id,
+    # Create message with encryption (caption only)
+    new_message = await create_encrypted_message(
+        session=session,
         match_id=match_id,
         sender_id=current_user.id,
         receiver_id=other_user_id,
+        content=caption or "",
         message_type="photo",
-        content=caption,
+        is_accepted=True,
         media_url=media_url,
-        is_sent=True,
-        is_accepted=True,  # Photos only in accepted chats
     )
-    session.add(new_message)
+    
     await session.commit()
+
+    # Get decrypted content for WebSocket
+    decrypted_content = new_message.content if new_message.match_id else new_message._content
 
     # Send WebSocket notification
     await websocket_manager.send_to_match(
@@ -315,7 +325,7 @@ async def send_photo_message(
                 "id": str(new_message.id),
                 "message_type": "photo",
                 "media_url": media_url,
-                "caption": caption,
+                "caption": decrypted_content,
                 "sender_id": str(current_user.id),
                 "sent_at": new_message.sent_at.isoformat(),
             }
@@ -342,7 +352,6 @@ async def send_voice_message(
     current_user: User = Depends(get_current_user),
 ) -> SendMessageResponse:
     """Send a voice message"""
-
     match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
 
     if not match and not other_user_id:
@@ -369,7 +378,7 @@ async def send_voice_message(
     if not success:
         raise HTTPException(status_code=400, detail=error)
 
-    # Create message
+    # Create message (voice messages have no text content)
     new_message = Message(
         id=message_id,
         match_id=match_id,
@@ -419,14 +428,12 @@ async def accept_chat(
     current_user: User = Depends(get_current_user),
 ) -> AcceptChatResponse:
     """Accept an unmatched chat (allows unlimited messages)"""
-
     match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
 
     if not match and not other_user_id:
         raise HTTPException(status_code=404, detail="Chat not found")
 
     # For unmatched chat, the other user is the identifier
-    # The current user is the one accepting
     await accept_unmatched_chat(session, match_id, identifier, current_user.id)
 
     return AcceptChatResponse(
