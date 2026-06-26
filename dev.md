@@ -1,5 +1,3 @@
-# 📁 **Complete `dev.md` - Updated with All Sessions**
-
 ```markdown
 # dev.md — Iranian Dating App (Badoo-style)
 
@@ -225,34 +223,59 @@ iranian-dating-app/
 │   ├── requirements.txt
 │   └── Dockerfile
 │
-└── mobile/                                # Flutter app (Session 16+)
+└── mobile/                                # Flutter app
     ├── lib/
     │   ├── main.dart
     │   ├── config/
     │   │   ├── app_constants.dart
     │   │   └── app_theme.dart
     │   ├── models/
-    │   │   └── user.dart                  # Full Badoo fields
+    │   │   ├── user.dart                  # Full Badoo fields + interests + prompts
+    │   │   ├── interest.dart
+    │   │   ├── prompt.dart
+    │   │   ├── photo.dart
+    │   │   └── location_models.dart
     │   ├── services/
     │   │   ├── api_service.dart           # Dio + interceptors
-    │   │   ├── auth_service.dart          # 3-step registration
-    │   │   └── storage_service.dart       # Token storage + userId
+    │   │   ├── auth_service.dart          # 3-step registration + updateProfile + updateInterests + updatePrompts
+    │   │   ├── storage_service.dart       # Token storage + userId
+    │   │   ├── google_auth_service.dart   # Google Sign-In
+    │   │   ├── location_service.dart      # GPS + location APIs
+    │   │   ├── onboarding_service.dart
+    │   │   └── photo_service.dart
     │   ├── providers/
-    │   │   ├── auth_provider.dart         # Auth state + token persistence
+    │   │   ├── auth_provider.dart         # Auth state + token persistence + updateProfile + updateInterests + updatePrompts
     │   │   ├── language_provider.dart
-    │   │   └── onboarding_provider.dart   # Multi-step profile data
-    │   └── screens/
-    │       ├── splash_screen.dart
-    │       ├── login_screen.dart          # Welcome + Login combined
-    │       ├── main_screen.dart           # Bottom nav + onboarding check
-    │       ├── auth/
-    │       │   ├── sign_up_screen.dart    # Step 1: Email + Password
-    │       │   └── verify_code_screen.dart # Step 2: OTP + Referral
-    │       └── onboarding/
-    │           ├── personal_info_screen.dart  # Step 3a: Name, Birth Date, Gender
-    │           ├── lifestyle_screen.dart      # Step 3b: (TODO)
-    │           ├── interests_screen.dart      # Step 3c: (TODO)
-    │           └── location_screen.dart       # Step 3d: (TODO)
+    │   │   ├── onboarding_provider.dart   # Multi-step profile data
+    │   │   └── profile_provider.dart      # Profile state
+    │   ├── screens/
+    │   │   ├── splash_screen.dart
+    │   │   ├── login_screen.dart          # Welcome + Login combined
+    │   │   ├── main_screen.dart           # Bottom nav + onboarding check
+    │   │   ├── auth/
+    │   │   │   ├── sign_up_screen.dart    # Step 1: Email + Password
+    │   │   │   └── verify_code_screen.dart # Step 2: OTP + Referral
+    │   │   ├── onboarding/
+    │   │   │   ├── basic_info_screen.dart
+    │   │   │   ├── profile_details_screen.dart
+    │   │   │   ├── interests_screen.dart
+    │   │   │   ├── prompts_screen.dart
+    │   │   │   └── photo_upload_screen.dart
+    │   │   └── profile/
+    │   │       ├── profile_screen.dart    # Account section with 6 menu items
+    │   │       ├── avatar_crop_screen.dart
+    │   │       ├── edit_basic_info_screen.dart
+    │   │       ├── edit_profile_details_screen.dart
+    │   │       ├── edit_interests_screen.dart
+    │   │       └── edit_prompts_screen.dart
+    │   ├── widgets/
+    │   │   ├── loading_widget.dart
+    │   │   └── progress_bar.dart
+    │   ├── l10n/
+    │   │   ├── app_en.arb                # English translations
+    │   │   └── app_fa.arb                # Persian translations
+    │   └── utils/
+    │       └── validators.dart
     ├── pubspec.yaml
     └── .env
 ```
@@ -559,14 +582,30 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | `/auth/password-reset/verify` | POST | Verify reset code + set new password |
 | `/auth/health` | GET | Health check |
 
-### Discover Endpoints (Updated)
+### User Endpoints
+
+| Endpoint | Method | Description | Status |
+|----------|--------|-------------|--------|
+| `/users/me` | GET | Get current user profile | ✅ |
+| `/users/me` | PUT | Update profile | ✅ |
+| `/users/me/interests` | PUT | Update interests | ✅ |
+| `/users/me/prompts` | PUT | Update prompts | ✅ |
+| `/users/me` | DELETE | Soft delete account | ✅ |
+| `/users/me/location` | POST | Update GPS location | ✅ |
+| `/users/me/location-text` | PATCH | Update text location | ✅ |
+| `/users/me/photos` | GET | Get all photos | ✅ |
+| `/users/me/photos` | POST | Upload photo | ✅ |
+| `/users/me/photos/{id}` | DELETE | Delete photo | ✅ |
+| `/users/me/photos/{id}/main` | PUT | Set main photo | ✅ |
+
+### Discover Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/discover` | GET | Discover users with filters (gender optional, age, distance) |
 | `/discover` | GET | Supports `gender` filter (male/female) - if not provided, shows all genders |
 
-### Search Endpoints (Updated)
+### Search Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -581,7 +620,23 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 |----------|--------|-------------|
 | `/interests` | GET | Public endpoint, returns all 158 interests sorted by category, name |
 
-### System Endpoints (NEW - Session 24)
+### Prompts Endpoint
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/prompts` | GET | Public endpoint, returns active prompts in requested language (en/fa) |
+
+### Location Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/locations/countries` | GET | Get all countries |
+| `/locations/states` | GET | Get states/provinces for a country |
+| `/locations/cities` | GET | Get cities for a country/state |
+| `/locations/reverse-geocode` | GET | Convert GPS to location text |
+| `/locations/city-centroid` | GET | Get lat/lng for a city |
+
+### System Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -595,7 +650,7 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | `/system/version/config` | GET | Admin - get version configuration |
 | `/system/version/override` | DELETE | Admin - clear version overrides |
 
-### Messages Endpoints (Updated)
+### Messages Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -610,7 +665,7 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | `/messages/{message_id}/forward` | POST | Forward message (re-encrypted) |
 | `/messages/{message_id}/status` | GET | Get message status |
 
-### Admin Messages Endpoints (New)
+### Admin Messages Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -621,6 +676,58 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 ---
 
 ## 8. Architecture Decisions
+
+### Profile Edit & Account Settings Architecture (Session 21 - Mobile)
+
+**Profile Screen Updates:**
+- Account section with 6 menu items:
+  1. **Verify Picture** - Shows verification status (`face_verified` from `PhotoResponse`)
+  2. **Basic Info** - Navigate to `EditBasicInfoScreen`
+  3. **Profile Details** - Navigate to `EditProfileDetailsScreen`
+  4. **Interests** - Navigate to `EditInterestsScreen`
+  5. **Prompts** - Navigate to `EditPromptsScreen`
+  6. **Edit Photos** - Navigate to photo management (coming soon)
+- Logout button removed from ProfileScreen (moved to Settings)
+
+**Edit Screens Architecture:**
+- Each edit screen reuses onboarding UI components
+- Pre-filled with user data from `AuthProvider.user`
+- Separate API calls for each section:
+  - `PUT /users/me` - Update basic info and profile details
+  - `PUT /users/me/interests` - Update interests
+  - `PUT /users/me/prompts` - Update prompts
+- No progress bars (these are edit screens, not onboarding)
+- Back arrow navigation
+- Full-width Save button (no Cancel button)
+
+**User Model Updates:**
+- Added `birthDate` field to `User` model
+- Added `interests` field (List<String>) to `User` model
+- Added `promptsData` field (List<Map<String, dynamic>>) to `User` model
+- Backend returns `prompts_data` field in `UserProfileResponse`
+
+**Backend Updates:**
+- Added `interests` and `prompts_data` fields to `UserProfileResponse` schema
+- Added `PUT /users/me/interests` endpoint
+- Added `PUT /users/me/prompts` endpoint
+- Fixed prompts validator using `values.__dict__['prompts']` to bypass SQLAlchemy descriptor conflict
+- Added `InterestUpdateRequest` and `PromptUpdateRequest` schemas
+
+**Location Update Flow:**
+- EditBasicInfoScreen uses three separate API calls:
+  1. `PUT /users/me` - Update profile fields (name, gender, bio, birth_date)
+  2. `PATCH /users/me/location-text` - Update location text (country, province, city)
+  3. `POST /users/me/location` - Update GPS coordinates (lat, lng)
+
+**Enum Mapping:**
+- Profile details fields map UI display values to backend enum values
+- Removed invalid options that don't match backend enums:
+  - Relationship: only 'Single', 'Divorced', 'Widowed', 'Separated'
+  - Children: removed 'Open to children'
+  - Smoking: removed 'Trying to quit', 'Socially' → 'occasionally'
+  - Drinking: removed 'Sober'
+  - Education: removed 'In College'
+  - Political: removed 'Other'
 
 ### System Status & Version Check Architecture (Session 24)
 
@@ -854,12 +961,12 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 15 | Push notifications + Real Payment + Production | 🔲 |
 | 16-17 | Flutter mobile app - Auth screens (Splash, Login, Sign Up, Verify) | ✅ |
 | 18 | Flutter - Token persistence + Backend compatibility fixes | ✅ |
-| 19 | Flutter - Onboarding Flow (Lifestyle, Interests, Location) | 🔲 |
+| 19 | Flutter - Onboarding Flow (Lifestyle, Interests, Location) | ✅ |
 | 20 | Flutter - Main App Features (Discover, Search, Chats, Profile) | 🔲 |
-| 21 | Flutter - Polish & Production | 🔲 |
-| **22** | **Message Encryption (AES-256-GCM)** | ✅ |
-| **23** | **Discover & Search Updates, Interests Endpoint, Test Coverage** | ✅ |
-| **24** | **System Status & Version Check API** | ✅ |
+| 21 | **Flutter - Profile Edit & Account Settings** | ✅ |
+| 22 | **Message Encryption (AES-256-GCM)** | ✅ |
+| 23 | **Discover & Search Updates, Interests Endpoint, Test Coverage** | ✅ |
+| 24 | **System Status & Version Check API** | ✅ |
 
 ---
 
@@ -1092,7 +1199,26 @@ alembic downgrade -1
 
 ---
 
-## Session 22-24 Completion Summary
+## Session 21-24 Completion Summary
+
+### ✅ Session 21 Complete - Flutter Profile Edit & Account Settings
+
+| Feature | Status |
+|---------|--------|
+| ProfileScreen with 6 Account menu items | ✅ |
+| Verify Picture status display | ✅ |
+| EditBasicInfoScreen with location search | ✅ |
+| EditProfileDetailsScreen with chip selection | ✅ |
+| EditInterestsScreen with category grouping | ✅ |
+| EditPromptsScreen with prompt answers | ✅ |
+| Remove logout button from ProfileScreen | ✅ |
+| UpdateProfile with null value handling | ✅ |
+| updateInterests and updatePrompts API methods | ✅ |
+| Backend PUT /users/me/interests endpoint | ✅ |
+| Backend PUT /users/me/prompts endpoint | ✅ |
+| User model with interests and promptsData | ✅ |
+| mounted checks for async operations | ✅ |
+| Enum mapping for profile details | ✅ |
 
 ### ✅ Session 22 Complete - Message Encryption
 
@@ -1149,6 +1275,9 @@ alembic downgrade -1
 
 | Item | Priority | Session |
 |------|----------|---------|
+| Edit Photos Screen (photo management) | High | 21 |
+| Face verification UI | Medium | 21 |
+| Persian translations for all screens | High | 22 |
 | Re-run full test suite against MinIO setup | High | — |
 | Real ZarinPal integration | High | 15 |
 | FCM push notifications | High | 15 |
@@ -1159,15 +1288,15 @@ alembic downgrade -1
 | `test_referrals.py` update | Medium | — |
 | `test_subscriptions.py` update | Medium | — |
 | Real face-match API (photo verification) | Medium | — |
-| Flutter Onboarding Flow | High | 19 |
-| Flutter Main App Features | High | 20 |
-| Flutter Polish & Production | Medium | 21 |
+| Flutter Discover Screen | High | 20 |
+| Flutter Search Screen | High | 20 |
+| Flutter Chat System | High | 20 |
 
 ---
 
 **Next: Session 15 - Push Notifications + Real Payment + Production Ready (Backend)**
 
-**Then: Session 19 - Flutter Onboarding Flow (Lifestyle, Interests, Location)**
+**Then: Session 20 - Flutter Main App Features (Discover, Search, Chats)**
 
 Ready to start when you are. 🚀
 ```

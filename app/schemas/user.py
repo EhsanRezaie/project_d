@@ -1,6 +1,6 @@
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator, model_validator
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from uuid import UUID
 
 
@@ -12,6 +12,7 @@ class UserUpdateRequest(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     gender: Optional[str] = None
     sexual_orientation: Optional[str] = None
+    birth_date: Optional[date] = None
     height: Optional[int] = None
     weight: Optional[int] = None
     body_type: Optional[str] = None
@@ -26,7 +27,7 @@ class UserUpdateRequest(BaseModel):
     ethnicity: Optional[str] = None
     political_orientation: Optional[str] = None
     languages: Optional[List[str]] = None
-    
+
     @field_validator("gender")
     @classmethod
     def validate_gender(cls, v: str) -> str:
@@ -104,6 +105,21 @@ class UserUpdateRequest(BaseModel):
             raise ValueError("Weight must be between 30kg and 300kg")
         return v
 
+    @field_validator("birth_date", mode="before")
+    @classmethod
+    def validate_birth_date(cls, v):
+        """Convert string to date object."""
+        if v is None:
+            return None
+        if isinstance(v, date):
+            return v
+        if isinstance(v, str):
+            try:
+                return datetime.strptime(v, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError("Invalid birth_date format. Use YYYY-MM-DD")
+        raise ValueError("birth_date must be a string or date")
+
 
 class LocationTextUpdateRequest(BaseModel):
     """Update user location with text fields."""
@@ -173,6 +189,9 @@ class UserProfileResponse(BaseModel):
     last_seen_at: Optional[datetime] = None
     settings: Optional[UserSettingsResponse] = None
     main_photo_url: Optional[str] = None
+    birth_date: Optional[str] = None
+    interests: Optional[List[str]] = None
+    prompts: Optional[List[dict]] = None
 
     class Config:
         from_attributes = True
@@ -184,7 +203,6 @@ class UserProfileResponse(BaseModel):
         Extract all profile fields from user.profile.
         This runs BEFORE validation so Pydantic sees these fields as present.
         """
-        # If values is a User object (SQLAlchemy model)
         if hasattr(values, 'profile'):
             profile = values.profile
             if profile:
@@ -217,12 +235,25 @@ class UserProfileResponse(BaseModel):
                 values.premium_until = profile.premium_until
                 values.is_verified = profile.is_verified
                 values.is_profile_complete = profile.is_profile_complete
-                values.settings = values.settings
-                
-                # اگه settings از قبل وجود نداره، از user.settings بگیر
-                if hasattr(values, 'settings') and values.settings:
-                    values.settings = values.settings
-                
+                values.birth_date = profile.birth_date.isoformat() if profile.birth_date else None
+
+                # interests: safe to assign directly because `interests` is NOT
+                # a relationship on the User ORM model — no descriptor to trip over.
+                values.interests = (
+                    [ui.interest.name for ui in values.user_interests]
+                    if values.user_interests else []
+                )
+
+                # prompts: IS a relationship on User, so assigning directly triggers
+                # SQLAlchemy's collection descriptor and crashes with dicts.
+                # Fix: snapshot the ORM collection first, then bypass the descriptor
+                # by writing to __dict__ directly.
+                raw_prompts = list(values.prompts) if values.prompts else []
+                values.__dict__['prompts'] = [
+                    {"prompt_id": str(up.prompt_id), "answer": up.answer}
+                    for up in raw_prompts
+                ]
+
         return values
 
 
@@ -257,7 +288,7 @@ class PublicUserResponse(BaseModel):
     def from_user_with_privacy(cls, user, settings, current_user_id: UUID = None):
         """Create public response respecting privacy settings."""
         is_self = current_user_id and user.id == current_user_id
-        
+
         if is_self:
             return cls(
                 id=user.id,
@@ -282,7 +313,7 @@ class PublicUserResponse(BaseModel):
                 is_online=user.last_seen_at and (datetime.now(timezone.utc) - user.last_seen_at).seconds < 300,
                 interests=None
             )
-        
+
         if settings.hide_last_seen:
             return cls(
                 id=user.id,
@@ -372,6 +403,16 @@ class UserPromptResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class InterestUpdateRequest(BaseModel):
+    """Update user interests."""
+    interests: List[str] = Field(..., description="List of interest names")
+
+
+class PromptUpdateRequest(BaseModel):
+    """Update user prompts."""
+    prompts: List[dict[str, str]] = Field(..., description="List of prompts with prompt_id and answer")
 
 
 # ============ Alias for backward compatibility ============
