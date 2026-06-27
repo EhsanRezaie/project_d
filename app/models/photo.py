@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, SmallInteger, Text, ForeignKey, DateTime, func
+from sqlalchemy import Column, String, Boolean, SmallInteger, Text, ForeignKey, DateTime, func , JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -25,3 +25,6 @@ class Photo(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="photos")
+
+    # Crop data for avatar
+    crop = Column(JSON, nullable=True)

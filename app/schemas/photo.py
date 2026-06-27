@@ -1,7 +1,15 @@
+# app/schemas/photo.py
 from uuid import UUID
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
+
+
+class CropData(BaseModel):
+    """Crop data for avatar"""
+    x: float = 0.0
+    y: float = 0.0
+    size: float = 300.0
+    scale: float = 1.0
 
 
 class PhotoResponse(BaseModel):
@@ -14,6 +22,7 @@ class PhotoResponse(BaseModel):
     status: str  # pending, approved, rejected
     reject_reason: Optional[str] = None
     face_verified: bool
+    crop: Optional[CropData] = None  # Crop data for avatar
 
     class Config:
         from_attributes = True
@@ -25,6 +34,11 @@ class PhotoUploadResponse(BaseModel):
     url: str
     status: str
     message: str = "Photo uploaded. Under review by admin."
+
+
+class PhotoUpdateCropRequest(BaseModel):
+    """Update photo crop data"""
+    crop: CropData
 
 
 class PhotoUpdateOrderRequest(BaseModel):
