@@ -1,45 +1,102 @@
 # app/services/location_service.py
 """
-Global location service: countries, provinces, cities, reverse geocoding.
+Global location service using countrystatecity-countries library.
 """
 import json
 import httpx
-import pycountry
-import geonamescache
 from functools import lru_cache
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 
 from app.core.logging import get_logger
 
 logger = get_logger("location_service")
 
-_gc = geonamescache.GeonamesCache()
+# Import countrystatecity-countries
+from countrystatecity_countries import (
+    get_countries as _get_countries,
+    get_country_by_code,
+    get_states_of_country,
+    get_cities_of_state,
+    get_cities_of_country,
+    search_cities,
+)
 
 REVERSE_GC_CACHE_TTL = 60 * 60 * 24
 NOMINATIM_USER_AGENT = "DatingApp/1.0"
 
 
+# ============================================================================
+# Helper: Convert library objects to dicts
+# ============================================================================
+
+def _country_to_dict(country) -> dict:
+    """Convert Country object to dictionary."""
+    return {
+        "iso2": country.iso2,
+        "iso3": country.iso3,
+        "name": country.name,
+        "latitude": country.latitude,
+        "longitude": country.longitude,
+        "phone_code": country.phone_code,
+        "currency": country.currency,
+        "capital": country.capital,
+        "region": country.region,
+        "subregion": country.subregion,
+        "native": country.native,
+        "tld": country.tld,
+    }
+
+
+def _state_to_dict(state) -> dict:
+    """Convert State object to dictionary."""
+    return {
+        "code": state.state_code,
+        "iso_code": f"{state.country_code}-{state.state_code}",
+        "name": state.name,
+        "latitude": state.latitude,
+        "longitude": state.longitude,
+        "country_code": state.country_code,
+    }
+
+
+def _city_to_dict(city) -> dict:
+    """Convert City object to dictionary."""
+    return {
+        "name": city.name,
+        "state_code": city.state_code,
+        "country_code": city.country_code,
+        "latitude": city.latitude,
+        "longitude": city.longitude,
+        "population": getattr(city, "population", None),
+        "timezone": getattr(city, "timezone", None),
+    }
+
+
+# ============================================================================
+# Country Functions
+# ============================================================================
+
 @lru_cache(maxsize=1)
 def _countries_cached() -> list[dict]:
-    gc_countries = _gc.get_countries()
-    result = []
-    for country in pycountry.countries:
-        gc = gc_countries.get(country.alpha_2, {})
-        result.append({
-            "iso2": country.alpha_2,
-            "iso3": country.alpha_3,
-            "name": country.name,
-            "latitude": gc.get("latitude"),
-            "longitude": gc.get("longitude"),
-        })
-    return sorted(result, key=lambda c: c["name"])
+    """Get all countries with their details."""
+    try:
+        countries = _get_countries()
+        return sorted(
+            [_country_to_dict(c) for c in countries],
+            key=lambda c: c["name"]
+        )
+    except Exception as e:
+        logger.error(f"Error loading countries: {e}")
+        return []
 
 
 def get_countries() -> list[dict]:
+    """Get all countries sorted by name."""
     return _countries_cached()
 
 
 def get_country_by_iso2(iso2: str) -> Optional[dict]:
+    """Get country by ISO2 code."""
     iso2 = iso2.upper()
     for c in get_countries():
         if c["iso2"] == iso2:
@@ -47,69 +104,165 @@ def get_country_by_iso2(iso2: str) -> Optional[dict]:
     return None
 
 
+# ============================================================================
+# State/Province Functions
+# ============================================================================
+
 @lru_cache(maxsize=256)
-def _provinces_cached(country_iso2: str) -> list[dict]:
-    subdivisions = pycountry.subdivisions.get(country_code=country_iso2)
-    if not subdivisions:
+def _states_cached(country_iso2: str) -> list[dict]:
+    """Get all states/provinces for a country."""
+    try:
+        states = get_states_of_country(country_iso2.upper())
+        return sorted(
+            [_state_to_dict(s) for s in states],
+            key=lambda s: s["name"]
+        )
+    except Exception as e:
+        logger.error(f"Error loading states for {country_iso2}: {e}")
         return []
-    result = []
-    for sub in subdivisions:
-        if sub.parent_code is not None:
-            continue
-        result.append({
-            "code": sub.code.split("-", 1)[-1],
-            "iso_code": sub.code,
-            "name": sub.name,
-            "type": sub.type,
-        })
-    return sorted(result, key=lambda p: p["name"])
 
 
-def get_provinces(country_iso2: str) -> list[dict]:
-    return _provinces_cached(country_iso2.upper())
+def get_states(country_iso2: str) -> list[dict]:
+    """Get all states/provinces for a country."""
+    return _states_cached(country_iso2.upper())
 
 
-def get_province_by_code(country_iso2: str, code: str) -> Optional[dict]:
+def get_state_by_code(country_iso2: str, code: str) -> Optional[dict]:
+    """Get state by code."""
     code = code.upper()
-    for p in get_provinces(country_iso2):
-        if p["code"].upper() == code or p["iso_code"].upper() == code:
-            return p
+    for s in get_states(country_iso2):
+        if s["code"].upper() == code or s["iso_code"].upper() == code:
+            return s
     return None
+
+
+def get_state_by_name(country_iso2: str, name: str) -> Optional[dict]:
+    """Get state by name (case-insensitive)."""
+    name_lower = name.lower().strip()
+    for s in get_states(country_iso2):
+        if s["name"].lower() == name_lower:
+            return s
+    return None
+
+
+# ============================================================================
+# City Functions
+# ============================================================================
+
+@lru_cache(maxsize=256)
+def _cities_by_state_cached(country_iso2: str, state_code: str) -> list[dict]:
+    """Get all cities for a specific state/province."""
+    try:
+        cities = get_cities_of_state(country_iso2.upper(), state_code.upper())
+        
+        if not cities:
+            return []
+        
+        result = [_city_to_dict(c) for c in cities]
+        result.sort(key=lambda c: (-(c["population"] or 0) if c["population"] else 0, c["name"]))
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error loading cities for state {state_code}: {e}")
+        return []
 
 
 @lru_cache(maxsize=256)
-def _cities_cached(country_iso2: str) -> list[dict]:
-    cities = _gc.get_cities()
-    result = [
-        {
-            "name": c["name"],
-            "latitude": c.get("latitude"),
-            "longitude": c.get("longitude"),
-            "population": c.get("population", 0),
-        }
-        for c in cities.values()
-        if c["countrycode"] == country_iso2
-    ]
-    return sorted(result, key=lambda c: (-c["population"], c["name"]))
+def _cities_by_country_cached(country_iso2: str) -> list[dict]:
+    """Get all cities for a country (cached)."""
+    try:
+        cities = get_cities_of_country(country_iso2.upper())
+        
+        if not cities:
+            return []
+        
+        result = [_city_to_dict(c) for c in cities]
+        result.sort(key=lambda c: (-(c["population"] or 0) if c["population"] else 0, c["name"]))
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error loading cities for country {country_iso2}: {e}")
+        return []
 
 
-def get_cities(country_iso2: str) -> list[dict]:
-    return _cities_cached(country_iso2.upper())
+def get_cities(
+    country_iso2: str,
+    state_code: Optional[str] = None
+) -> list[dict]:
+    """
+    Get cities for a country, optionally filtered by state/province.
+    """
+    country_iso2 = country_iso2.upper()
+    
+    if state_code:
+        return _cities_by_state_cached(country_iso2, state_code.upper())
+    else:
+        return _cities_by_country_cached(country_iso2)
 
 
-def get_city_centroid(country_iso2: str, city_name: str) -> Optional[dict]:
-    name_lower = city_name.lower().strip()
-    for city in get_cities(country_iso2):
-        if city["name"].lower() == name_lower:
-            return {
-                "name": city["name"],
-                "latitude": city["latitude"],
-                "longitude": city["longitude"],
-            }
+def get_cities_by_state_name(
+    country_iso2: str,
+    state_name: str
+) -> list[dict]:
+    """
+    Get cities for a state/province by name.
+    """
+    country_iso2 = country_iso2.upper()
+    state = get_state_by_name(country_iso2, state_name)
+    if state:
+        return get_cities(country_iso2, state["code"])
+    return []
+
+
+def search_cities_by_name(
+    country_iso2: str,
+    query: str,
+    state_code: Optional[str] = None
+) -> list[dict]:
+    """
+    Search cities by name.
+    """
+    try:
+        results = search_cities(
+            country_iso2.upper(),
+            state_code.upper() if state_code else None,
+            query
+        )
+        return [_city_to_dict(c) for c in results]
+    except Exception as e:
+        logger.error(f"Error searching cities: {e}")
+        return []
+
+
+def get_city_centroid(
+    country_iso2: str,
+    city_name: str,
+    state_code: Optional[str] = None
+) -> Optional[dict]:
+    """
+    Get centroid coordinates for a city.
+    """
+    results = search_cities_by_name(country_iso2, city_name, state_code)
+    if results:
+        return results[0]
     return None
 
+
+def clear_cache() -> None:
+    """Clear all cached data."""
+    logger.info("Clearing all location caches")
+    _countries_cached.cache_clear()
+    _states_cached.cache_clear()
+    _cities_by_state_cached.cache_clear()
+    _cities_by_country_cached.cache_clear()
+
+
+# ============================================================================
+# Reverse Geocoding
+# ============================================================================
 
 async def reverse_geocode(lat: float, lng: float, redis_client=None) -> Optional[dict]:
+    """Convert GPS coordinates to location text using Nominatim API."""
     cache_key = f"geo:reverse:{round(lat, 3)}:{round(lng, 3)}"
 
     if redis_client:
@@ -151,6 +304,7 @@ async def _nominatim_reverse(lat: float, lng: float) -> Optional[dict]:
             data = response.json()
 
         address = data.get("address", {})
+        
         return {
             "country": address.get("country"),
             "country_iso2": address.get("country_code", "").upper() or None,
@@ -177,77 +331,60 @@ async def _nominatim_reverse(lat: float, lng: float) -> Optional[dict]:
         return None
 
 
-def clear_cache() -> None:
-    _countries_cached.cache_clear()
-    _provinces_cached.cache_clear()
-    _cities_cached.cache_clear()
-
-
 # =============================================================================
-# LocationService Class - For use in users.py
+# LocationService Class
 # =============================================================================
 
 class LocationService:
     """Service class for location operations."""
     
     @staticmethod
-    def validate_location(province: Optional[str] = None, city: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Validate that province and city exist in Iran.
-        Returns: {"valid": bool, "error": Optional[str]}
-        """
-        # For now, just basic validation
-        # Can be expanded to check against actual data
-        if province is None and city is None:
-            return {"valid": True, "error": None}
-        
-        # Basic validation - check if province/city are not empty
-        if province is not None and len(province.strip()) == 0:
-            return {"valid": False, "error": "Province cannot be empty"}
-        
-        if city is not None and len(city.strip()) == 0:
-            return {"valid": False, "error": "City cannot be empty"}
-        
-        # Check if city exists in Iran (IR) dataset
-        if city is not None:
-            # Try to find city in Iran's cities
-            cities = get_cities("IR")
-            city_found = any(c["name"].lower() == city.lower() for c in cities)
-            if not city_found:
-                # Log warning but don't fail - user might be entering a city not in our dataset
-                logger.warning(f"City '{city}' not found in Iran cities dataset")
-                # Still allow it - cities dataset may not be complete
-                pass
-        
-        return {"valid": True, "error": None}
-    
-    @staticmethod
-    async def reverse_geocode(lat: float, lng: float) -> Optional[Dict[str, Any]]:
-        """
-        Reverse geocode coordinates to location text.
-        Uses the global reverse_geocode function.
-        """
-        # Import redis client here to avoid circular imports
-        from app.core.redis import redis_client
-        result = await reverse_geocode(lat, lng, redis_client=redis_client)
-        return result
-    
-    @staticmethod
     def get_countries() -> List[Dict[str, Any]]:
-        """Get list of all countries."""
         return get_countries()
     
     @staticmethod
-    def get_provinces(country_iso2: str) -> List[Dict[str, Any]]:
-        """Get provinces for a country."""
-        return get_provinces(country_iso2)
+    def get_states(country_iso2: str) -> List[Dict[str, Any]]:
+        return get_states(country_iso2)
     
     @staticmethod
-    def get_cities(country_iso2: str) -> List[Dict[str, Any]]:
-        """Get cities for a country."""
-        return get_cities(country_iso2)
+    def get_cities(
+        country_iso2: str,
+        state_code: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return get_cities(country_iso2, state_code)
     
     @staticmethod
-    def get_city_centroid(country_iso2: str, city_name: str) -> Optional[Dict[str, Any]]:
-        """Get centroid coordinates for a city."""
-        return get_city_centroid(country_iso2, city_name)
+    def get_cities_by_state_name(
+        country_iso2: str,
+        state_name: str
+    ) -> List[Dict[str, Any]]:
+        return get_cities_by_state_name(country_iso2, state_name)
+    
+    @staticmethod
+    def search_cities(
+        country_iso2: str,
+        query: str,
+        state_code: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return search_cities_by_name(country_iso2, query, state_code)
+    
+    @staticmethod
+    def get_city_centroid(
+        country_iso2: str,
+        city_name: str,
+        state_code: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        return get_city_centroid(country_iso2, city_name, state_code)
+    
+    @staticmethod
+    async def reverse_geocode(lat: float, lng: float) -> Optional[Dict[str, Any]]:
+        from app.core.redis import redis_client
+        return await reverse_geocode(lat, lng, redis_client=redis_client)
+    
+    @staticmethod
+    def get_state_by_code(country_iso2: str, code: str) -> Optional[Dict[str, Any]]:
+        return get_state_by_code(country_iso2, code)
+    
+    @staticmethod
+    def get_state_by_name(country_iso2: str, name: str) -> Optional[Dict[str, Any]]:
+        return get_state_by_name(country_iso2, name)

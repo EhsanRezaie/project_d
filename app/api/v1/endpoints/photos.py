@@ -3,13 +3,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from uuid import UUID
 
+from app.core.config import settings
 from app.db.session import get_session
 from app.models.user import User
 from app.models.photo import Photo
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.services.photo_service import PhotoService
-from app.schemas.photo import PhotoResponse, PhotoUploadResponse
+from app.schemas.photo import (
+    PhotoResponse,
+    PhotoUploadResponse,
+    PhotoUpdateCropRequest,
+)
 
 router = APIRouter(prefix="/users/me/photos", tags=["photos"])
 
@@ -33,6 +38,7 @@ async def _to_photo_response(photo: Photo) -> PhotoResponse:
         status=photo.status,
         reject_reason=photo.reject_reason,
         face_verified=photo.face_verified,
+        crop=photo.crop,  # Include crop data
     )
 
 
@@ -66,10 +72,10 @@ async def upload_photo(
         select(Photo).where(Photo.user_id == current_user.id)
     )
     photos = result.scalars().all()
-    if len(photos) >= 6:
+    if len(photos) >= settings.MAX_PHOTOS_PER_USER:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 6 photos per user",
+            detail="Maximum 9 photos per user",
         )
 
     # Create photo record
@@ -219,6 +225,47 @@ async def set_main_photo(
 
     # Set new main photo
     photo.is_main = True
+    await session.commit()
+    await session.refresh(photo)
+
+    return await _to_photo_response(photo)
+
+
+# =============================================================================
+# NEW: Update Crop Data
+# =============================================================================
+
+@router.patch("/{photo_id}/crop", response_model=PhotoResponse)
+@limiter.limit("10/minute")
+async def update_photo_crop(
+    request: Request,
+    photo_id: UUID,
+    crop_data: PhotoUpdateCropRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> PhotoResponse:
+    """
+    Update crop data for a photo.
+    Stores crop position and scale for avatar display.
+    """
+    # Find the photo
+    result = await session.execute(
+        select(Photo).where(
+            Photo.id == photo_id,
+            Photo.user_id == current_user.id,
+        )
+    )
+    photo = result.scalar_one_or_none()
+
+    if not photo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Photo not found",
+        )
+
+    # Update crop data
+    photo.crop = crop_data.crop.model_dump()
+
     await session.commit()
     await session.refresh(photo)
 

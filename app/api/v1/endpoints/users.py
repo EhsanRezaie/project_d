@@ -1,16 +1,19 @@
 # app/api/v1/endpoints/users.py
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import func, select ,delete 
+from app.models.user_interest import UserInterest 
+from app.models.user_prompt import UserPrompt
 from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone  
-
+from app.models.interest import Interest
 from app.db.session import get_session
 from app.models.user import User
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.services.location_service import LocationService
-from app.schemas.user import UserProfileResponse, UserUpdateRequest, LocationTextUpdateRequest, LocationTextUpdateResponse
+from app.schemas.user import UserProfileResponse, UserUpdateRequest, LocationTextUpdateRequest, LocationTextUpdateResponse,InterestUpdateRequest,PromptUpdateRequest
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -22,20 +25,27 @@ async def get_me(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> UserProfileResponse:
-    if not current_user.profile:
-        result = await session.execute(
-            select(User)
-            .options(
-                selectinload(User.profile),
-                selectinload(User.settings),
-            )
-            .where(User.id == current_user.id)
+
+    # Always reload with relationships loaded
+    result = await session.execute(
+        select(User)
+        .options(
+            selectinload(User.profile),
+            selectinload(User.settings),
+            selectinload(User.user_interests).selectinload(UserInterest.interest),
+            selectinload(User.prompts).selectinload(UserPrompt.prompt),
         )
-        user = result.scalar_one_or_none()
-        if user and user.profile:
-            return UserProfileResponse.model_validate(user)
+        .where(User.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
     
-    return UserProfileResponse.model_validate(current_user)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return UserProfileResponse.model_validate(user)
 
 
 @router.put("/me", response_model=UserProfileResponse)
@@ -67,7 +77,7 @@ async def update_me(
         )
     
     # Fields that belong to UserProfile
-    profile_fields = ['name', 'bio', 'gender', 'height', 'weight', 
+    profile_fields = ['name', 'bio', 'birth_date', 'gender', 'height', 'weight', 
                   'body_type', 'relationship_status', 'living_situation',
                   'children_status', 'smoking', 'drinking', 'education',
                   'workplace', 'religion', 'ethnicity', 'political_orientation',
@@ -86,12 +96,14 @@ async def update_me(
     await session.commit()
     await session.refresh(current_user)
     
-    # Reload with profile and settings
+    # Reload with profile, settings, user_interests, and prompts
     result = await session.execute(
         select(User)
         .options(
             selectinload(User.profile),
             selectinload(User.settings),
+            selectinload(User.user_interests).selectinload(UserInterest.interest),
+            selectinload(User.prompts).selectinload(UserPrompt.prompt),
         )
         .where(User.id == current_user.id)
     )
@@ -177,7 +189,6 @@ async def update_location_text(
 ):
     """
     Update user's location with text fields (country, province, city).
-    Validates that province and city exist in Iran.
     """
     profile = current_user.profile
     if not profile:
@@ -186,15 +197,7 @@ async def update_location_text(
             detail="User profile not found",
         )
     
-    # Validate if province provided
-    if body.province or body.city:
-        result = LocationService.validate_location(body.province, body.city)
-        if not result["valid"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result["error"]
-            )
-    
+    # Update fields - no validation needed
     if body.country is not None:
         profile.country = body.country
     if body.province is not None:
@@ -202,7 +205,7 @@ async def update_location_text(
     if body.city is not None:
         profile.city = body.city
     
-    # Set location_manual to True only if any text field was updated
+    # Set location_manual to True if any text field was updated
     if body.province is not None or body.city is not None or body.country is not None:
         if body.province or body.city or body.country:
             profile.location_manual = True
@@ -216,3 +219,109 @@ async def update_location_text(
         city=profile.city,
         location_manual=profile.location_manual
     )
+
+
+@router.put("/me/interests", response_model=UserProfileResponse)
+@limiter.limit("30/minute")
+async def update_interests(
+    request: Request,
+    update_data: InterestUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> UserProfileResponse:
+    """
+    Update current user's interests.
+    Replaces all existing interests with the new list.
+    """
+    # Get all interest names from database
+    result = await session.execute(
+        select(Interest).where(Interest.name.in_(update_data.interests))
+    )
+    existing_interests = result.scalars().all()
+    
+    # Check if all provided interests exist
+    existing_names = {i.name for i in existing_interests}
+    provided_names = set(update_data.interests)
+    missing_names = provided_names - existing_names
+    
+    if missing_names:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid interests: {', '.join(missing_names)}"
+        )
+    
+    # Delete all existing user interests
+    await session.execute(
+        delete(UserInterest).where(UserInterest.user_id == current_user.id)
+    )
+    
+    # Create new user interests
+    for interest in existing_interests:
+        user_interest = UserInterest(
+            user_id=current_user.id,
+            interest_id=interest.id,
+        )
+        session.add(user_interest)
+    
+    await session.commit()
+    await session.refresh(current_user)
+    
+    # Reload with profile, settings, user_interests, and prompts
+    result = await session.execute(
+        select(User)
+        .options(
+            selectinload(User.profile),
+            selectinload(User.settings),
+            selectinload(User.user_interests).selectinload(UserInterest.interest),
+            selectinload(User.prompts).selectinload(UserPrompt.prompt),
+        )
+        .where(User.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
+    
+    return UserProfileResponse.model_validate(user)
+
+
+@router.put("/me/prompts", response_model=UserProfileResponse)
+@limiter.limit("30/minute")
+async def update_prompts(
+    request: Request,
+    update_data: PromptUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> UserProfileResponse:
+    """
+    Update current user's prompts.
+    Replaces all existing prompts with the new list.
+    """
+    # Delete all existing user prompts
+    await session.execute(
+        delete(UserPrompt).where(UserPrompt.user_id == current_user.id)
+    )
+    
+    # Create new user prompts
+    for prompt_data in update_data.prompts:
+        user_prompt = UserPrompt(
+            user_id=current_user.id,
+            prompt_id=uuid.UUID(prompt_data["prompt_id"]),
+            answer=prompt_data["answer"],
+        )
+        session.add(user_prompt)
+    
+    await session.commit()
+    await session.refresh(current_user)
+    
+    # Reload with profile, settings, user_interests, and prompts
+    result = await session.execute(
+        select(User)
+        .options(
+            selectinload(User.profile),
+            selectinload(User.settings),
+            selectinload(User.user_interests).selectinload(UserInterest.interest),
+            selectinload(User.prompts).selectinload(UserPrompt.prompt),
+        )
+        .where(User.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
+    
+    return UserProfileResponse.model_validate(user)
