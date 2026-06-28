@@ -6,11 +6,12 @@ from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.models.user import User
 from app.services.reward_service import RewardService
+from app.schemas.rewards import AdRewardResponse, DailyLimitsResponse
 
 router = APIRouter(prefix="/rewards", tags=["rewards"])
 
 
-@router.post("/ad-watched")
+@router.post("/ad-watched", response_model=AdRewardResponse)
 @limiter.limit("10/minute")
 async def claim_ad_reward(
     request: Request,
@@ -35,7 +36,7 @@ async def claim_ad_reward(
     return result
 
 
-@router.get("/my-limits")
+@router.get("/my-limits", response_model=DailyLimitsResponse)
 @limiter.limit("30/minute")
 async def get_my_limits(
     request: Request,

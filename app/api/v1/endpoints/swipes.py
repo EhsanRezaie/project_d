@@ -17,6 +17,7 @@ from app.models.photo import Photo
 from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
 from app.schemas.discover import SwipeRequest, SwipeResponse
+from app.schemas.swipe import SwipeStatsResponse
 from app.services.websocket_manager import websocket_manager
 
 router = APIRouter(prefix="/swipes", tags=["swipes"])
@@ -236,7 +237,7 @@ async def swipe(
     )
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=SwipeStatsResponse)
 @limiter.limit("30/minute")
 async def get_swipe_stats(
     request: Request,

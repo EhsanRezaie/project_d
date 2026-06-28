@@ -16,7 +16,7 @@ from app.models.match import Match
 from app.models.message import Message
 from app.models.report import Report
 from app.models.subscription import Subscription
-from app.schemas.admin import AdminUserResponse, AdminUserUpdate, AdminPremiumGrant, AdminUserListResponse, AdminMessageRequest, AdminMessageResponse
+from app.schemas.admin import AdminUserResponse, AdminUserUpdate, AdminPremiumGrant, AdminUserListResponse, AdminMessageRequest, AdminMessageResponse, UserActivityEntry
 
 router = APIRouter(prefix="/admin/users", tags=["admin"])
 
@@ -286,7 +286,7 @@ async def admin_grant_premium(
     )
 
 
-@router.get("/{user_id}/activity")
+@router.get("/{user_id}/activity", response_model=list[UserActivityEntry])
 @limiter.limit("60/minute")
 async def admin_get_user_activity(
     request: Request,

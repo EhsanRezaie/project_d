@@ -10,6 +10,15 @@ from app.models.photo import Photo
 from app.models.user import User
 from app.models.user_profile import UserProfile
 from app.services.photo_service import PhotoService
+from app.schemas.admin import (
+    AdminPendingPhotoResponse,
+    AdminPhotoActionResponse,
+    AdminPhotoRejectResponse,
+    AdminPhotoStatsResponse,
+    AdminPhotoDetailResponse,
+    AdminPhotoVerifyResponse,
+    AdminUserPhotoResponse,
+)
 
 router = APIRouter(prefix="/admin/photos", tags=["admin"])
 
@@ -38,7 +47,7 @@ router = APIRouter(prefix="/admin/photos", tags=["admin"])
 _AUTO_FACE_VERIFY = True
 
 
-@router.get("/pending")
+@router.get("/pending", response_model=list[AdminPendingPhotoResponse])
 @limiter.limit("60/minute")
 async def admin_get_pending_photos(
     request: Request,
@@ -79,7 +88,7 @@ async def admin_get_pending_photos(
     return photos
 
 
-@router.post("/{photo_id}/approve")
+@router.post("/{photo_id}/approve", response_model=AdminPhotoActionResponse)
 @limiter.limit("30/minute")
 async def admin_approve_photo(
     request: Request,
@@ -109,7 +118,7 @@ async def admin_approve_photo(
     return {"message": "Photo approved successfully", "photo_id": str(photo_id)}
 
 
-@router.post("/{photo_id}/reject")
+@router.post("/{photo_id}/reject", response_model=AdminPhotoRejectResponse)
 @limiter.limit("30/minute")
 async def admin_reject_photo(
     request: Request,
@@ -139,7 +148,7 @@ async def admin_reject_photo(
     return {"message": "Photo rejected successfully", "photo_id": str(photo_id), "reason": reason}
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=AdminPhotoStatsResponse)
 @limiter.limit("60/minute")
 async def admin_photo_stats(
     request: Request,
@@ -162,7 +171,7 @@ async def admin_photo_stats(
     }
 
 
-@router.get("/{photo_id}")
+@router.get("/{photo_id}", response_model=AdminPhotoDetailResponse)
 @limiter.limit("60/minute")
 async def admin_get_photo(
     request: Request,
@@ -200,7 +209,7 @@ async def admin_get_photo(
     }
 
 
-@router.post("/{photo_id}/verify-face")
+@router.post("/{photo_id}/verify-face", response_model=AdminPhotoVerifyResponse)
 @limiter.limit("30/minute")
 async def admin_verify_face(
     request: Request,
@@ -228,7 +237,7 @@ async def admin_verify_face(
     return {"message": "Photo verified", "photo_id": str(photo_id), "face_verified": True}
 
 
-@router.get("/users/{user_id}/photos")
+@router.get("/users/{user_id}/photos", response_model=list[AdminUserPhotoResponse])
 @limiter.limit("60/minute")
 async def admin_get_user_photos(
     request: Request,

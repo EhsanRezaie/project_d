@@ -50,3 +50,13 @@ class ReverseGeocodeResponse(BaseModel):
     country_iso2: Optional[str] = None
     province: Optional[str] = None
     city: Optional[str] = None
+
+
+class LocationUpdateResponse(BaseModel):
+    """Response for updating user location."""
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    country: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
+    location_manual: bool
