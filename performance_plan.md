@@ -946,8 +946,8 @@ Work through phases in order. Each phase is ~1 session of work.
 
 ### Phase 4 — Backend Query Optimization
 
-- [ ] Add `get_current_user_id` lightweight dependency (Section 3.1)
-- [ ] Switch 9 endpoints to use `get_current_user_id` (Section 3.1)
+- [x] Add `get_current_user_id` lightweight dependency (Section 3.1)
+- [x] Switch 8 endpoints to use `get_current_user_id` (Section 3.1) — swipes excluded, needs profile.name/age
 - [ ] Add `selectinload` chains to `GET /discover`, `GET /search`, `GET /matches` (Section 3.2)
 - [ ] Move Haversine distance filter into PostgreSQL WHERE clause (Section 3.3)
 - [ ] Add `BackgroundTasks` to 5 endpoints (Section 3.4)

@@ -10,10 +10,11 @@ from app.services.reward_service import RewardService
 from app.services.notification_service import NotificationService
 from app.db.session import get_session
 from app.models.user import User
+from app.models.user_profile import UserProfile
 from app.models.swipe import Swipe
 from app.models.match import Match
 from app.models.photo import Photo
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
 from app.schemas.discover import SwipeRequest, SwipeResponse
 from app.services.websocket_manager import websocket_manager
@@ -39,7 +40,7 @@ async def swipe(
     request: Request,
     body: SwipeRequest,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ) -> SwipeResponse:
     """
     Swipe right (like) or left (pass) on a user.
@@ -53,10 +54,21 @@ async def swipe(
     """
     
     # Cannot swipe on yourself
-    if body.user_id == current_user.id:
+    if body.user_id == current_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot swipe on yourself"
+        )
+    
+    # Load current user's profile (name, age, is_premium)
+    profile_result = await session.execute(
+        select(UserProfile).where(UserProfile.user_id == current_user_id)
+    )
+    current_profile = profile_result.scalar_one_or_none()
+    if not current_profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found"
         )
     
     # Check if target user exists and is active
@@ -79,7 +91,7 @@ async def swipe(
     # Check if already swiped
     existing_result = await session.execute(
         select(Swipe).where(
-            Swipe.from_user == current_user.id,
+            Swipe.from_user == current_user_id,
             Swipe.to_user == body.user_id
         )
     )
@@ -95,10 +107,10 @@ async def swipe(
     likes_remaining = None
     if body.direction == "like":
         reward_service = RewardService(session)
-        can_like = await reward_service.consume_like(current_user)
+        can_like = await reward_service.consume_like(current_user_id, current_profile.is_premium)
         
         if not can_like:
-            remaining = await reward_service.get_remaining_likes(current_user)
+            remaining = await reward_service.get_remaining_likes(current_user_id, current_profile.is_premium)
             if remaining == 0:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -111,12 +123,12 @@ async def swipe(
                 )
         
         # Get remaining after consumption
-        remaining = await reward_service.get_remaining_likes(current_user)
+        remaining = await reward_service.get_remaining_likes(current_user_id, current_profile.is_premium)
         likes_remaining = remaining if remaining != -1 else None
     
     # Create swipe record
     new_swipe = Swipe(
-        from_user=current_user.id,
+        from_user=current_user_id,
         to_user=body.user_id,
         direction=body.direction,
     )
@@ -127,10 +139,10 @@ async def swipe(
     if body.direction == "like":
         notification_service = NotificationService(session)
         await notification_service.notify_like(
-            liker_id=current_user.id,
+            liker_id=current_user_id,
             liked_user_id=target_user.id,
-            liker_name=current_user.profile.name ,
-            liker_age=current_user.profile.age
+            liker_name=current_profile.name,
+            liker_age=current_profile.age
         )
     
     # Check for match (if both liked each other)
@@ -142,7 +154,7 @@ async def swipe(
         mutual_result = await session.execute(
             select(Swipe).where(
                 Swipe.from_user == body.user_id,
-                Swipe.to_user == current_user.id,
+                Swipe.to_user == current_user_id,
                 Swipe.direction == "like"
             )
         )
@@ -151,7 +163,7 @@ async def swipe(
         if mutual_swipe:
             # Create match
             new_match = Match(
-                user1_id=current_user.id,
+                user1_id=current_user_id,
                 user2_id=body.user_id,
                 is_active=True,
             )
@@ -164,17 +176,17 @@ async def swipe(
             # Send match notifications to both users
             notification_service = NotificationService(session)
             await notification_service.notify_match(
-                user1_id=current_user.id,
+                user1_id=current_user_id,
                 user2_id=target_user.id,
                 match_id=new_match.id
             )
             
             # Send WebSocket notification to both users
             user1_data = {
-                "id": str(current_user.id),
-                "name": current_user.profile.name,
-                "age": current_user.profile.age,
-                "main_photo_url": await get_user_main_photo_url(session, current_user.id),
+                "id": str(current_user_id),
+                "name": current_profile.name,
+                "age": current_profile.age,
+                "main_photo_url": await get_user_main_photo_url(session, current_user_id),
             }
             
             user2_data = {
@@ -185,7 +197,7 @@ async def swipe(
             }
             
             await websocket_manager.broadcast_match(
-                str(current_user.id),
+                str(current_user_id),
                 str(target_user.id),
                 str(new_match.id),
                 user1_data,

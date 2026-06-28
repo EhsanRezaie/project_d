@@ -6,7 +6,7 @@ from uuid import UUID
 from app.db.session import get_session
 from app.models.user import User
 from app.models.block import Block
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
 from app.schemas.search import BlockResponse
 
@@ -19,14 +19,14 @@ async def block_user(
     request: Request,
     user_id: UUID,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ) -> None:
     """
     Block a user.
     Blocked users won't appear in discover or search.
     """
     
-    if user_id == current_user.id:
+    if user_id == current_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot block yourself"
@@ -47,7 +47,7 @@ async def block_user(
     # Check if already blocked
     existing = await session.execute(
         select(Block).where(
-            Block.blocker_id == current_user.id,
+            Block.blocker_id == current_user_id,
             Block.blocked_id == user_id,
         )
     )
@@ -59,7 +59,7 @@ async def block_user(
     
     # Create block
     block = Block(
-        blocker_id=current_user.id,
+        blocker_id=current_user_id,
         blocked_id=user_id,
     )
     session.add(block)
@@ -72,7 +72,7 @@ async def unblock_user(
     request: Request,
     user_id: UUID,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ) -> None:
     """
     Unblock a user.
@@ -80,7 +80,7 @@ async def unblock_user(
     
     result = await session.execute(
         select(Block).where(
-            Block.blocker_id == current_user.id,
+            Block.blocker_id == current_user_id,
             Block.blocked_id == user_id,
         )
     )

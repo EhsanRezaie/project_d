@@ -982,6 +982,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 26 | **Dummy user seeder (1000 users)** | ✅ |
 | 27 | **Performance Phase 1 — indexes, GZip, Cache-Control, limit caps** | ✅ |
 | 28 | **Performance Phase 2+3 — Redis caching (static + user data + daily limits)** | ✅ |
+| 29 | **Performance Phase 4.1 — get_current_user_id lightweight dependency** | ✅ |
 
 ---
 
@@ -1356,11 +1357,11 @@ alembic downgrade -1
 ---
 
 **Next: Phase 4 — Backend Query Optimization**
-- `get_current_user_id` lightweight dependency
-- `selectinload` chains on discover/search/matches
-- DB Haversine distance filter
-- `BackgroundTasks` for notifications
-- Cursor pagination on messages
+- [x] `get_current_user_id` lightweight dependency + 8 endpoints switched
+- [ ] `selectinload` chains on discover/search/matches
+- [ ] DB Haversine distance filter
+- [ ] `BackgroundTasks` for notifications
+- [ ] Cursor pagination on messages
 
 **Then: Session 15 - Push Notifications + Real Payment + Production Ready (Backend)**
 ```
