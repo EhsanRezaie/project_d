@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -34,11 +34,51 @@ async def get_user_main_photo_url(session: AsyncSession, user_id: UUID) -> str |
     return result.scalar_one_or_none()
 
 
+async def _background_match_notification(
+    session: AsyncSession,
+    current_user_id: UUID,
+    target_user_id: UUID,
+    match_id: UUID,
+    current_user_name: str,
+    current_user_age: int,
+    target_user_name: str,
+    target_user_age: int,
+):
+    """Run after response is sent: create match notifications and broadcast WebSocket."""
+    notification_service = NotificationService(session)
+    await notification_service.notify_match(current_user_id, target_user_id, match_id)
+
+    user1_main_photo_url = await get_user_main_photo_url(session, current_user_id)
+    user2_main_photo_url = await get_user_main_photo_url(session, target_user_id)
+
+    user1_data = {
+        "id": str(current_user_id),
+        "name": current_user_name,
+        "age": current_user_age,
+        "main_photo_url": user1_main_photo_url,
+    }
+    user2_data = {
+        "id": str(target_user_id),
+        "name": target_user_name,
+        "age": target_user_age,
+        "main_photo_url": user2_main_photo_url,
+    }
+
+    await websocket_manager.broadcast_match(
+        str(current_user_id),
+        str(target_user_id),
+        str(match_id),
+        user1_data,
+        user2_data,
+    )
+
+
 @router.post("", response_model=SwipeResponse)
 @limiter.limit("30/minute")
 async def swipe(
     request: Request,
     body: SwipeRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     current_user_id: UUID = Depends(get_current_user_id),
 ) -> SwipeResponse:
@@ -173,35 +213,17 @@ async def swipe(
             matched = True
             match_id = new_match.id
             
-            # Send match notifications to both users
-            notification_service = NotificationService(session)
-            await notification_service.notify_match(
-                user1_id=current_user_id,
-                user2_id=target_user.id,
-                match_id=new_match.id
-            )
-            
-            # Send WebSocket notification to both users
-            user1_data = {
-                "id": str(current_user_id),
-                "name": current_profile.name,
-                "age": current_profile.age,
-                "main_photo_url": await get_user_main_photo_url(session, current_user_id),
-            }
-            
-            user2_data = {
-                "id": str(target_user.id),
-                "name": target_user.profile.name,
-                "age": target_user.profile.age,
-                "main_photo_url": await get_user_main_photo_url(session, target_user.id),
-            }
-            
-            await websocket_manager.broadcast_match(
-                str(current_user_id),
-                str(target_user.id),
-                str(new_match.id),
-                user1_data,
-                user2_data
+            # Offload match notification + WebSocket broadcast to background
+            background_tasks.add_task(
+                _background_match_notification,
+                session=session,
+                current_user_id=current_user_id,
+                target_user_id=target_user.id,
+                match_id=new_match.id,
+                current_user_name=current_profile.name,
+                current_user_age=current_profile.age,
+                target_user_name=target_user.profile.name,
+                target_user_age=target_user.profile.age,
             )
     
     await session.commit()

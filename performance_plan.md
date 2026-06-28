@@ -948,10 +948,10 @@ Work through phases in order. Each phase is ~1 session of work.
 
 - [x] Add `get_current_user_id` lightweight dependency (Section 3.1)
 - [x] Switch 8 endpoints to use `get_current_user_id` (Section 3.1) — swipes excluded, needs profile.name/age
-- [ ] Add `selectinload` chains to `GET /discover`, `GET /search`, `GET /matches` (Section 3.2)
-- [ ] Move Haversine distance filter into PostgreSQL WHERE clause (Section 3.3)
-- [ ] Add `BackgroundTasks` to 5 endpoints (Section 3.4)
-- [ ] Add cursor-based pagination (`before` param) to `GET /messages/{identifier}` (Section 3.5)
+- [x] Add `selectinload` chains to `GET /discover`, `GET /search`, `GET /matches` (Section 3.2)
+- [x] Move Haversine distance filter into PostgreSQL WHERE clause (Section 3.3)
+- [x] Add `BackgroundTasks` to 4 endpoints — swipes + 3 message sends (Section 3.4)
+- [x] Add cursor-based pagination (`before` param) to `GET /messages/{identifier}` (Section 3.5)
 
 ### Phase 5 — Flutter App
 
