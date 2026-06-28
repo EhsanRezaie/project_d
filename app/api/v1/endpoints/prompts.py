@@ -5,6 +5,8 @@ from sqlalchemy import select
 from app.db.session import get_session
 from app.models.prompt import Prompt
 from app.schemas.prompt import PromptResponse
+from app.core.redis import redis_client
+from app.core.cache import cache_get, cache_set, key_prompts, TTL_PROMPTS
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
@@ -15,7 +17,6 @@ async def get_prompts(
     language: str = Query("fa", min_length=2, max_length=5, description="Language code, e.g. 'fa' or 'en'"),
     session: AsyncSession = Depends(get_session),
 ) -> list[PromptResponse]:
-    response.headers["Cache-Control"] = "public, max-age=86400"
     """
     Get the list of active prompt questions in the requested language.
 
@@ -24,10 +25,16 @@ async def get_prompts(
     existing UserPrompt answers referencing them) but no longer offered
     as a choice for new answers.
     """
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    cached = await cache_get(redis_client, key_prompts(language))
+    if cached:
+        return [PromptResponse(**p) for p in cached]
     result = await session.execute(
         select(Prompt)
         .where(Prompt.language == language, Prompt.is_active == True)  # noqa: E712
         .order_by(Prompt.category, Prompt.id)
     )
     prompts = result.scalars().all()
-    return [PromptResponse.model_validate(p) for p in prompts]
+    data = [PromptResponse.model_validate(p).model_dump(mode='json') for p in prompts]
+    await cache_set(redis_client, key_prompts(language), data, TTL_PROMPTS)
+    return [PromptResponse(**p) for p in data]

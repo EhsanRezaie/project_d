@@ -11,6 +11,7 @@ from app.db.session import get_session, engine
 from app.core.redis import redis_client
 from app.core.limiter import limiter
 from app.core.config import settings
+from app.core.cache import cache_get, cache_set, key_system_status, TTL_SYSTEM_STATUS
 from app.schemas.system import (
     SystemStatusResponse,
     ServiceStatus,
@@ -127,6 +128,9 @@ async def system_status(request: Request, response: Response) -> SystemStatusRes
     Returns system availability, maintenance mode, and version info.
     """
     response.headers["Cache-Control"] = "public, max-age=60"
+    cached = await cache_get(redis_client, key_system_status())
+    if cached:
+        return SystemStatusResponse(**cached)
     # Get maintenance status
     maintenance = await get_maintenance_status()
     
@@ -163,7 +167,7 @@ async def system_status(request: Request, response: Response) -> SystemStatusRes
     # Determine overall status
     overall_status = "ok" if db_status == "ok" and redis_status == "ok" else "degraded"
     
-    return SystemStatusResponse(
+    result = SystemStatusResponse(
         status=overall_status,
         timestamp=datetime.now(timezone.utc).isoformat(),
         version=getattr(settings, "APP_VERSION", "1.0.0"),
@@ -184,6 +188,8 @@ async def system_status(request: Request, response: Response) -> SystemStatusRes
         ),
         maintenance=maintenance,
     )
+    await cache_set(redis_client, key_system_status(), result.model_dump(mode='json'), TTL_SYSTEM_STATUS)
+    return result
 
 
 # ---------------------------------------------------------------------------

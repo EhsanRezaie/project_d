@@ -8,6 +8,8 @@ from app.db.session import get_session
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.core.config import settings
+from app.core.redis import redis_client
+from app.core.cache import cache_get, cache_set, key_sub_plans, TTL_SUB_PLANS
 from sqlalchemy.orm import selectinload
 from app.models.user import User
 from app.models.subscription import Subscription
@@ -29,7 +31,10 @@ router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 async def get_plans(request: Request, response: Response):
     """Get available subscription plans with prices."""
     response.headers["Cache-Control"] = "public, max-age=3600"
-    return SubscriptionPlansResponse(
+    cached = await cache_get(redis_client, key_sub_plans())
+    if cached:
+        return SubscriptionPlansResponse(**cached)
+    plans = SubscriptionPlansResponse(
         plans=[
             PlanResponse(
                 id="monthly",
@@ -57,6 +62,8 @@ async def get_plans(request: Request, response: Response):
             ),
         ]
     )
+    await cache_set(redis_client, key_sub_plans(), plans.model_dump(mode='json'), TTL_SUB_PLANS)
+    return plans
 
 
 @router.post("/purchase", response_model=PurchaseResponse)

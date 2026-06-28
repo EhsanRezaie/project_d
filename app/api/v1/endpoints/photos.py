@@ -9,6 +9,8 @@ from app.models.user import User
 from app.models.photo import Photo
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
+from app.core.redis import redis_client
+from app.core.cache import invalidate_user_cache
 from app.services.photo_service import PhotoService
 from app.schemas.photo import (
     PhotoResponse,
@@ -102,6 +104,8 @@ async def upload_photo(
     await session.commit()
     await session.refresh(new_photo)
 
+    await invalidate_user_cache(redis_client, current_user.id)
+
     # Resolve a real, loadable (signed) URL for the immediate upload response
     display_url = await PhotoService.get_photo_url(photo_key, new_photo.status)
 
@@ -170,6 +174,8 @@ async def delete_photo(
     await session.delete(photo)
     await session.commit()
 
+    await invalidate_user_cache(redis_client, current_user.id)
+
     # If deleted photo was main, set new main photo
     if photo.is_main:
         result = await session.execute(
@@ -227,6 +233,7 @@ async def set_main_photo(
     photo.is_main = True
     await session.commit()
     await session.refresh(photo)
+    await invalidate_user_cache(redis_client, current_user.id)
 
     return await _to_photo_response(photo)
 
@@ -268,5 +275,6 @@ async def update_photo_crop(
 
     await session.commit()
     await session.refresh(photo)
+    await invalidate_user_cache(redis_client, current_user.id)
 
     return await _to_photo_response(photo)

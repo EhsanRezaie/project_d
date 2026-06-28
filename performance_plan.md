@@ -927,22 +927,22 @@ Work through phases in order. Each phase is ~1 session of work.
 - [x] Add `Cache-Control` headers to 5 public endpoints (Section 4.2)
 - [x] Enforce `limit` cap (le=50) on all 6 list endpoints (Section 3.6)
 
-### Phase 2 — Redis Caching: Static Data
+### ✅ Phase 2 — Redis Caching: Static Data
 
-- [ ] Create `app/core/cache.py` with all key functions and helpers (Section 2.1)
-- [ ] Cache `GET /api/v1/interests` (Section 2.2)
-- [ ] Cache `GET /api/v1/prompts?language=fa` and `?language=en` (Section 2.2)
-- [ ] Cache `GET /api/v1/locations/countries` (Section 2.2)
-- [ ] Cache `GET /api/v1/locations/provinces` (Section 2.2)
-- [ ] Cache `GET /api/v1/locations/cities` (Section 2.2)
-- [ ] Cache `GET /api/v1/subscriptions/plans` (Section 2.2)
-- [ ] Cache `GET /api/v1/system/status` (Section 2.3)
+- [x] Create `app/core/cache.py` with all key functions and helpers (Section 2.1)
+- [x] Cache `GET /api/v1/interests` (Section 2.2)
+- [x] Cache `GET /api/v1/prompts?language=fa` and `?language=en` (Section 2.2)
+- [x] Cache `GET /api/v1/locations/countries` (Section 2.2)
+- [x] Cache `GET /api/v1/locations/provinces` (Section 2.2)
+- [x] Cache `GET /api/v1/locations/cities` (Section 2.2)
+- [x] Cache `GET /api/v1/subscriptions/plans` (Section 2.2)
+- [x] Cache `GET /api/v1/system/status` (Section 2.3)
 
-### Phase 3 — Redis Caching: User Data + Daily Limits
+### ✅ Phase 3 — Redis Caching: User Data + Daily Limits
 
-- [ ] Cache `GET /api/v1/users/me` per user (Section 2.4)
-- [ ] Call `invalidate_user_cache()` in all 8 mutation endpoints (Section 2.4)
-- [ ] Cache daily limits in Redis with midnight TTL (Section 2.5)
+- [x] Cache `GET /api/v1/users/me` per user (Section 2.4)
+- [x] Call `invalidate_user_cache()` in all 8 mutation endpoints (Section 2.4)
+- [x] Cache daily limits in Redis with midnight TTL (Section 2.5)
 
 ### Phase 4 — Backend Query Optimization
 
