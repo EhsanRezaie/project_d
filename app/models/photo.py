@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, SmallInteger, Text, ForeignKey, DateTime, func , JSON
+from sqlalchemy import Column, String, Boolean, SmallInteger, Text, ForeignKey, DateTime, func, JSON, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -7,6 +7,11 @@ from app.db.base import Base
 
 class Photo(Base):
     __tablename__ = "photos"
+    __table_args__ = (
+        Index('idx_photos_user_main', 'user_id', 'is_main', postgresql_where=text("is_main = true")),
+        Index('idx_photos_user_id', 'user_id', 'created_at'),
+        Index('idx_photos_status', 'status', 'created_at'),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from uuid import UUID
@@ -21,8 +21,8 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 @limiter.limit("60/minute")
 async def get_notifications(
     request: Request,
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from uuid import UUID
@@ -100,6 +100,8 @@ async def unblock_user(
 @limiter.limit("30/minute")
 async def list_blocks(
     request: Request,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[BlockResponse]:
@@ -107,11 +109,19 @@ async def list_blocks(
     List all users blocked by current user.
     """
     
+    # Count total
+    count_query = select(func.count()).select_from(
+        select(Block).where(Block.blocker_id == current_user.id).subquery()
+    )
+    total = await session.scalar(count_query)
+    
     result = await session.execute(
         select(Block, User)
         .join(User, Block.blocked_id == User.id)
         .where(Block.blocker_id == current_user.id)
         .order_by(Block.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     
     blocks = []

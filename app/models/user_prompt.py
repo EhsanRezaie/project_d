@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Text, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -15,6 +15,7 @@ class UserPrompt(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "prompt_id", name="uq_user_prompts_user_prompt"),
+        Index('idx_user_prompts_user', 'user_id'),
     )
 
     # Relationships

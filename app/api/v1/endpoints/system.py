@@ -1,5 +1,5 @@
 # app/api/v1/endpoints/system.py
-from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi import APIRouter, Depends, Request, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from datetime import datetime, timezone
@@ -121,11 +121,12 @@ async def check_admin_auth(request: Request) -> bool:
 
 @router.get("/status", response_model=SystemStatusResponse)
 @limiter.limit("60/minute")
-async def system_status(request: Request) -> SystemStatusResponse:
+async def system_status(request: Request, response: Response) -> SystemStatusResponse:
     """
     System status endpoint for splash screen.
     Returns system availability, maintenance mode, and version info.
     """
+    response.headers["Cache-Control"] = "public, max-age=60"
     # Get maintenance status
     maintenance = await get_maintenance_status()
     

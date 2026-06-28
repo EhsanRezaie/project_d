@@ -980,6 +980,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 24 | **System Status & Version Check API** | ✅ |
 | 25 | **Test migration + backend User.profile fixes (511 tests)** | ✅ |
 | 26 | **Dummy user seeder (1000 users)** | ✅ |
+| 27 | **Performance Phase 1 — indexes, GZip, Cache-Control, limit caps** | ✅ |
 
 ---
 
@@ -1298,6 +1299,17 @@ alembic downgrade -1
 | README.md updated with seed command | ✅ |
 | `ALTER TABLE photos ADD COLUMN crop JSON` applied to dev DB | ✅ |
 
+### ✅ Session 27 Complete - Performance Phase 1
+
+| Feature | Status |
+|---------|--------|
+| DB indexes in models (`__table_args__` + `Index`) — 37 across 10 tables | ✅ |
+| Alembic migration `7f10ad4c02b9` applied to dev + test DBs | ✅ |
+| `EXPLAIN ANALYZE` — all `Index Scan`, zero `Seq Scan` | ✅ |
+| GZip middleware in `app/main.py` (≥1KB responses auto-compressed) | ✅ |
+| `Cache-Control` headers on 5 public endpoints (interests, prompts, locations/countries, plans, status) | ✅ |
+| `limit` cap `le=50` enforced on 6 list endpoints (discover, search, matches, messages, notifications, blocks) | ✅ |
+
 ---
 
 ### ⚠️ Pending
@@ -1309,7 +1321,6 @@ alembic downgrade -1
 | Persian translations for all screens | High | — |
 | Real ZarinPal integration | High | 15 |
 | FCM push notifications | High | 15 |
-| Database indexes | Medium | 15 |
 | Real face-match API (photo verification) | Medium | — |
 | Flutter Discover Screen | High | 20 |
 | Flutter Search Screen | High | 20 |
@@ -1317,7 +1328,7 @@ alembic downgrade -1
 
 ---
 
-**Next: Session 15 - Push Notifications + Real Payment + Production Ready (Backend)**
+**Next: Performance Phase 2 - Redis Caching (Static Data)**
 
-**Then: Session 20 - Flutter Main App Features (Discover, Search, Chats)**
+**Then: Session 15 - Push Notifications + Real Payment + Production Ready (Backend)**
 ```
