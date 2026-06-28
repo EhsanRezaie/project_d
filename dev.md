@@ -983,6 +983,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 27 | **Performance Phase 1 — indexes, GZip, Cache-Control, limit caps** | ✅ |
 | 28 | **Performance Phase 2+3 — Redis caching (static + user data + daily limits)** | ✅ |
 | 29 | **Performance Phase 4.1 — get_current_user_id lightweight dependency** | ✅ |
+| 30 | **Performance Phase 4.2-4.5 — Eager loading, DB Haversine, BackgroundTasks, Cursor pagination** | ✅ |
 
 ---
 
@@ -1356,12 +1357,50 @@ alembic downgrade -1
 
 ---
 
-**Next: Phase 4 — Backend Query Optimization**
-- [x] `get_current_user_id` lightweight dependency + 8 endpoints switched
-- [ ] `selectinload` chains on discover/search/matches
-- [ ] DB Haversine distance filter
-- [ ] `BackgroundTasks` for notifications
-- [ ] Cursor pagination on messages
+### ✅ Session 30 Complete — Performance Phase 4.2-4.5 (Backend Query Optimization)
 
-**Then: Session 15 - Push Notifications + Real Payment + Production Ready (Backend)**
+**Phase 4.2 — Eager Loading:**
+- `GET /discover`: Removed redundant `current_user` query, dropped unused `UserSettings` load, `selectinload(User.photos)` only
+- `GET /search`: Same + removed redundant `current_user` query
+- `GET /matches`: Single `DISTINCT ON (match_id)` query replaces N+1 per-match last-message queries
+
+**Phase 4.3 — DB-Level Haversine Distance:**
+- `GET /discover`: Distance filter pushed to PostgreSQL `WHERE` clause (before `LIMIT`, so pagination is accurate)
+- `GET /search`: Same + sort by distance moved to SQL `ORDER BY`
+
+**Phase 4.4 — BackgroundTasks:**
+- `POST /swipes`: Match notifications + photo URL queries + WebSocket broadcast moved to `BackgroundTasks`
+- `POST /messages/{identifier}/text`: WebSocket notification backgrounded
+- `POST /messages/{identifier}/photo`: WebSocket notification backgrounded
+- `POST /messages/{identifier}/voice`: WebSocket notification backgrounded
+- All use request session (stays open until after background tasks complete, `get_session` commits at cleanup)
+
+**Phase 4.5 — Cursor Pagination:**
+- `GET /messages/{identifier}`: Added `before` cursor param (ISO datetime)
+- When provided: `Message.sent_at < before` replaces `OFFSET` — no expensive row-skipping
+- `offset` kept as backward-compatible fallback
+- Client passes `sent_at` of oldest loaded message as next cursor
+
+**Files Modified:**
+- `app/api/v1/endpoints/discover.py` — DB Haversine, redundant query removed, photo selectinload
+- `app/api/v1/endpoints/search.py` — DB Haversine, SQL sort/pagination, redundant query removed
+- `app/api/v1/endpoints/matches.py` — last-message N+1 eliminated, photo eager load
+- `app/api/v1/endpoints/swipes.py` — BackgroundTasks for match notification + WebSocket
+- `app/api/v1/endpoints/messages.py` — Cursor pagination, BackgroundTasks for WebSocket sends
+
+**Tests: 511 passing ✅**
+
+---
+
+**Phase 5 — Flutter App Performance**
+- [ ] `dio_cache_interceptor` + Hive store
+- [ ] Per-endpoint cache policies
+- [ ] `CachedNetworkImage` size limits
+- [ ] Replace `Consumer` → `Selector` in hot paths
+- [ ] `ListView.builder` + `RepaintBoundary` audit
+- [ ] Parallelize splash screen
+- [ ] WebSocket exponential backoff
+- [ ] Notifications pagination
+
+**Then: Session 15 — Push Notifications + Real Payment + Production Ready (Backend)**
 ```

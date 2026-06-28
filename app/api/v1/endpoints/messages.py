@@ -1,11 +1,11 @@
 # app/api/v1/endpoints/messages.py
 from typing import Optional, Tuple
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File, Form, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request, UploadFile, File, Form, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.db.session import get_session
 from app.models.user import User
@@ -63,6 +63,16 @@ async def get_match_or_chat(session: AsyncSession, identifier: UUID, user_id: UU
     return None, None, None
 
 
+async def _background_websocket_send(match_id_str: str, sender_id_str: str, message_data: dict, other_user_id_str: str):
+    """Send WebSocket notification after response is sent."""
+    await websocket_manager.send_to_match(
+        match_id_str,
+        sender_id_str,
+        message_data,
+        other_user_id=other_user_id_str,
+    )
+
+
 @router.get("/{identifier}", response_model=MessageListResponse)
 @limiter.limit("60/minute")
 async def get_chat_history(
@@ -70,12 +80,18 @@ async def get_chat_history(
     identifier: UUID,
     limit: int = Query(30, ge=1, le=50),
     offset: int = Query(0, ge=0),
+    before: Optional[datetime] = Query(None, description="Cursor: get messages older than this timestamp (ISO format)"),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> MessageListResponse:
     """
     Get chat history for a match or unmatched chat.
-    identifier can be match_id OR user_id (for unmatched chat)
+    identifier can be match_id OR user_id (for unmatched chat).
+
+    Pagination:
+      - Legacy: use `offset` + `limit`
+      - Cursor:  use `before` (ISO datetime) + `limit`
+                 Client passes the `sent_at` of the oldest loaded message as `before` for the next page.
     """
     match, other_user_id, match_id = await get_match_or_chat(session, identifier, current_user.id)
 
@@ -123,12 +139,21 @@ async def get_chat_history(
         )
     )
 
+    # Cursor pagination: filter before the cursor timestamp
+    if before:
+        if before.tzinfo is None:
+            before = before.replace(tzinfo=timezone.utc)
+        query = query.where(Message.sent_at < before)
+
     # Count total
     count_query = select(func.count()).select_from(query.subquery())
     total = await session.scalar(count_query)
 
-    # Get messages
-    query = query.order_by(Message.sent_at.desc()).offset(offset).limit(limit)
+    # Get messages — cursor pagination OR legacy offset
+    query = query.order_by(Message.sent_at.desc())
+    if not before:
+        query = query.offset(offset)
+    query = query.limit(limit)
     result = await session.execute(query)
     messages = result.scalars().all()
 
@@ -176,10 +201,16 @@ async def get_chat_history(
             read_at=msg.read_at,
         ))
 
+    has_more = len(messages) == limit
+    if before:
+        next_offset = None
+    else:
+        next_offset = offset + limit if offset + limit < total else None
+
     return MessageListResponse(
         messages=message_responses,
         total=total or 0,
-        next_offset=offset + limit if offset + limit < total else None
+        next_offset=next_offset,
     )
 
 
@@ -189,6 +220,7 @@ async def send_text_message(
     request: Request,
     identifier: UUID,
     body: TextMessageRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> SendMessageResponse:
@@ -233,24 +265,24 @@ async def send_text_message(
 
     await session.commit()
 
-    # Get decrypted content for WebSocket
+    # Offload WebSocket notification to background
     decrypted_content = new_message.content if new_message.match_id else new_message._content
-
-    # Send WebSocket notification with decrypted content
-    await websocket_manager.send_to_match(
-        str(match_id) if match_id else str(other_user_id),
-        str(current_user.id),
-        {
-            "type": "new_message",
-            "data": {
-                "id": str(new_message.id),
-                "message_type": "text",
-                "content": decrypted_content,
-                "sender_id": str(current_user.id),
-                "sent_at": new_message.sent_at.isoformat(),
-            }
-        },
-        other_user_id=str(other_user_id)
+    message_data = {
+        "type": "new_message",
+        "data": {
+            "id": str(new_message.id),
+            "message_type": "text",
+            "content": decrypted_content,
+            "sender_id": str(current_user.id),
+            "sent_at": new_message.sent_at.isoformat(),
+        }
+    }
+    background_tasks.add_task(
+        _background_websocket_send,
+        match_id_str=str(match_id) if match_id else str(other_user_id),
+        sender_id_str=str(current_user.id),
+        message_data=message_data,
+        other_user_id_str=str(other_user_id),
     )
 
     return SendMessageResponse(
@@ -266,6 +298,7 @@ async def send_text_message(
 async def send_photo_message(
     request: Request,
     identifier: UUID,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     caption: str = Form(None),
     session: AsyncSession = Depends(get_session),
@@ -312,25 +345,25 @@ async def send_photo_message(
     
     await session.commit()
 
-    # Get decrypted content for WebSocket
+    # Offload WebSocket notification to background
     decrypted_content = new_message.content if new_message.match_id else new_message._content
-
-    # Send WebSocket notification
-    await websocket_manager.send_to_match(
-        str(match_id) if match_id else str(other_user_id),
-        str(current_user.id),
-        {
-            "type": "new_message",
-            "data": {
-                "id": str(new_message.id),
-                "message_type": "photo",
-                "media_url": media_url,
-                "caption": decrypted_content,
-                "sender_id": str(current_user.id),
-                "sent_at": new_message.sent_at.isoformat(),
-            }
-        },
-        other_user_id=str(other_user_id)
+    message_data = {
+        "type": "new_message",
+        "data": {
+            "id": str(new_message.id),
+            "message_type": "photo",
+            "media_url": media_url,
+            "caption": decrypted_content,
+            "sender_id": str(current_user.id),
+            "sent_at": new_message.sent_at.isoformat(),
+        }
+    }
+    background_tasks.add_task(
+        _background_websocket_send,
+        match_id_str=str(match_id) if match_id else str(other_user_id),
+        sender_id_str=str(current_user.id),
+        message_data=message_data,
+        other_user_id_str=str(other_user_id),
     )
 
     return SendMessageResponse(
@@ -346,6 +379,7 @@ async def send_photo_message(
 async def send_voice_message(
     request: Request,
     identifier: UUID,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     duration: int = Form(...),
     session: AsyncSession = Depends(get_session),
@@ -393,22 +427,24 @@ async def send_voice_message(
     session.add(new_message)
     await session.commit()
 
-    # Send WebSocket notification
-    await websocket_manager.send_to_match(
-        str(match_id) if match_id else str(other_user_id),
-        str(current_user.id),
-        {
-            "type": "new_message",
-            "data": {
-                "id": str(new_message.id),
-                "message_type": "voice",
-                "media_url": media_url,
-                "duration": duration,
-                "sender_id": str(current_user.id),
-                "sent_at": new_message.sent_at.isoformat(),
-            }
-        },
-        other_user_id=str(other_user_id)
+    # Offload WebSocket notification to background
+    message_data = {
+        "type": "new_message",
+        "data": {
+            "id": str(new_message.id),
+            "message_type": "voice",
+            "media_url": media_url,
+            "duration": duration,
+            "sender_id": str(current_user.id),
+            "sent_at": new_message.sent_at.isoformat(),
+        }
+    }
+    background_tasks.add_task(
+        _background_websocket_send,
+        match_id_str=str(match_id) if match_id else str(other_user_id),
+        sender_id_str=str(current_user.id),
+        message_data=message_data,
+        other_user_id_str=str(other_user_id),
     )
 
     return SendMessageResponse(
