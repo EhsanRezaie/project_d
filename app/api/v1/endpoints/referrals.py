@@ -14,6 +14,10 @@ from app.models.referral_reward import ReferralReward
 from app.services.reward_service import RewardService
 from app.schemas.referral import ReferralCodeResponse, ClaimReferralResponse, ReferralStatsResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("referrals")
+
 router = APIRouter(prefix="/referrals", tags=["referrals"])
 
 

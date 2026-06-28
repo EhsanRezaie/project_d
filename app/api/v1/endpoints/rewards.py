@@ -8,6 +8,10 @@ from app.models.user import User
 from app.services.reward_service import RewardService
 from app.schemas.rewards import AdRewardResponse, DailyLimitsResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("rewards")
+
 router = APIRouter(prefix="/rewards", tags=["rewards"])
 
 

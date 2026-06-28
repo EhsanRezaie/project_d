@@ -10,6 +10,10 @@ from app.models.user import User
 from app.models.ticket import Ticket
 from app.schemas.ticket import TicketCreate, TicketResponse, TicketListResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("tickets")
+
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
 

@@ -23,6 +23,10 @@ from app.schemas.dashboard import (
     TicketStatsResponse
 )
 
+from app.core.logging import get_logger
+
+logger = get_logger("admin_dashboard")
+
 router = APIRouter(prefix="/admin/dashboard", tags=["admin"])
 
 

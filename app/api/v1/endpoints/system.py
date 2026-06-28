@@ -24,6 +24,10 @@ from app.schemas.system import (
     VersionCheckRequest,
 )
 
+from app.core.logging import get_logger
+
+logger = get_logger("system")
+
 router = APIRouter(prefix="/system", tags=["system"])
 
 

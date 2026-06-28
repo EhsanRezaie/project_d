@@ -11,6 +11,10 @@ from app.models.user import User
 from app.models.report import Report
 from app.schemas.report import ReportRequest, ReportResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("reports")
+
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 

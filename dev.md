@@ -987,6 +987,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 30 | **Performance Phase 4.2-4.5 — Eager loading, DB Haversine, BackgroundTasks, Cursor pagination** | ✅ |
 | 31 | **Schema audit + Redoc accuracy — all endpoints now declare response_model** | ✅ |
 | 32 | **WebSocket tests — push shape validation + manager unit tests** | ✅ |
+| 33 | **Structured logging + GlitchTip error tracking** | ✅ |
 
 ---
 
@@ -1468,6 +1469,39 @@ Every endpoint in the app now declares a proper `response_model`, so Redoc shows
 **Tests: 547 passing ✅** (was 538)
 
 ---
+
+### ✅ Session 33 Complete — Structured Logging (structlog + JSON)
+
+| Feature | Status |
+|---------|--------|
+| `app/core/logging.py` rewritten with `structlog` + `JSONRenderer` (ISO timestamps, log level, logger name) | ✅ |
+| File handler (`logs/app.log`) removed — JSON to stdout only | ✅ |
+| `get_logger(name)` interface kept identical — all callers unchanged | ✅ |
+| `GLITCHTIP_DSN=` added to `.env.example` (empty, fill in production) | ✅ |
+| `sentry-sdk[fastapi]` added to `requirements.txt` | ✅ |
+| `glitchtip` service + init added to `docker-compose.yml` (reuses existing Postgres + Redis) | ✅ |
+| `glitchtip-test` service + init added to `docker-compose.test.yml` (port 8081, separate DB) | ✅ |
+| `logger.exception()` added to `app/db/session.py` before rollback + `raise` | ✅ |
+| Logger declarations added to **35 files**: 25 endpoints, 3 services, 6 core, 1 db | ✅ |
+| **42 existing log calls** converted to structured key=value format across 9 files | ✅ |
+| `structlog==26.1.0` added to `requirements.txt` | ✅ |
+| All 547 tests still passing | ✅ |
+
+**Running GlitchTip (dev):**
+```bash
+docker compose up -d glitchtip
+```
+Opens at `http://localhost:8080` — create account → create project → get DSN.
+
+**Running GlitchTip (test):**
+```bash
+docker compose -f docker-compose.test.yml up -d glitchtip-test
+```
+Opens at `http://localhost:8081` — separate database and Redis namespace.
+
+---
+
+**Phase 5 — Flutter App Performance**
 - [ ] `dio_cache_interceptor` + Hive store
 - [ ] Per-endpoint cache policies
 - [ ] `CachedNetworkImage` size limits

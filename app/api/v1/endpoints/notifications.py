@@ -14,6 +14,10 @@ from app.schemas.notification import (
     MarkReadRequest
 )
 
+from app.core.logging import get_logger
+
+logger = get_logger("notifications")
+
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 

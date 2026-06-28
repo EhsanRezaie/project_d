@@ -11,6 +11,9 @@ from app.db.session import get_session
 from app.models.user import User
 from app.core.config import settings
 from app.core.security import decode_token, ACCESS_TOKEN_TYPE
+from app.core.logging import get_logger
+
+logger = get_logger("core.deps")
 
 # HTTP Bearer security
 security = HTTPBearer(auto_error=False)

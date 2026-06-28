@@ -6,6 +6,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from app.core.config import settings
+from app.core.logging import get_logger
+
+logger = get_logger("core.encryption")
 
 
 def derive_chat_key(match_id: str) -> bytes:

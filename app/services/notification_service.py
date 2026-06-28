@@ -2,6 +2,9 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.notification import Notification
 from app.models.user import User
+from app.core.logging import get_logger
+
+logger = get_logger("services.notification_service")
 
 
 class NotificationService:

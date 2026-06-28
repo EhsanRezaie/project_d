@@ -14,6 +14,10 @@ from app.core.limiter import limiter
 from app.schemas.match import MatchResponse, MatchListResponse, MatchDetailResponse, MatchUserResponse, LastMessageResponse
 from app.services.notification_service import NotificationService
 
+from app.core.logging import get_logger
+
+logger = get_logger("matches")
+
 router = APIRouter(prefix="/matches", tags=["matches"])
 
 

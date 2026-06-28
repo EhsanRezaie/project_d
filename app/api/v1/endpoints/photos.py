@@ -18,6 +18,10 @@ from app.schemas.photo import (
     PhotoUpdateCropRequest,
 )
 
+from app.core.logging import get_logger
+
+logger = get_logger("photos")
+
 router = APIRouter(prefix="/users/me/photos", tags=["photos"])
 
 

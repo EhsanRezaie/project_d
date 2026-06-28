@@ -23,6 +23,10 @@ from app.schemas.subscription import (
     CancelSubscriptionResponse
 )
 
+from app.core.logging import get_logger
+
+logger = get_logger("subscriptions")
+
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 

@@ -19,6 +19,10 @@ from app.models.user_settings import UserSettings
 from app.core.redis import redis_client
 from app.core.cache import cache_get, cache_set, key_user_profile, TTL_USER_PROFILE, invalidate_user_cache
 
+from app.core.logging import get_logger
+
+logger = get_logger("users")
+
 router = APIRouter(prefix="/users", tags=["users"])
 
 

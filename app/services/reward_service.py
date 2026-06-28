@@ -239,7 +239,7 @@ class RewardService:
         # ✅ FIX: Use user.profile.premium_until
         profile = user.profile
         if not profile:
-            logger.error(f"User {user.id} has no profile")
+            logger.error("User has no profile", user_id=str(user.id))
             raise ValueError("User profile not found")
         
         # Calculate new expiry

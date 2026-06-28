@@ -6,6 +6,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
+from app.core.logging import get_logger
+
+logger = get_logger("core.security")
 
 # ---------------------------------------------------------------------------
 # Password hashing

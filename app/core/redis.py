@@ -1,4 +1,3 @@
-import logging
 from typing import Optional
 import redis.asyncio as aioredis
 from redis.asyncio.retry import Retry
@@ -6,8 +5,9 @@ from redis.backoff import ExponentialBackoff
 from redis.exceptions import RedisError, TimeoutError as RedisTimeoutError
 
 from app.core.config import settings
+from app.core.logging import get_logger
 
-logger = logging.getLogger("app.core.redis")
+logger = get_logger("core.redis")
 
 # Production Redis client with retries and timeouts
 redis_client: aioredis.Redis = aioredis.from_url(
@@ -32,7 +32,7 @@ async def _safe_redis_operation(operation, fallback=None):
     try:
         return await operation
     except (RedisError, RedisTimeoutError, ConnectionError) as e:
-        logger.error(f"Redis operation failed: {e}")
+        logger.error("Redis operation failed", error=str(e))
         if fallback is not None:
             return fallback
         raise
@@ -50,7 +50,7 @@ async def store_refresh_token(token: str, user_id: str) -> bool:
         await redis_client.set(key, user_id, ex=REFRESH_TOKEN_TTL)
         return True
     except (RedisError, RedisTimeoutError) as e:
-        logger.error(f"Failed to store refresh token: {e}")
+        logger.error("Failed to store refresh token", error=str(e))
         return False
 
 
@@ -63,7 +63,7 @@ async def get_refresh_token_owner(token: str) -> Optional[str]:
     try:
         return await redis_client.get(key)
     except (RedisError, RedisTimeoutError) as e:
-        logger.error(f"Failed to get refresh token owner: {e}")
+        logger.error("Failed to get refresh token owner", error=str(e))
         return None
 
 
@@ -77,7 +77,7 @@ async def revoke_refresh_token(token: str) -> bool:
         await redis_client.delete(key)
         return True
     except (RedisError, RedisTimeoutError) as e:
-        logger.error(f"Failed to revoke refresh token: {e}")
+        logger.error("Failed to revoke refresh token", error=str(e))
         return False
 
 
@@ -97,7 +97,7 @@ async def revoke_all_user_tokens(user_id: str) -> int:
                 revoked_count += 1
         return revoked_count
     except (RedisError, RedisTimeoutError) as e:
-        logger.error(f"Failed to revoke all user tokens: {e}")
+        logger.error("Failed to revoke all user tokens", error=str(e))
         return -1
 
 
@@ -120,7 +120,7 @@ async def store_verification_code(email: str, code: str, ttl: int = VERIFICATION
         await redis_client.set(key, code, ex=ttl)
         return True
     except (RedisError, RedisTimeoutError) as e:
-        logger.error(f"Failed to store verification code: {e}")
+        logger.error("Failed to store verification code", error=str(e))
         return False
 
 
@@ -138,7 +138,7 @@ async def get_verification_code(email: str) -> Optional[str]:
     try:
         return await redis_client.get(key)
     except (RedisError, RedisTimeoutError) as e:
-        logger.error(f"Failed to get verification code: {e}")
+        logger.error("Failed to get verification code", error=str(e))
         return None
 
 
@@ -157,7 +157,7 @@ async def delete_verification_code(email: str) -> bool:
         await redis_client.delete(key)
         return True
     except (RedisError, RedisTimeoutError) as e:
-        logger.error(f"Failed to delete verification code: {e}")
+        logger.error("Failed to delete verification code", error=str(e))
         return False
 
 

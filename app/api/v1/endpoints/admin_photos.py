@@ -20,6 +20,10 @@ from app.schemas.admin import (
     AdminUserPhotoResponse,
 )
 
+from app.core.logging import get_logger
+
+logger = get_logger("admin_photos")
+
 router = APIRouter(prefix="/admin/photos", tags=["admin"])
 
 

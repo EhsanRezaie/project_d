@@ -18,6 +18,10 @@ from app.models.report import Report
 from app.models.subscription import Subscription
 from app.schemas.admin import AdminUserResponse, AdminUserUpdate, AdminPremiumGrant, AdminUserListResponse, AdminMessageRequest, AdminMessageResponse, UserActivityEntry
 
+from app.core.logging import get_logger
+
+logger = get_logger("admin_users")
+
 router = APIRouter(prefix="/admin/users", tags=["admin"])
 
 

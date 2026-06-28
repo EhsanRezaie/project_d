@@ -463,7 +463,7 @@ log.info("swipe_recorded", swiper=str(user_id), swipee=str(swipee_id), type="lik
 log.error("payment_failed", user=str(user_id), plan="monthly", error=str(e))
 ```
 
-**Sentry for error tracking** (free tier: 5,000 errors/month):
+**GlitchTip for error tracking** (self-hosted, free — uses `sentry-sdk` client):
 
 ```python
 # app/main.py
@@ -472,7 +472,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 sentry_sdk.init(
-    dsn=settings.SENTRY_DSN,   # add to .env
+    dsn=settings.GLITCHTIP_DSN,   # add to .env
     integrations=[
         FastApiIntegration(transaction_style="endpoint"),
         SqlalchemyIntegration(),
@@ -488,8 +488,10 @@ pip install sentry-sdk[fastapi]
 
 **Add to `.env`:**
 ```env
-SENTRY_DSN=https://xxx@yyy.ingest.sentry.io/zzz
+GLITCHTIP_DSN=https://public_key@glitchtip:8080/1
 ```
+
+Runs in Docker — see `docker-compose.yml` (`glitchtip` service on port 8080) and `docker-compose.test.yml` (`glitchtip-test` on port 8081).
 
 Without this, when something breaks in production you have no visibility.
 
@@ -720,8 +722,8 @@ Work through these in order. Each is one session.
 ### Session D — Observability
 - [ ] Replace logging with `structlog` JSON output (Section 7)
 - [ ] Add Sentry SDK to `main.py` (Section 7)
-- [ ] Add `SENTRY_DSN` to `.env` (Section 7)
-- [ ] Verify errors appear in Sentry dashboard
+- [ ] Add `GLITCHTIP_DSN` to `.env` (Section 7)
+- [ ] Verify errors appear in GlitchTip dashboard
 
 ### Session E — FCM Push Notifications (was Session 15)
 - [ ] Create `DeviceToken` model + migration (Section 9)

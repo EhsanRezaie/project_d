@@ -51,17 +51,17 @@ async def websocket_chat(
             elif msg_type == "typing":
                 # Broadcast typing indicator to other user
                 # For now, just log - we need to know other user ID
-                logger.debug(f"User {user_id_str} typing in chat {match_id}")
+                logger.debug("User typing in chat", user_id=user_id_str, match_id=match_id)
 
             elif msg_type == "delivery_ack":
-                logger.debug(f"Delivery ack for messages: {message.get('message_ids')}")
+                logger.debug("Delivery ack for messages", message_ids=message.get("message_ids"))
 
             elif msg_type == "read_ack":
-                logger.debug(f"Read ack for messages: {message.get('message_ids')}")
+                logger.debug("Read ack for messages", message_ids=message.get("message_ids"))
 
     except WebSocketDisconnect:
         await websocket_manager.remove_chat_connection(match_id, user_id_str, websocket)
-        logger.info(f"Chat WebSocket disconnected for user {user_id_str}, match {match_id}")
+        logger.info("Chat WebSocket disconnected", user_id=user_id_str, match_id=match_id)
     except Exception as e:
-        logger.error(f"Chat WebSocket error: {e}")
+        logger.error("Chat WebSocket error", error=str(e))
         await websocket_manager.remove_chat_connection(match_id, user_id_str, websocket)

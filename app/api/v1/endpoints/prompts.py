@@ -8,6 +8,10 @@ from app.schemas.prompt import PromptResponse
 from app.core.redis import redis_client
 from app.core.cache import cache_get, cache_set, key_prompts, TTL_PROMPTS
 
+from app.core.logging import get_logger
+
+logger = get_logger("prompts")
+
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
 

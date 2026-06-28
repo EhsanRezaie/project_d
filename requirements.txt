@@ -74,7 +74,9 @@ redis==8.0.0
 requests==2.34.2
 rsa==4.9.1
 s3transfer==0.14.0
+sentry-sdk[fastapi]==2.63.0
 six==1.17.0
+structlog==26.1.0
 slowapi==0.1.9
 SQLAlchemy==2.0.50
 starlette==1.2.1

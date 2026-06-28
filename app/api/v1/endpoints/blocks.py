@@ -11,6 +11,10 @@ from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
 from app.schemas.search import BlockResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("blocks")
+
 router = APIRouter(prefix="/blocks", tags=["blocks"])
 
 

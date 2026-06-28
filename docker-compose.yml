@@ -12,12 +12,22 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dating_user -d dating_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: dating_redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio:latest
@@ -60,6 +70,35 @@ services:
       mc anonymous set download local/photos-public &&
       echo 'MinIO buckets ready: photos-public (public-read), photos-private (private)'
       "
+
+  glitchtip-db-init:
+    image: postgis/postgis:15-3.3
+    container_name: dating_glitchtip_db_init
+    entrypoint: >
+      /bin/sh -c "
+      psql postgresql://dating_user:dating_pass@db:5432/postgres -c
+      \"CREATE DATABASE glitchtip OWNER dating_user;\" 2>/dev/null; exit 0
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    container_name: dating_glitchtip
+    ports:
+      - "8080:80"
+    environment:
+      DATABASE_URL: postgres://dating_user:dating_pass@db:5432/glitchtip
+      REDIS_URL: redis://redis:6379/1
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-change-me-to-a-random-string}
+      PORT: 80
+    depends_on:
+      glitchtip-db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:

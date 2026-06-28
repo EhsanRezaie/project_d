@@ -46,6 +46,10 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserProfileResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("auth")
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 

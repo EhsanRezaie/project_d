@@ -97,16 +97,16 @@ async def list_cities(
     cities = []
     
     if state_code:
-        logger.info(f"Getting cities for {country} with state_code: {state_code}")
+        logger.info("Getting cities by state_code", country=country, state_code=state_code)
         cities = LocationService.get_cities(country, state_code)
     elif state_name:
-        logger.info(f"Getting cities for {country} with state_name: {state_name}")
+        logger.info("Getting cities by state_name", country=country, state_name=state_name)
         cities = LocationService.get_cities_by_state_name(country, state_name)
     else:
-        logger.info(f"Getting all cities for {country}")
+        logger.info("Getting all cities", country=country)
         cities = LocationService.get_cities(country)
     
-    logger.info(f"Returning {len(cities)} cities for {country}")
+    logger.info("Returning cities", country=country, count=len(cities))
     
     # If no cities, return empty list
     if not cities:
