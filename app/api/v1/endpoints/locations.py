@@ -1,5 +1,5 @@
 # app/api/v1/endpoints/locations.py
-from fastapi import APIRouter, HTTPException, Query, Request, Depends
+from fastapi import APIRouter, HTTPException, Query, Request, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
