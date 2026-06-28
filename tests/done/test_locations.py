@@ -318,6 +318,39 @@ class TestLocationGPS:
             assert data["lng"] == 51.3890
             assert data["location_manual"] is False
 
+    async def test_update_location_gps_response_shape(
+        self, 
+        client: AsyncClient, 
+        mock_verification_code
+    ):
+        """LocationUpdateResponse should contain all 6 fields."""
+        from tests.done.test_auth import register_user_full
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        with patch("app.services.location_service._nominatim_reverse") as mock_reverse:
+            mock_reverse.return_value = {
+                "country": "Iran",
+                "country_iso2": "IR",
+                "province": "Tehran",
+                "city": "Tehran",
+            }
+
+            res = await client.patch(
+                LOCATION_GPS_URL,
+                params={"lat": 35.6892, "lng": 51.3890},
+                headers=headers
+            )
+            assert res.status_code == 200
+            data = res.json()
+
+            assert isinstance(data["lat"], float)
+            assert isinstance(data["lng"], float)
+            assert isinstance(data["country"], str)
+            assert isinstance(data["province"], str)
+            assert isinstance(data["city"], str)
+            assert data["location_manual"] is False
+
     async def test_update_location_gps_invalid_lat(
         self, 
         client: AsyncClient, 
@@ -398,6 +431,36 @@ class TestLocationManual:
         
         # Should have estimated lat/lng from city centroid
         assert data["lat"] is not None or data["lat"] is None
+
+    async def test_update_location_manual_response_shape(
+        self, 
+        client: AsyncClient, 
+        mock_verification_code
+    ):
+        """LocationUpdateResponse should contain all 6 fields for manual."""
+        from tests.done.test_auth import register_user_full
+        result = await register_user_full(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {result['access_token']}"}
+
+        res = await client.patch(
+            LOCATION_MANUAL_URL,
+            params={
+                "country": "Iran",
+                "province": "Isfahan",
+                "city": "Isfahan",
+                "country_iso2": "IR",
+            },
+            headers=headers
+        )
+        assert res.status_code == 200
+        data = res.json()
+
+        assert isinstance(data["lat"], (float, type(None)))
+        assert isinstance(data["lng"], (float, type(None)))
+        assert isinstance(data["country"], str)
+        assert isinstance(data["province"], str)
+        assert isinstance(data["city"], str)
+        assert data["location_manual"] is True
 
     async def test_update_location_manual_with_centroid(
         self, 

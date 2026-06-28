@@ -194,7 +194,7 @@ iranian-dating-app/
 │   ├── tests/
 │   │   ├── __init__.py
 │   │   ├── conftest.py                    # ✅ Auto-seeds interests, reset_state fixture
-│   │   └── done/                          # 29 files, 511 tests, all ✅
+│   │   └── done/                          # 30 files, 547 tests, all ✅
 │   │       ├── test_admin_dashboard.py
 │   │       ├── test_admin_messages.py
 │   │       ├── test_admin_photos.py
@@ -223,7 +223,8 @@ iranian-dating-app/
 │   │       ├── test_swipes.py
 │   │       ├── test_system.py
 │   │       ├── test_tickets.py
-│   │       └── test_users.py
+│   │       ├── test_users.py
+│   │       └── test_websocket.py
 │   │
 │   ├── uploads/
 │   ├── .env
@@ -985,6 +986,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 29 | **Performance Phase 4.1 — get_current_user_id lightweight dependency** | ✅ |
 | 30 | **Performance Phase 4.2-4.5 — Eager loading, DB Haversine, BackgroundTasks, Cursor pagination** | ✅ |
 | 31 | **Schema audit + Redoc accuracy — all endpoints now declare response_model** | ✅ |
+| 32 | **WebSocket tests — push shape validation + manager unit tests** | ✅ |
 
 ---
 
@@ -1047,13 +1049,14 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 
 | Session | Test Files | Tests | Status |
 |---------|------------|-------|--------|
-| All | 29 test files in `tests/done/` | **511** | **✅ All passing** |
+| All | 30 test files in `tests/done/` | **547** | **✅ All passing** |
 | 25 | test_auth, test_users, test_photos, test_prompts, test_settings, test_encryption | 101 | ✅ |
 | 25 | test_swipes, test_matches, test_blocks, test_discover, test_search | 110 | ✅ |
 | 25 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 79 | ✅ |
 | 25 | test_notifications, test_reports, test_tickets | 95 | ✅ |
 | 25 | test_admin_dashboard, test_admin_messages, test_admin_photos | 56 | ✅ |
 | 25 | test_admin_reports, test_admin_tickets, test_admin_users | 70 | ✅ |
+| 32 | test_websocket | 9 | ✅ |
 
 ### Run All Tests
 
@@ -1441,7 +1444,30 @@ Every endpoint in the app now declares a proper `response_model`, so Redoc shows
 
 ---
 
-**Phase 5 — Flutter App Performance**
+### ✅ Session 32 Complete — WebSocket Tests (Push Shape Validation + Manager Unit Tests)
+
+**9 new tests in `tests/done/test_websocket.py`:**
+
+| Test | What it validates |
+|------|-------------------|
+| `test_new_match_push_shape` | `broadcast_match` receives `{id, name, age, main_photo_url}` for both users |
+| `test_text_message_push_shape` | `send_to_match` receives `{"type":"new_message","data":{id,message_type,content,sender_id,sent_at}}` |
+| `test_photo_message_push_shape` | Same with `media_url`, `caption` — no `duration` |
+| `test_voice_message_push_shape` | Same with `media_url`, `duration` — no `caption`/`content` |
+| `test_broadcast_match_envelope` | Direct `WebSocketManager` unit test — JSON envelope structure (`type` + `data` nesting) |
+| `test_send_to_match_envelope` | Same for `send_to_match` |
+| `test_send_personal_message_envelope` | Same for `send_personal_message` |
+| `test_disconnect_cleans_up` | Manager removes connection on disconnect |
+| `test_send_personal_message_no_connection` | Manager doesn't raise on missing connection |
+
+**Bug fix:**
+| File | Change |
+|------|--------|
+| `chat_service.py:385-390` | `datetime.utcnow()` → `datetime.now(timezone.utc)` — fixed "can't compare offset-naive and offset-aware datetimes" crash in `delete_for="everyone"` branch |
+
+**Tests: 547 passing ✅** (was 538)
+
+---
 - [ ] `dio_cache_interceptor` + Hive store
 - [ ] Per-endpoint cache policies
 - [ ] `CachedNetworkImage` size limits

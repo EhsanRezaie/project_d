@@ -319,3 +319,21 @@ class TestSwipeStats:
         assert "total_matches" in data
         assert "ads_watched_today" in data
         assert "max_ads_per_day" in data
+
+    async def test_stats_types_are_correct(self, client, mock_verification_code):
+        """All SwipeStatsResponse fields should have correct types."""
+        male = await register_male(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {male['access_token']}"}
+
+        res = await client.get(f"{SWIPE_URL}/stats", headers=headers)
+        assert res.status_code == 200
+        data = res.json()
+
+        assert isinstance(data["daily_likes_remaining"], int)
+        assert isinstance(data["is_unlimited"], bool)
+        assert isinstance(data["total_likes_sent"], int)
+        assert isinstance(data["total_passes_sent"], int)
+        assert isinstance(data["total_matches"], int)
+        assert isinstance(data["ads_watched_today"], int)
+        assert isinstance(data["max_ads_per_day"], int)
+        assert data["is_unlimited"] is True  # welcome bonus

@@ -927,3 +927,528 @@ class TestMediaInChatHistory:
         assert voice_msg is not None
         assert voice_msg["media_url"] is not None
         assert voice_msg["media_duration"] == 15
+
+
+# =============================================================================
+# POST /api/v1/messages/delivered
+# =============================================================================
+
+class TestMessageDelivery:
+    """Test marking messages as delivered."""
+
+    async def _setup_match_and_send_message(
+        self, client, mock_verification_code, db_session
+    ):
+        """Helper: create match and send one text message. Returns (male_headers, female_headers, match_id, msg_id)."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "delivery_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "delivery_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Hello"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+        return male_headers, female_headers, match_id, msg_id, male_id
+
+    async def test_mark_delivered_success(self, client, mock_verification_code, db_session):
+        """Should mark message as delivered."""
+        male_headers, female_headers, match_id, msg_id, male_id = await self._setup_match_and_send_message(
+            client, mock_verification_code, db_session
+        )
+
+        res = await client.post(
+            f"{MESSAGES_URL}/delivered",
+            json={"message_ids": [msg_id]},
+            headers=female_headers,
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert "message" in body
+        assert "1 messages marked as delivered" in body["message"]
+
+        # Verify status
+        status_res = await client.get(f"{MESSAGES_URL}/{msg_id}/status", headers=male_headers)
+        assert status_res.status_code == 200
+        assert status_res.json()["is_delivered"] is True
+
+    async def test_mark_delivered_empty_list(self, client, mock_verification_code, db_session):
+        """Should handle empty message_ids list."""
+        male_headers, female_headers, match_id, msg_id, male_id = await self._setup_match_and_send_message(
+            client, mock_verification_code, db_session
+        )
+
+        res = await client.post(
+            f"{MESSAGES_URL}/delivered",
+            json={"message_ids": []},
+            headers=female_headers,
+        )
+        assert res.status_code == 200
+        assert "0 messages marked as delivered" in res.json()["message"]
+
+    async def test_mark_delivered_requires_auth(self, client):
+        """Should return 401 without token."""
+        res = await client.post(
+            f"{MESSAGES_URL}/delivered",
+            json={"message_ids": []},
+        )
+        assert res.status_code == 401
+
+
+# =============================================================================
+# POST /api/v1/messages/{message_id}/status
+# =============================================================================
+
+class TestMessageStatus:
+    """Test GET /messages/{message_id}/status."""
+
+    async def test_message_status_shape(self, client, mock_verification_code, db_session):
+        """MessageStatusResponse should contain all schema fields."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "status_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "status_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Status test"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+
+        res = await client.get(f"{MESSAGES_URL}/{msg_id}/status", headers=male_headers)
+        assert res.status_code == 200
+        body = res.json()
+
+        assert isinstance(body["id"], str)
+        assert isinstance(body["sent_at"], str)
+        assert body["delivered_at"] is None
+        assert body["read_at"] is None
+        assert body["is_delivered"] is False
+        assert body["is_read"] is False
+
+    async def test_message_status_unauthorized(self, client, mock_verification_code, db_session):
+        """Other user should not see message status."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "status2_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "status2_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Status auth test"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+
+        # Female tries to see male's sent message status
+        res = await client.get(f"{MESSAGES_URL}/{msg_id}/status", headers=female_headers)
+        assert res.status_code == 403
+
+    async def test_message_status_requires_auth(self, client, mock_verification_code, db_session):
+        """Should return 401 without token."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "status3_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "status3_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Status auth test"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+
+        res = await client.get(f"{MESSAGES_URL}/{msg_id}/status")
+        assert res.status_code == 401
+
+
+# =============================================================================
+# DELETE /api/v1/messages/{message_id} — delete for everyone
+# =============================================================================
+
+class TestMessageDeleteForEveryone:
+    """Test message deletion for everyone."""
+
+    async def test_delete_message_for_everyone(self, client, mock_verification_code, db_session):
+        """Should delete message for both users."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "delevery_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "delevery_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Delete for everyone"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+
+        # Delete for everyone
+        res = await client.delete(
+            f"{MESSAGES_URL}/{msg_id}?delete_for=everyone",
+            headers=male_headers,
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert "message" in body
+        assert "deleted" in body["message"]
+
+        # Verify message is gone for both users
+        history = await client.get(f"{MESSAGES_URL}/{match_id}", headers=male_headers)
+        assert history.status_code == 200
+        msgs = history.json()["messages"]
+        assert not any(m["id"] == msg_id for m in msgs)
+
+        history2 = await client.get(f"{MESSAGES_URL}/{match_id}", headers=female_headers)
+        assert history2.status_code == 200
+        msgs2 = history2.json()["messages"]
+        assert not any(m["id"] == msg_id for m in msgs2)
+
+    async def test_delete_message_for_everyone_non_sender(self, client, mock_verification_code, db_session):
+        """Only sender can delete for everyone."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "delother_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "delother_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Delete test"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+
+        # Female tries to delete male's message for everyone
+        res = await client.delete(
+            f"{MESSAGES_URL}/{msg_id}?delete_for=everyone",
+            headers=female_headers,
+        )
+        assert res.status_code == 400
+
+
+# =============================================================================
+# POST /api/v1/messages/{message_id}/forward
+# =============================================================================
+
+class TestForwardMessage:
+    """Test message forwarding."""
+
+    async def test_forward_message_success(self, client, mock_verification_code, db_session):
+        """Should forward message to another match."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "fwd_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "fwd_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        # Create first match
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match1_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match1_id = match1_res.json()["match_id"]
+
+        # Send message in match1
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match1_id}/text",
+            json={"content": "Forward this message"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+
+        # Female likes female2... wait, we need a second match to forward TO
+        # Register a third user for the target match
+        VALID_EMAIL_FEMALE2 = "fwd_female2@example.com"
+        COMPLETE_PROFILE_PAYLOAD_FEMALE2 = {
+            "name": "Fwd Female2",
+            "birth_date": "2000-01-01",
+            "gender": "female",
+            "lat": 35.6892,
+            "lng": 51.3890,
+        }
+        female2_headers, female2_id = await register_and_get_headers(
+            client, VALID_EMAIL_FEMALE2, COMPLETE_PROFILE_PAYLOAD_FEMALE2, mock_verification_code
+        )
+
+        result2 = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female2_id]))
+        )
+        users2 = result2.scalars().all()
+
+        # Create second match (male ↔ female2)
+        await client.post(SWIPE_URL, json={"user_id": female2_id, "direction": "like"}, headers=male_headers)
+        match2_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female2_headers)
+        match2_id = match2_res.json()["match_id"]
+
+        # Forward message from match1 to match2
+        res = await client.post(
+            f"{MESSAGES_URL}/{msg_id}/forward",
+            json={"target_match_id": match2_id},
+            headers=male_headers,
+        )
+        assert res.status_code == 200
+        body = res.json()
+
+        assert "message" in body
+        assert body["message"] == "Message forwarded"
+        assert "new_message_id" in body
+        assert isinstance(body["new_message_id"], str)
+
+        # Verify forwarded message appears in match2 history
+        history = await client.get(f"{MESSAGES_URL}/{match2_id}", headers=male_headers)
+        assert history.status_code == 200
+        msgs = history.json()["messages"]
+        assert any(m["id"] == body["new_message_id"] for m in msgs)
+
+    async def test_forward_to_nonexistent_match(self, client, mock_verification_code, db_session):
+        """Should return 400 when forwarding to non-existent match."""
+        from uuid import uuid4
+        male_headers, male_id = await register_and_get_headers(
+            client, "fwderr_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "fwderr_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Forward error test"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+
+        res = await client.post(
+            f"{MESSAGES_URL}/{msg_id}/forward",
+            json={"target_match_id": str(uuid4())},
+            headers=male_headers,
+        )
+        assert res.status_code == 400
+
+    async def test_forward_requires_auth(self, client, mock_verification_code, db_session):
+        """Should return 401 without token."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "fwdauth_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "fwdauth_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        msg_res = await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Fwd auth test"},
+            headers=male_headers,
+        )
+        msg_id = msg_res.json()["id"]
+
+        res = await client.post(
+            f"{MESSAGES_URL}/{msg_id}/forward",
+            json={"target_match_id": match_id},
+        )
+        assert res.status_code == 401
+
+
+# =============================================================================
+# Cursor pagination (before param)
+# =============================================================================
+
+class TestCursorPagination:
+    """Test cursor-based pagination with before parameter."""
+
+    async def test_cursor_pagination_returns_older_messages(self, client, mock_verification_code, db_session):
+        """before param should return messages older than the cursor timestamp."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "cursor_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "cursor_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        # Send several messages
+        msg_ids = []
+        for i in range(5):
+            res = await client.post(
+                f"{MESSAGES_URL}/{match_id}/text",
+                json={"content": f"Message {i}"},
+                headers=male_headers,
+            )
+            msg_ids.append(res.json()["id"])
+
+        # Get full history
+        full = await client.get(f"{MESSAGES_URL}/{match_id}?limit=5", headers=male_headers)
+        assert full.status_code == 200
+        full_msgs = full.json()["messages"]
+        assert len(full_msgs) == 5
+
+        # Get the second-to-last message's sent_at as cursor
+        cursor = full_msgs[-2]["sent_at"]
+
+        # Use cursor as before parameter
+        cursor_res = await client.get(
+            f"{MESSAGES_URL}/{match_id}?before={cursor}&limit=3",
+            headers=male_headers,
+        )
+        assert cursor_res.status_code == 200
+        cursor_data = cursor_res.json()
+        assert len(cursor_data["messages"]) >= 1
+
+        # All returned messages should be older than cursor
+        for msg in cursor_data["messages"]:
+            assert msg["sent_at"] < cursor
+
+    async def test_cursor_pagination_with_no_older_messages(self, client, mock_verification_code, db_session):
+        """before parameter with a very old timestamp should return empty."""
+        male_headers, male_id = await register_and_get_headers(
+            client, "cursor2_male@example.com", COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        female_headers, female_id = await register_and_get_headers(
+            client, "cursor2_female@example.com", COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        result = await db_session.execute(
+            select(User)
+            .options(selectinload(User.profile))
+            .where(User.id.in_([male_id, female_id]))
+        )
+        users = result.scalars().all()
+
+        await client.post(SWIPE_URL, json={"user_id": female_id, "direction": "like"}, headers=male_headers)
+        match_res = await client.post(SWIPE_URL, json={"user_id": male_id, "direction": "like"}, headers=female_headers)
+        match_id = match_res.json()["match_id"]
+
+        await client.post(
+            f"{MESSAGES_URL}/{match_id}/text",
+            json={"content": "Only message"},
+            headers=male_headers,
+        )
+
+        # Use year 2000 as cursor — no messages that old
+        res = await client.get(
+            f"{MESSAGES_URL}/{match_id}?before=2000-01-01T00:00:00Z&limit=10",
+            headers=male_headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert len(data["messages"]) == 0
+        assert data["total"] == 0

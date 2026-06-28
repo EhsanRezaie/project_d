@@ -117,3 +117,45 @@ class TestRewards:
         ]
         for field in expected_fields:
             assert field in body
+
+    async def test_limits_response_shape_premium(self, client: AsyncClient, mock_verification_code):
+        """DailyLimitsResponse should show premium state with unlimited (-1)."""
+        data = await register_user(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {data['access_token']}"}
+
+        res = await client.get(REWARDS_LIMITS_URL, headers=headers)
+        assert res.status_code == 200
+        body = res.json()
+
+        assert body["is_premium"] is True
+        assert isinstance(body["premium_expires_at"], str)
+        assert isinstance(body["likes_used_today"], int)
+        assert body["likes_remaining_today"] == -1
+        assert isinstance(body["chats_used_today"], int)
+        assert body["chats_remaining_today"] == -1
+        assert isinstance(body["ads_watched_today"], int)
+        assert isinstance(body["max_ads_per_day"], int)
+        assert body["daily_likes_limit"] == -1
+        assert body["daily_chats_limit"] == -1
+        assert isinstance(body["ad_reward_likes_bonus"], int)
+        assert isinstance(body["ad_reward_chats_bonus"], int)
+
+    async def test_ad_reward_response_shape(self, client: AsyncClient, mock_verification_code):
+        """AdRewardResponse should contain all schema fields."""
+        data = await register_user(client, mock_verification_code)
+        headers = {"Authorization": f"Bearer {data['access_token']}"}
+
+        res = await client.post(REWARDS_AD_URL, headers=headers)
+        assert res.status_code == 200
+        body = res.json()
+
+        assert body["success"] is True
+        assert isinstance(body["likes_added"], int)
+        assert body["likes_added"] == 5
+        assert isinstance(body["chats_added"], int)
+        assert body["chats_added"] == 3
+        assert isinstance(body["ads_watched_today"], int)
+        assert body["ads_watched_today"] == 1
+        assert isinstance(body["max_ads_per_day"], int)
+        assert body["max_ads_per_day"] == 2
+        assert isinstance(body["message"], str)

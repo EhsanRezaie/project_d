@@ -175,3 +175,55 @@ class TestReferrals:
 
         res3 = await client.get(REFERRAL_STATS_URL)
         assert res3.status_code == 401
+
+    async def test_claim_referral_response_shape(self, client: AsyncClient, mock_verification_code):
+        """ClaimReferralResponse should match schema."""
+        inviter = await register_user(client, mock_verification_code=mock_verification_code)
+        inviter_headers = {"Authorization": f"Bearer {inviter['access_token']}"}
+        code_res = await client.get(REFERRAL_CODE_URL, headers=inviter_headers)
+        code = code_res.json()["referral_code"]
+
+        invited = await register_user(client, "claim_shape@example.com", mock_verification_code)
+        invited_headers = {"Authorization": f"Bearer {invited['access_token']}"}
+
+        res = await client.post(REFERRAL_CLAIM_URL, json={"referral_code": code}, headers=invited_headers)
+        assert res.status_code == 200
+        body = res.json()
+
+        assert body["success"] is True
+        assert isinstance(body["message"], str)
+        assert "free premium days" in body["message"]
+        assert isinstance(body["your_referral_code"], str)
+        assert len(body["your_referral_code"]) == 8
+
+    async def test_referral_code_response_shape(self, client: AsyncClient, mock_verification_code):
+        """ReferralCodeResponse should match schema."""
+        data = await register_user(client, mock_verification_code=mock_verification_code)
+        headers = {"Authorization": f"Bearer {data['access_token']}"}
+
+        res = await client.get(REFERRAL_CODE_URL, headers=headers)
+        assert res.status_code == 200
+        body = res.json()
+
+        assert isinstance(body["referral_code"], str)
+        assert len(body["referral_code"]) == 8
+        assert isinstance(body["share_text"], str)
+        assert body["referral_code"] in body["share_text"]
+
+    async def test_referral_stats_response_shape(self, client: AsyncClient, mock_verification_code):
+        """ReferralStatsResponse should match schema."""
+        data = await register_user(client, mock_verification_code=mock_verification_code)
+        headers = {"Authorization": f"Bearer {data['access_token']}"}
+
+        res = await client.get(REFERRAL_STATS_URL, headers=headers)
+        assert res.status_code == 200
+        body = res.json()
+
+        assert isinstance(body["referral_code"], str)
+        assert len(body["referral_code"]) == 8
+        assert isinstance(body["successful_referrals"], int)
+        assert isinstance(body["total_premium_days_earned"], int)
+        assert isinstance(body["inviter_reward_days"], int)
+        assert isinstance(body["invited_reward_days"], int)
+        assert isinstance(body["is_premium"], bool)
+        assert body["premium_until"] is not None  # welcome bonus
