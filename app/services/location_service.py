@@ -53,9 +53,10 @@ def _state_to_dict(state) -> dict:
         "code": state.state_code,
         "iso_code": f"{state.country_code}-{state.state_code}",
         "name": state.name,
-        "latitude": state.latitude,
-        "longitude": state.longitude,
+        "latitude": float(state.latitude) if state.latitude is not None else None,
+        "longitude": float(state.longitude) if state.longitude is not None else None,
         "country_code": state.country_code,
+        "type": getattr(state, "type", None),
     }
 
 
@@ -65,8 +66,8 @@ def _city_to_dict(city) -> dict:
         "name": city.name,
         "state_code": city.state_code,
         "country_code": city.country_code,
-        "latitude": city.latitude,
-        "longitude": city.longitude,
+        "latitude": float(city.latitude) if city.latitude is not None else None,
+        "longitude": float(city.longitude) if city.longitude is not None else None,
         "population": getattr(city, "population", None),
         "timezone": getattr(city, "timezone", None),
     }

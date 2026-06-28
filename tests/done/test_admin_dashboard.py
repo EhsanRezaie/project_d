@@ -1,33 +1,57 @@
 import pytest
 from httpx import AsyncClient
-from tests.done.test_auth import register_user
 from app.core.config import settings
 
 ADMIN_DASHBOARD_URL = "/api/v1/admin/dashboard"
 ADMIN_KEY = settings.ADMIN_SECRET_KEY
 
+REGISTER_INIT_URL = "/api/v1/auth/register/init"
+REGISTER_VERIFY_URL = "/api/v1/auth/register/verify"
+REGISTER_COMPLETE_URL = "/api/v1/auth/register/complete"
+VALID_CODE = "123456"
+VALID_PASSWORD = "strongpass123"
+
+COMPLETE_PROFILE = {
+    "name": "Test User",
+    "birth_date": "1995-06-15",
+    "gender": "male",
+    "lat": 35.6892,
+    "lng": 51.3890,
+}
+
+
+async def register_user(client: AsyncClient, email: str, mock_verification_code) -> dict:
+    res = await client.post(REGISTER_INIT_URL, json={"email": email})
+    assert res.status_code == 200, res.text
+
+    await mock_verification_code(email, VALID_CODE)
+
+    res = await client.post(REGISTER_VERIFY_URL, json={
+        "email": email, "code": VALID_CODE, "password": VALID_PASSWORD,
+    })
+    assert res.status_code == 200, res.text
+    data = res.json()
+
+    headers = {"Authorization": f"Bearer {data['access_token']}"}
+    res = await client.post(REGISTER_COMPLETE_URL, json=COMPLETE_PROFILE, headers=headers)
+    assert res.status_code == 200, res.text
+
+    return res.json()
+
 
 class TestAdminDashboard:
     """Test admin dashboard statistics"""
 
-    async def test_dashboard_overview_success(self, client: AsyncClient):
+    async def test_dashboard_overview_success(self, client: AsyncClient, mock_verification_code):
         """Admin should get dashboard overview stats"""
-        # Create users with unique emails
         for i in range(3):
-            payload = {
-                "email": f"dashboard_{i}@example.com",
-                "password": "strongpass123",
-                "name": f"Dashboard User {i}",
-                "age": 25,
-                "gender": "male"
-            }
-            await client.post("/api/v1/auth/register", json=payload)
-        
+            await register_user(client, f"dashboard_{i}@example.com", mock_verification_code)
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.get(ADMIN_DASHBOARD_URL, headers=admin_headers)
         assert res.status_code == 200
         body = res.json()
-        
+
         assert "total_users" in body
         assert "active_today" in body
         assert "new_users_today" in body
@@ -40,7 +64,7 @@ class TestAdminDashboard:
         assert "pending_photos" in body
         assert "pending_reports" in body
         assert "open_tickets" in body
-        
+
         assert body["total_users"] >= 3
 
     async def test_user_growth_stats(self, client: AsyncClient):
@@ -53,7 +77,7 @@ class TestAdminDashboard:
         )
         assert res.status_code == 200
         body = res.json()
-        
+
         assert "labels" in body
         assert "new_users" in body
         assert "active_users" in body
@@ -71,7 +95,7 @@ class TestAdminDashboard:
         )
         assert res.status_code == 200
         body = res.json()
-        
+
         assert "labels" in body
         assert "swipes" in body
         assert "matches" in body
@@ -87,7 +111,7 @@ class TestAdminDashboard:
         )
         assert res.status_code == 200
         body = res.json()
-        
+
         assert "pending" in body
         assert "reviewed" in body
         assert "action_taken" in body
@@ -101,7 +125,7 @@ class TestAdminDashboard:
         )
         assert res.status_code == 200
         body = res.json()
-        
+
         assert "open" in body
         assert "in_progress" in body
         assert "closed" in body

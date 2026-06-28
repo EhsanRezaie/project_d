@@ -6,7 +6,9 @@ from datetime import datetime, timedelta, date ,timezone
 from app.db.session import get_session
 from app.core.deps import get_admin_user
 from app.core.limiter import limiter
+from sqlalchemy.orm import selectinload
 from app.models.user import User
+from app.models.user_profile import UserProfile
 from app.models.swipe import Swipe
 from app.models.match import Match
 from app.models.message import Message
@@ -62,7 +64,7 @@ async def admin_dashboard_overview(
     
     # Premium users
     premium_users_result = await session.execute(
-        select(func.count()).where(User.premium_until > now)
+        select(func.count()).select_from(User).join(User.profile).where(UserProfile.premium_until > now)
     )
     premium_users = premium_users_result.scalar() or 0
     

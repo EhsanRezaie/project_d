@@ -7,6 +7,7 @@ from datetime import datetime
 from app.db.session import get_session
 from app.core.deps import get_admin_user
 from app.core.limiter import limiter
+from sqlalchemy.orm import selectinload
 from app.models.user import User
 from app.models.report import Report
 from app.schemas.admin import AdminReportResponse, AdminReportUpdate
@@ -38,21 +39,21 @@ async def admin_list_reports(
     response_reports = []
     for report in reports:
         reporter_result = await session.execute(
-            select(User).where(User.id == report.reporter_id)
+            select(User).options(selectinload(User.profile)).where(User.id == report.reporter_id)
         )
         reporter = reporter_result.scalar_one_or_none()
         
         reported_result = await session.execute(
-            select(User).where(User.id == report.reported_id)
+            select(User).options(selectinload(User.profile)).where(User.id == report.reported_id)
         )
         reported = reported_result.scalar_one_or_none()
         
         response_reports.append(AdminReportResponse(
             id=report.id,
             reporter_id=report.reporter_id,
-            reporter_name=reporter.name if reporter else "Deleted User",
+            reporter_name=reporter.profile.name if reporter else "Deleted User",
             reported_id=report.reported_id,
-            reported_name=reported.name if reported else "Deleted User",
+            reported_name=reported.profile.name if reported else "Deleted User",
             reason=report.reason,
             status=report.status,
             admin_note=report.admin_note,
@@ -82,21 +83,21 @@ async def admin_get_report(
         raise HTTPException(status_code=404, detail="Report not found")
     
     reporter_result = await session.execute(
-        select(User).where(User.id == report.reporter_id)
+        select(User).options(selectinload(User.profile)).where(User.id == report.reporter_id)
     )
     reporter = reporter_result.scalar_one_or_none()
     
     reported_result = await session.execute(
-        select(User).where(User.id == report.reported_id)
+        select(User).options(selectinload(User.profile)).where(User.id == report.reported_id)
     )
     reported = reported_result.scalar_one_or_none()
     
     return AdminReportResponse(
         id=report.id,
         reporter_id=report.reporter_id,
-        reporter_name=reporter.name if reporter else "Deleted User",
+        reporter_name=reporter.profile.name if reporter else "Deleted User",
         reported_id=report.reported_id,
-        reported_name=reported.name if reported else "Deleted User",
+        reported_name=reported.profile.name if reported else "Deleted User",
         reason=report.reason,
         status=report.status,
         admin_note=report.admin_note,
@@ -134,21 +135,21 @@ async def admin_update_report(
     await session.commit()
     
     reporter_result = await session.execute(
-        select(User).where(User.id == report.reporter_id)
+        select(User).options(selectinload(User.profile)).where(User.id == report.reporter_id)
     )
     reporter = reporter_result.scalar_one_or_none()
     
     reported_result = await session.execute(
-        select(User).where(User.id == report.reported_id)
+        select(User).options(selectinload(User.profile)).where(User.id == report.reported_id)
     )
     reported = reported_result.scalar_one_or_none()
     
     return AdminReportResponse(
         id=report.id,
         reporter_id=report.reporter_id,
-        reporter_name=reporter.name if reporter else "Deleted User",
+        reporter_name=reporter.profile.name if reporter else "Deleted User",
         reported_id=report.reported_id,
-        reported_name=reported.name if reported else "Deleted User",
+        reported_name=reported.profile.name if reported else "Deleted User",
         reason=report.reason,
         status=report.status,
         admin_note=report.admin_note,

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
+from sqlalchemy.orm import selectinload
 from app.db.session import get_session
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
@@ -66,7 +67,7 @@ async def claim_referral(
     
     # Find inviter by referral code
     result = await session.execute(
-        select(User).where(User.referral_code == referral_code)
+        select(User).options(selectinload(User.profile)).where(User.referral_code == referral_code)
     )
     inviter = result.scalar_one_or_none()
     
@@ -132,7 +133,7 @@ async def get_referral_stats(
     total_days_earned = result.scalar() or 0
     
     # Get premium status
-    premium_until = current_user.premium_until.isoformat() if current_user.premium_until else None
+    premium_until = current_user.profile.premium_until.isoformat() if current_user.profile.premium_until else None
     
     # Generate code if missing
     if not current_user.referral_code:

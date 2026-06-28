@@ -8,6 +8,7 @@ from app.db.session import get_session
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.core.config import settings
+from sqlalchemy.orm import selectinload
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.schemas.subscription import (
@@ -110,7 +111,9 @@ async def verify_payment(
             ref_id=None
         )
     
-    result = await session.execute(select(User).where(User.id == user_id))
+    result = await session.execute(
+        select(User).options(selectinload(User.profile)).where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
     
     if not user:
@@ -128,17 +131,17 @@ async def verify_payment(
     days = plan_days.get(plan, 30)
     
     now = datetime.now(timezone.utc)
-    if user.premium_until is None or user.premium_until < now:
-        user.premium_until = now + timedelta(days=days)
+    if user.profile.premium_until is None or user.profile.premium_until < now:
+        user.profile.premium_until = now + timedelta(days=days)
     else:
-        user.premium_until = user.premium_until + timedelta(days=days)
+        user.profile.premium_until = user.profile.premium_until + timedelta(days=days)
     
     subscription = Subscription(
         user_id=user.id,
         plan=plan,
         status="active",
         started_at=now,
-        expires_at=user.premium_until,
+        expires_at=user.profile.premium_until,
         source="purchase",
         payment_id="MOCK_" + authority,
     )

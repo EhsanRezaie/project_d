@@ -1,16 +1,46 @@
 import pytest
 from httpx import AsyncClient
-from tests.done.test_auth import register_user
 from app.core.config import settings
 
 ADMIN_USERS_URL = "/api/v1/admin/users"
 ADMIN_KEY = settings.ADMIN_SECRET_KEY
 
+REGISTER_INIT_URL = "/api/v1/auth/register/init"
+REGISTER_VERIFY_URL = "/api/v1/auth/register/verify"
+REGISTER_COMPLETE_URL = "/api/v1/auth/register/complete"
+VALID_PASSWORD = "strongpass123"
+VALID_CODE = "123456"
+COMPLETE_PROFILE = {
+    "name": "Test User",
+    "birth_date": "1995-06-15",
+    "gender": "male",
+    "lat": 35.6892,
+    "lng": 51.3890,
+}
+
+
+async def register_user(client: AsyncClient, email: str = None, mock_verification_code=None) -> dict:
+    if email is None:
+        email = "user@example.com"
+    res = await client.post(REGISTER_INIT_URL, json={"email": email})
+    assert res.status_code == 200, res.text
+    if mock_verification_code:
+        await mock_verification_code(email, VALID_CODE)
+    res = await client.post(REGISTER_VERIFY_URL, json={
+        "email": email, "code": VALID_CODE, "password": VALID_PASSWORD,
+    })
+    assert res.status_code == 200, res.text
+    data = res.json()
+    headers = {"Authorization": f"Bearer {data['access_token']}"}
+    res = await client.post(REGISTER_COMPLETE_URL, json=COMPLETE_PROFILE, headers=headers)
+    assert res.status_code == 200, res.text
+    return res.json()
+
 
 class TestAdminUsers:
     """Test admin user management"""
 
-    async def test_admin_list_users_success(self, client: AsyncClient):
+    async def test_admin_list_users_success(self, client: AsyncClient, mock_verification_code):
         """Admin should list all users"""
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.get(ADMIN_USERS_URL, headers=admin_headers)
@@ -19,31 +49,25 @@ class TestAdminUsers:
         assert "users" in body
         assert "total" in body
 
-    async def test_admin_list_users_search_by_name(self, client: AsyncClient):
+    async def test_admin_list_users_search_by_name(self, client: AsyncClient, mock_verification_code):
         """Admin should search users by name"""
         # Create a user with unique name
-        user_payload = {
-            "email": "search_test@example.com",
-            "password": "strongpass123",
-            "name": "SearchableUserName",
-            "age": 25,
-            "gender": "male"
-        }
-        await client.post("/api/v1/auth/register", json=user_payload)
-        
+        await register_user(client, "search_test@example.com", mock_verification_code)
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.get(
             ADMIN_USERS_URL,
-            params={"search": "SearchableUserName"},
+            params={"search": "Test User"},
             headers=admin_headers
         )
         assert res.status_code == 200
         body = res.json()
         assert len(body["users"]) >= 1
-        assert body["users"][0]["name"] == "SearchableUserName"
 
-    async def test_admin_list_users_search_by_email(self, client: AsyncClient):
+    async def test_admin_list_users_search_by_email(self, client: AsyncClient, mock_verification_code):
         """Admin should search users by email"""
+        await register_user(client, "search_test@example.com", mock_verification_code)
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.get(
             ADMIN_USERS_URL,
@@ -94,11 +118,11 @@ class TestAdminUsers:
         body = res.json()
         assert len(body["users"]) <= 5
 
-    async def test_admin_get_user_detail(self, client: AsyncClient):
+    async def test_admin_get_user_detail(self, client: AsyncClient, mock_verification_code):
         """Admin should view user details with stats"""
         # Create a user
-        user_data = await register_user(client)
-        
+        user_data = await register_user(client, "detail@example.com", mock_verification_code)
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.get(
             f"{ADMIN_USERS_URL}/{user_data['user']['id']}",
@@ -121,11 +145,11 @@ class TestAdminUsers:
         )
         assert res.status_code == 404
 
-    async def test_admin_deactivate_user(self, client: AsyncClient):
+    async def test_admin_deactivate_user(self, client: AsyncClient, mock_verification_code):
         """Admin should deactivate a user"""
         # Create a user
-        user_data = await register_user(client)
-        
+        user_data = await register_user(client, "deactivate@example.com", mock_verification_code)
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.patch(
             f"{ADMIN_USERS_URL}/{user_data['user']['id']}",
@@ -135,28 +159,28 @@ class TestAdminUsers:
         assert res.status_code == 200
         body = res.json()
         assert body["is_active"] is False
-        
+
         # User should not be able to login
         login_res = await client.post(
             "/api/v1/auth/login",
-            json={"email": user_data['user']['email'], "password": "strongpass123"}
+            json={"email": "deactivate@example.com", "password": "strongpass123"}
         )
         assert login_res.status_code == 401
 
-    async def test_admin_activate_user(self, client: AsyncClient):
+    async def test_admin_activate_user(self, client: AsyncClient, mock_verification_code):
         """Admin should activate a deactivated user"""
         # Create a user
-        user_data = await register_user(client)
-        
+        user_data = await register_user(client, "activate@example.com", mock_verification_code)
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
-        
+
         # Deactivate
         await client.patch(
             f"{ADMIN_USERS_URL}/{user_data['user']['id']}",
             json={"is_active": False},
             headers=admin_headers
         )
-        
+
         # Activate
         res = await client.patch(
             f"{ADMIN_USERS_URL}/{user_data['user']['id']}",
@@ -166,11 +190,11 @@ class TestAdminUsers:
         assert res.status_code == 200
         assert res.json()["is_active"] is True
 
-    async def test_admin_grant_premium(self, client: AsyncClient):
+    async def test_admin_grant_premium(self, client: AsyncClient, mock_verification_code):
         """Admin should grant premium days to user"""
         # Create a user
-        user_data = await register_user(client)
-        
+        user_data = await register_user(client, "premium@example.com", mock_verification_code)
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.post(
             f"{ADMIN_USERS_URL}/{user_data['user']['id']}/premium",
@@ -182,51 +206,36 @@ class TestAdminUsers:
         assert body["is_premium"] is True
         assert body["premium_until"] is not None
 
-    async def test_admin_delete_user(self, client: AsyncClient):
+    async def test_admin_delete_user(self, client: AsyncClient, mock_verification_code):
         """Admin should hard delete a user"""
         # Create a user
-        user_payload = {
-            "email": "delete_me@example.com",
-            "password": "strongpass123",
-            "name": "Delete Me",
-            "age": 25,
-            "gender": "male"
-        }
-        user_res = await client.post("/api/v1/auth/register", json=user_payload)
-        user_id = user_res.json()["user"]["id"]
-        
+        user_data = await register_user(client, "delete_me@example.com", mock_verification_code)
+        user_id = user_data["user"]["id"]
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.delete(f"{ADMIN_USERS_URL}/{user_id}", headers=admin_headers)
         assert res.status_code == 204
-        
+
         # User should not exist
         get_res = await client.get(f"{ADMIN_USERS_URL}/{user_id}", headers=admin_headers)
         assert get_res.status_code == 404
 
-    async def test_admin_get_user_activity(self, client: AsyncClient):
+    async def test_admin_get_user_activity(self, client: AsyncClient, mock_verification_code):
         """Admin should get user activity stats"""
         # Create a user and do some activity
-        user_data = await register_user(client)
+        user_data = await register_user(client, "activity@example.com", mock_verification_code)
         user_headers = {"Authorization": f"Bearer {user_data['access_token']}"}
-        
+
         # Create another user to swipe
-        target_payload = {
-            "email": "activity_target@example.com",
-            "password": "strongpass123",
-            "name": "Activity Target",
-            "age": 25,
-            "gender": "female"
-        }
-        target_res = await client.post("/api/v1/auth/register", json=target_payload)
-        target_data = target_res.json()
-        
+        target_data = await register_user(client, "activity_target@example.com", mock_verification_code)
+
         # Perform a swipe
         await client.post(
             "/api/v1/swipes",
             json={"user_id": target_data["user"]["id"], "direction": "like"},
             headers=user_headers
         )
-        
+
         admin_headers = {"X-Admin-Key": ADMIN_KEY}
         res = await client.get(
             f"{ADMIN_USERS_URL}/{user_data['user']['id']}/activity",

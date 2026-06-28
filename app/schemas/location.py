@@ -28,6 +28,7 @@ class ProvinceResponse(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     country_code: Optional[str] = None
+    type: Optional[str] = None
 
     class Config:
         from_attributes = True

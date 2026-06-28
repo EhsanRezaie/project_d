@@ -62,10 +62,10 @@ async def get_matches(
     Returns matches sorted by most recent message or match date.
     """
     
-    # Find all matches where current user is user1 or user2 - EAGER LOAD users
+    # Find all matches where current user is user1 or user2 - EAGER LOAD users + profiles
     query = select(Match).options(
-        selectinload(Match.user1),
-        selectinload(Match.user2)
+        selectinload(Match.user1).selectinload(User.profile),
+        selectinload(Match.user2).selectinload(User.profile)
     ).where(
         or_(
             Match.user1_id == current_user.id,
@@ -103,8 +103,8 @@ async def get_matches(
             matched_at=match.matched_at,
             user=MatchUserResponse(
                 id=other_user.id,
-                name=other_current_user.profile.name,
-                age=other_current_user.profile.age,
+                name=other_user.profile.name,
+                age=other_user.profile.age,
                 main_photo_url=main_photo_url,
             ),
             last_message=LastMessageResponse(
@@ -133,8 +133,8 @@ async def get_match_detail(
     """
     
     query = select(Match).options(
-        selectinload(Match.user1),
-        selectinload(Match.user2)
+        selectinload(Match.user1).selectinload(User.profile),
+        selectinload(Match.user2).selectinload(User.profile)
     ).where(
         Match.id == match_id,
         Match.is_active == True,
@@ -162,14 +162,14 @@ async def get_match_detail(
         matched_at=match.matched_at,
         user1=MatchUserResponse(
             id=match.user1.id,
-            name=match.user1.name,
-            age=match.user1.age,
+            name=match.user1.profile.name,
+            age=match.user1.profile.age,
             main_photo_url=user1_photo,
         ),
         user2=MatchUserResponse(
             id=match.user2.id,
-            name=match.user2.name,
-            age=match.user2.age,
+            name=match.user2.profile.name,
+            age=match.user2.profile.age,
             main_photo_url=user2_photo,
         ),
         is_active=match.is_active
