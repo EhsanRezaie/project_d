@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from sqlalchemy import Column, String, Boolean, SmallInteger, Double, DateTime, Text, Date as SQLDate, ForeignKey, JSON
+from sqlalchemy import Column, String, Boolean, SmallInteger, Double, DateTime, Text, Date as SQLDate, ForeignKey, JSON, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -9,6 +9,24 @@ from app.db.base import Base
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
+    __table_args__ = (
+        Index('idx_profiles_gender', 'gender'),
+        Index('idx_profiles_lat_lng', 'lat', 'lng'),
+        Index('idx_profiles_birth_date', 'birth_date'),
+        Index('idx_profiles_country', 'country'),
+        Index('idx_profiles_province', 'province'),
+        Index('idx_profiles_city', 'city'),
+        Index('idx_profiles_religion', 'religion'),
+        Index('idx_profiles_ethnicity', 'ethnicity'),
+        Index('idx_profiles_education', 'education'),
+        Index('idx_profiles_body_type', 'body_type'),
+        Index('idx_profiles_smoking', 'smoking'),
+        Index('idx_profiles_drinking', 'drinking'),
+        Index('idx_profiles_relationship_status', 'relationship_status'),
+        Index('idx_profiles_height', 'height'),
+        Index('idx_profiles_is_verified', 'is_verified', postgresql_where=text("is_verified = true")),
+        Index('idx_profiles_premium_until', 'premium_until'),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)

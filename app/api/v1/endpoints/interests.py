@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -11,8 +11,10 @@ router = APIRouter(prefix="/interests", tags=["interests"])
 
 @router.get("", response_model=list[InterestResponse])
 async def get_interests(
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> list[InterestResponse]:
+    response.headers["Cache-Control"] = "public, max-age=86400"
     """
     Get the full list of selectable interests.
 

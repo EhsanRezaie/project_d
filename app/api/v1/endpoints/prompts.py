@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -11,9 +11,11 @@ router = APIRouter(prefix="/prompts", tags=["prompts"])
 
 @router.get("", response_model=list[PromptResponse])
 async def get_prompts(
+    response: Response,
     language: str = Query("fa", min_length=2, max_length=5, description="Language code, e.g. 'fa' or 'en'"),
     session: AsyncSession = Depends(get_session),
 ) -> list[PromptResponse]:
+    response.headers["Cache-Control"] = "public, max-age=86400"
     """
     Get the list of active prompt questions in the requested language.
 

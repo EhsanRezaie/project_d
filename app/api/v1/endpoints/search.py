@@ -67,7 +67,7 @@ async def search_users(
     interests: str = Query(None, max_length=500),
     sort_by: str = Query("recent", pattern="^(recent|distance|age|name)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=50),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),

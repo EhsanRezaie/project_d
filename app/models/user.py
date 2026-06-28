@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, DateTime, Text, func, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, Text, func, Integer, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -8,6 +8,11 @@ from app.db.base import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index('idx_users_is_active', 'is_active', postgresql_where=text("is_active = true")),
+        Index('idx_users_registration_status', 'registration_status'),
+        Index('idx_users_last_seen', 'last_seen_at'),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)

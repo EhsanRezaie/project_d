@@ -68,8 +68,8 @@ async def get_match_or_chat(session: AsyncSession, identifier: UUID, user_id: UU
 async def get_chat_history(
     request: Request,
     identifier: UUID,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(30, ge=1, le=50),
+    offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> MessageListResponse:

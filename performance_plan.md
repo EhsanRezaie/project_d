@@ -918,14 +918,14 @@ Future<void> loadMore() async {
 
 Work through phases in order. Each phase is ~1 session of work.
 
-### Phase 1 — Database Indexes *(do first, zero risk, highest ROI)*
+### ✅ Phase 1 — Database Indexes *(do first, zero risk, highest ROI)*
 
-- [ ] Write Alembic migration with all indexes from Section 1
-- [ ] Run `alembic upgrade head` on dev DB
-- [ ] Run `EXPLAIN ANALYZE` on discover and search queries — confirm `Index Scan` appears
-- [ ] Add GZip middleware to `main.py` (Section 4.1)
-- [ ] Add `Cache-Control` headers to 5 public endpoints (Section 4.2)
-- [ ] Enforce `limit` cap (le=50) on all 6 list endpoints (Section 3.6)
+- [x] Write Alembic migration with all indexes from Section 1
+- [x] Run `alembic upgrade head` on dev DB
+- [x] Run `EXPLAIN ANALYZE` on discover and search queries — confirm `Index Scan` appears
+- [x] Add GZip middleware to `main.py` (Section 4.1)
+- [x] Add `Cache-Control` headers to 5 public endpoints (Section 4.2)
+- [x] Enforce `limit` cap (le=50) on all 6 list endpoints (Section 3.6)
 
 ### Phase 2 — Redis Caching: Static Data
 

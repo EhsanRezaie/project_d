@@ -33,8 +33,9 @@ router = APIRouter(prefix="/locations", tags=["locations"])
 
 @router.get("/countries", response_model=list[CountryResponse])
 @limiter.limit("60/minute")
-async def list_countries(request: Request):
+async def list_countries(request: Request, response: Response):
     """All countries sorted alphabetically."""
+    response.headers["Cache-Control"] = "public, max-age=604800"
     return LocationService.get_countries()
 
 

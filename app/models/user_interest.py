@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -14,6 +14,8 @@ class UserInterest(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "interest_id", name="uq_user_interests_user_interest"),
+        Index('idx_user_interests_user', 'user_id'),
+        Index('idx_user_interests_interest', 'interest_id'),
     )
 
     # Relationships

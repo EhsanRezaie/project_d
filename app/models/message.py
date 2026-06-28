@@ -1,6 +1,6 @@
 # app/models/message.py
 import uuid
-from sqlalchemy import Column, Text, Boolean, DateTime, ForeignKey, func, Integer, String
+from sqlalchemy import Column, Text, Boolean, DateTime, ForeignKey, func, Integer, String, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -9,6 +9,12 @@ from app.core.encryption import encrypt_message, decrypt_message
 
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (
+        Index('idx_messages_match_sent', 'match_id', 'sent_at'),
+        Index('idx_messages_receiver_delivered', 'receiver_id', 'is_delivered', postgresql_where=text("is_delivered = false")),
+        Index('idx_messages_receiver_read', 'receiver_id', 'is_read', postgresql_where=text("is_read = false")),
+        Index('idx_messages_match_recent', 'match_id', 'sent_at', postgresql_where=text("is_deleted_for_all = false")),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     

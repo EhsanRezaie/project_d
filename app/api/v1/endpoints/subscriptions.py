@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone, timedelta
@@ -26,8 +26,9 @@ router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 @router.get("/plans", response_model=SubscriptionPlansResponse)
 @limiter.limit("100/minute")
-async def get_plans(request: Request):  # ADDED request parameter
+async def get_plans(request: Request, response: Response):
     """Get available subscription plans with prices."""
+    response.headers["Cache-Control"] = "public, max-age=3600"
     return SubscriptionPlansResponse(
         plans=[
             PlanResponse(

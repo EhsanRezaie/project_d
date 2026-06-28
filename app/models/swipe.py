@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, ForeignKey, func, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, ForeignKey, func, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
 from sqlalchemy.orm import relationship
@@ -7,7 +7,11 @@ from sqlalchemy.orm import relationship
 
 class Swipe(Base):
     __tablename__ = "swipes"
-    __table_args__ = (UniqueConstraint("from_user", "to_user"),)
+    __table_args__ = (
+        UniqueConstraint("from_user", "to_user"),
+        Index('idx_swipes_swipee_swiper_type', 'to_user', 'from_user', 'direction'),
+        Index('idx_swipes_swiper_type', 'from_user', 'direction'),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     from_user = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
