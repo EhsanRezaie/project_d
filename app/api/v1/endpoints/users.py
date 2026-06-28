@@ -16,6 +16,8 @@ from app.services.location_service import LocationService
 from app.schemas.user import UserProfileResponse, UserUpdateRequest, LocationTextUpdateRequest, LocationTextUpdateResponse,InterestUpdateRequest,PromptUpdateRequest
 from app.schemas.settings import UserSettingsUpdateRequest, UserSettingsResponse
 from app.models.user_settings import UserSettings
+from app.core.redis import redis_client
+from app.core.cache import cache_get, cache_set, key_user_profile, TTL_USER_PROFILE, invalidate_user_cache
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -27,6 +29,11 @@ async def get_me(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> UserProfileResponse:
+
+    cache_key = key_user_profile(current_user.id)
+    cached = await cache_get(redis_client, cache_key)
+    if cached:
+        return UserProfileResponse.model_validate(cached)
 
     # Always reload with relationships loaded
     result = await session.execute(
@@ -47,7 +54,9 @@ async def get_me(
             detail="User not found"
         )
     
-    return UserProfileResponse.model_validate(user)
+    response = UserProfileResponse.model_validate(user)
+    await cache_set(redis_client, cache_key, response.model_dump(mode='json'), TTL_USER_PROFILE)
+    return response
 
 
 @router.put("/me", response_model=UserProfileResponse)
@@ -98,6 +107,8 @@ async def update_me(
     await session.commit()
     await session.refresh(current_user)
     
+    await invalidate_user_cache(redis_client, current_user.id)
+
     # Reload with profile, settings, user_interests, and prompts
     result = await session.execute(
         select(User)
@@ -154,6 +165,8 @@ async def update_settings(
     await session.commit()
     await session.refresh(settings)
     
+    await invalidate_user_cache(redis_client, current_user.id)
+    
     return settings
 
 
@@ -170,6 +183,7 @@ async def delete_me(
     """
     current_user.is_active = False
     await session.commit()
+    await invalidate_user_cache(redis_client, current_user.id)
 
 
 @router.post("/me/location", status_code=status.HTTP_204_NO_CONTENT)
@@ -222,6 +236,7 @@ async def update_location(
                 profile.city = location_data.get("city")
     
     await session.commit()
+    await invalidate_user_cache(redis_client, current_user.id)
 
 
 @router.patch("/me/location-text", response_model=LocationTextUpdateResponse)
@@ -257,6 +272,7 @@ async def update_location_text(
     
     await session.commit()
     await session.refresh(current_user)
+    await invalidate_user_cache(redis_client, current_user.id)
     
     return LocationTextUpdateResponse(
         country=profile.country,
@@ -310,7 +326,8 @@ async def update_interests(
     
     await session.commit()
     await session.refresh(current_user)
-    
+    await invalidate_user_cache(redis_client, current_user.id)
+
     # Reload with profile, settings, user_interests, and prompts
     result = await session.execute(
         select(User)
@@ -355,7 +372,8 @@ async def update_prompts(
     
     await session.commit()
     await session.refresh(current_user)
-    
+    await invalidate_user_cache(redis_client, current_user.id)
+
     # Reload with profile, settings, user_interests, and prompts
     result = await session.execute(
         select(User)

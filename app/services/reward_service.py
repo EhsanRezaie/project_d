@@ -9,8 +9,18 @@ from app.models.user import User
 from app.models.daily_limit import DailyLimit
 from app.models.subscription import Subscription
 from app.core.logging import get_logger
+from app.core.redis import redis_client
+from app.core.cache import cache_get, cache_set, key_daily_limits
 
 logger = get_logger("reward_service")
+
+
+def _seconds_until_midnight() -> int:
+    now = datetime.now()
+    midnight = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return int((midnight - now).total_seconds())
 
 
 class RewardService:
@@ -21,6 +31,19 @@ class RewardService:
     
     async def get_or_create_daily_limit(self, user_id: UUID, target_date: date) -> DailyLimit:
         """Get or create daily limit record for a user."""
+        # Try Redis cache first
+        cache_key = key_daily_limits(user_id, target_date.isoformat())
+        cached = await cache_get(redis_client, cache_key)
+        if cached:
+            return DailyLimit(
+                user_id=user_id,
+                date=target_date,
+                likes_used=cached.get("likes_used", 0),
+                chats_used=cached.get("chats_used", 0),
+                ad_likes_bonus=cached.get("ad_likes_bonus", 0),
+                ad_chats_bonus=cached.get("ad_chats_bonus", 0),
+            )
+
         result = await self.db.execute(
             select(DailyLimit).where(
                 DailyLimit.user_id == user_id,
@@ -40,6 +63,14 @@ class RewardService:
             )
             self.db.add(daily_limit)
             await self.db.flush()
+
+        # Cache for the rest of the day
+        await cache_set(redis_client, cache_key, {
+            "likes_used": daily_limit.likes_used,
+            "chats_used": daily_limit.chats_used,
+            "ad_likes_bonus": daily_limit.ad_likes_bonus,
+            "ad_chats_bonus": daily_limit.ad_chats_bonus,
+        }, _seconds_until_midnight())
         
         return daily_limit
     
@@ -81,6 +112,15 @@ class RewardService:
         daily_limit = await self.get_or_create_daily_limit(user.id, today)
         daily_limit.likes_used += 1
         await self.db.commit()
+
+        # Update Redis cache
+        cache_key = key_daily_limits(user.id, today.isoformat())
+        await cache_set(redis_client, cache_key, {
+            "likes_used": daily_limit.likes_used,
+            "chats_used": daily_limit.chats_used,
+            "ad_likes_bonus": daily_limit.ad_likes_bonus,
+            "ad_chats_bonus": daily_limit.ad_chats_bonus,
+        }, _seconds_until_midnight())
         
         return True
     
@@ -98,6 +138,15 @@ class RewardService:
         daily_limit = await self.get_or_create_daily_limit(user.id, today)
         daily_limit.chats_used += 1
         await self.db.commit()
+
+        # Update Redis cache
+        cache_key = key_daily_limits(user.id, today.isoformat())
+        await cache_set(redis_client, cache_key, {
+            "likes_used": daily_limit.likes_used,
+            "chats_used": daily_limit.chats_used,
+            "ad_likes_bonus": daily_limit.ad_likes_bonus,
+            "ad_chats_bonus": daily_limit.ad_chats_bonus,
+        }, _seconds_until_midnight())
         
         return True
     
@@ -126,7 +175,16 @@ class RewardService:
         daily_limit.ad_likes_bonus += settings.AD_REWARD_LIKES_BONUS
         daily_limit.ad_chats_bonus += settings.AD_REWARD_CHATS_BONUS
         await self.db.commit()
-        
+
+        # Update Redis cache
+        cache_key = key_daily_limits(user.id, today.isoformat())
+        await cache_set(redis_client, cache_key, {
+            "likes_used": daily_limit.likes_used,
+            "chats_used": daily_limit.chats_used,
+            "ad_likes_bonus": daily_limit.ad_likes_bonus,
+            "ad_chats_bonus": daily_limit.ad_chats_bonus,
+        }, _seconds_until_midnight())
+
         return {
             'success': True,
             'likes_added': settings.AD_REWARD_LIKES_BONUS,

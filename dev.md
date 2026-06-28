@@ -981,6 +981,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 25 | **Test migration + backend User.profile fixes (511 tests)** | ✅ |
 | 26 | **Dummy user seeder (1000 users)** | ✅ |
 | 27 | **Performance Phase 1 — indexes, GZip, Cache-Control, limit caps** | ✅ |
+| 28 | **Performance Phase 2+3 — Redis caching (static + user data + daily limits)** | ✅ |
 
 ---
 
@@ -1328,7 +1329,38 @@ alembic downgrade -1
 
 ---
 
-**Next: Performance Phase 2 - Redis Caching (Static Data)**
+### ✅ Session 28 Complete - Performance Phase 3 — User Cache + Daily Limits
+
+| Feature | Status |
+|---------|--------|
+| `GET /api/v1/users/me` cached per user (10min TTL, `model_dump`/`model_validate`) | ✅ |
+| `invalidate_user_cache()` called on all 11 mutation endpoints (users, photos, locations) | ✅ |
+| Daily limits cached in Redis (midnight TTL) via `reward_service.get_or_create_daily_limit` | ✅ |
+| Cache updated after every `consume_like`, `consume_chat`, `claim_ad_reward` | ✅ |
+| **All 511 tests passing** | ✅ |
+
+**Mutation endpoints with cache invalidation:**
+- `PUT /users/me`, `PUT /users/me/settings`, `DELETE /users/me`
+- `POST /users/me/location`, `PATCH /users/me/location-text`
+- `PATCH /locations/me/location-gps`, `PATCH /locations/me/location-manual`
+- `POST /users/me/photos`, `DELETE /users/me/photos/{id}`
+- `PUT /users/me/photos/{id}/main`, `PATCH /users/me/photos/{id}/crop`
+- `PUT /users/me/interests`, `PUT /users/me/prompts`
+
+**Files Modified:**
+- `app/api/v1/endpoints/users.py` — cache GET /users/me, invalidate in all mutations
+- `app/api/v1/endpoints/photos.py` — invalidate in upload/delete/main/crop
+- `app/api/v1/endpoints/locations.py` — invalidate in GPS/manual location
+- `app/services/reward_service.py` — Redis cache for daily limits (get_or_create + post-mutation sync)
+
+---
+
+**Next: Phase 4 — Backend Query Optimization**
+- `get_current_user_id` lightweight dependency
+- `selectinload` chains on discover/search/matches
+- DB Haversine distance filter
+- `BackgroundTasks` for notifications
+- Cursor pagination on messages
 
 **Then: Session 15 - Push Notifications + Real Payment + Production Ready (Backend)**
 ```

@@ -21,6 +21,8 @@ from app.schemas.location import (
     ReverseGeocodeResponse,
 )
 from app.core.logging import get_logger
+from app.core.redis import redis_client
+from app.core.cache import cache_get, cache_set, key_countries, key_provinces, key_cities, TTL_LOCATIONS, invalidate_user_cache
 
 logger = get_logger("locations_endpoint")
 
@@ -36,7 +38,12 @@ router = APIRouter(prefix="/locations", tags=["locations"])
 async def list_countries(request: Request, response: Response):
     """All countries sorted alphabetically."""
     response.headers["Cache-Control"] = "public, max-age=604800"
-    return LocationService.get_countries()
+    cached = await cache_get(redis_client, key_countries())
+    if cached:
+        return cached
+    data = LocationService.get_countries()
+    await cache_set(redis_client, key_countries(), data, TTL_LOCATIONS)
+    return data
 
 
 @router.get("/states", response_model=list[ProvinceResponse])
@@ -49,7 +56,13 @@ async def list_states(
     country = country.upper()
     if not get_country_by_iso2(country):
         raise HTTPException(status_code=404, detail=f"Country '{country}' not found")
-    return LocationService.get_states(country)
+    cache_key = key_provinces(country)
+    cached = await cache_get(redis_client, cache_key)
+    if cached:
+        return cached
+    data = LocationService.get_states(country)
+    await cache_set(redis_client, cache_key, data, TTL_LOCATIONS)
+    return data
 
 
 @router.get("/cities", response_model=list[CityResponse])
@@ -73,8 +86,12 @@ async def list_cities(
     if not get_country_by_iso2(country):
         raise HTTPException(status_code=404, detail=f"Country '{country}' not found")
     
-    # Clear cache to ensure fresh data
-    clear_cache()
+    # Build cache key from available params
+    province_key = state_code or state_name or "_all"
+    cache_key = key_cities(country, province_key)
+    cached = await cache_get(redis_client, cache_key)
+    if cached:
+        return cached
     
     cities = []
     
@@ -95,9 +112,9 @@ async def list_cities(
         return []
     
     # Convert to response model
-    response = []
+    result = []
     for city in cities:
-        response.append(
+        result.append(
             CityResponse(
                 name=city["name"],
                 province=city.get("state_code"),
@@ -107,7 +124,8 @@ async def list_cities(
             )
         )
     
-    return response
+    await cache_set(redis_client, cache_key, [r.model_dump(mode='json') for r in result], TTL_LOCATIONS)
+    return result
 
 
 @router.get("/cities/search", response_model=list[CityResponse])
@@ -217,6 +235,7 @@ async def update_location_gps(
 
     await session.commit()
     await session.refresh(profile)
+    await invalidate_user_cache(redis_client, current_user.id)
 
     return {
         "lat": profile.lat,
@@ -266,6 +285,7 @@ async def update_location_manual(
 
     await session.commit()
     await session.refresh(profile)
+    await invalidate_user_cache(redis_client, current_user.id)
 
     return {
         "lat": profile.lat,
