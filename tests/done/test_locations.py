@@ -7,7 +7,7 @@ from app.core.security import create_access_token
 
 # ============ URL Constants ============
 COUNTRIES_URL = "/api/v1/locations/countries"
-PROVINCES_URL = "/api/v1/locations/provinces"
+PROVINCES_URL = "/api/v1/locations/states"
 CITIES_URL = "/api/v1/locations/cities"
 REVERSE_GEOCODE_URL = "/api/v1/locations/reverse-geocode"
 CITY_CENTROID_URL = "/api/v1/locations/city-centroid"
@@ -90,6 +90,9 @@ class TestProvinces:
             assert "iso_code" in first
             assert "name" in first
             assert "type" in first
+            assert "latitude" in first
+            assert "longitude" in first
+            assert "country_code" in first
 
     async def test_list_provinces_invalid_country(self, client: AsyncClient):
         """Should return 404 for invalid country code."""

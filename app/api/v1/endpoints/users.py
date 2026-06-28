@@ -14,6 +14,8 @@ from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.services.location_service import LocationService
 from app.schemas.user import UserProfileResponse, UserUpdateRequest, LocationTextUpdateRequest, LocationTextUpdateResponse,InterestUpdateRequest,PromptUpdateRequest
+from app.schemas.settings import UserSettingsUpdateRequest, UserSettingsResponse
+from app.models.user_settings import UserSettings
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -110,6 +112,49 @@ async def update_me(
     user = result.scalar_one_or_none()
     
     return UserProfileResponse.model_validate(user)
+
+
+@router.put("/me/settings", response_model=UserSettingsResponse)
+@limiter.limit("30/minute")
+async def update_settings(
+    request: Request,
+    update_data: UserSettingsUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update current user's settings.
+    All fields are optional - only provided fields will be updated.
+    """
+    result = await session.execute(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )
+    settings = result.scalar_one_or_none()
+    
+    if not settings:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User settings not found",
+        )
+    
+    update_dict = update_data.model_dump(exclude_unset=True)
+    
+    # Filter out None values — they mean "don't change"
+    update_dict = {k: v for k, v in update_dict.items() if v is not None}
+    
+    if not update_dict:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields to update",
+        )
+    
+    for field, value in update_dict.items():
+        setattr(settings, field, value)
+    
+    await session.commit()
+    await session.refresh(settings)
+    
+    return settings
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)

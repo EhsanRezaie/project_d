@@ -7,6 +7,7 @@ from datetime import datetime
 from app.db.session import get_session
 from app.core.deps import get_admin_user
 from app.core.limiter import limiter
+from sqlalchemy.orm import selectinload
 from app.models.user import User
 from app.models.ticket import Ticket
 from app.schemas.admin import AdminTicketResponse, AdminTicketUpdate
@@ -43,14 +44,14 @@ async def admin_list_tickets(
     response_tickets = []
     for ticket in tickets:
         user_result = await session.execute(
-            select(User).where(User.id == ticket.user_id)
+            select(User).options(selectinload(User.profile)).where(User.id == ticket.user_id)
         )
         user = user_result.scalar_one_or_none()
         
         response_tickets.append(AdminTicketResponse(
             id=ticket.id,
             user_id=ticket.user_id,
-            user_name=current_user.profile.name if user else "Deleted User",
+            user_name=user.profile.name if user else "Deleted User",
             user_email=user.email if user else "deleted@example.com",
             subject=ticket.subject,
             message=ticket.message,
@@ -86,14 +87,14 @@ async def admin_get_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
     
     user_result = await session.execute(
-        select(User).where(User.id == ticket.user_id)
+        select(User).options(selectinload(User.profile)).where(User.id == ticket.user_id)
     )
     user = user_result.scalar_one_or_none()
     
     return AdminTicketResponse(
         id=ticket.id,
         user_id=ticket.user_id,
-        user_name=current_user.profile.name if user else "Deleted User",
+        user_name=user.profile.name if user else "Deleted User",
         user_email=user.email if user else "deleted@example.com",
         subject=ticket.subject,
         message=ticket.message,
@@ -133,14 +134,14 @@ async def admin_update_ticket(
     await session.commit()
     
     user_result = await session.execute(
-        select(User).where(User.id == ticket.user_id)
+        select(User).options(selectinload(User.profile)).where(User.id == ticket.user_id)
     )
     user = user_result.scalar_one_or_none()
     
     return AdminTicketResponse(
         id=ticket.id,
         user_id=ticket.user_id,
-        user_name=current_user.profile.name if user else "Deleted User",
+        user_name=user.profile.name if user else "Deleted User",
         user_email=user.email if user else "deleted@example.com",
         subject=ticket.subject,
         message=ticket.message,

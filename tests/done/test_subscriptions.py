@@ -1,12 +1,56 @@
 import pytest
 from httpx import AsyncClient
-from tests.done.test_auth import register_user, VALID_REGISTER_PAYLOAD
 
+REGISTER_INIT_URL = "/api/v1/auth/register/init"
+REGISTER_VERIFY_URL = "/api/v1/auth/register/verify"
+REGISTER_COMPLETE_URL = "/api/v1/auth/register/complete"
 SUBSCRIPTION_PLANS_URL = "/api/v1/subscriptions/plans"
 SUBSCRIPTION_PURCHASE_URL = "/api/v1/subscriptions/purchase"
 SUBSCRIPTION_MY_URL = "/api/v1/subscriptions/my"
 SUBSCRIPTION_CANCEL_URL = "/api/v1/subscriptions/cancel"
 SUBSCRIPTION_VERIFY_URL = "/api/v1/subscriptions/verify"
+
+VALID_EMAIL = "sub_user@example.com"
+VALID_PASSWORD = "strongpass123"
+VALID_CODE = "123456"
+
+COMPLETE_PROFILE = {
+    "name": "Sub User",
+    "birth_date": "2000-01-01",
+    "gender": "male",
+    "lat": 35.6892,
+    "lng": 51.3890,
+}
+
+
+async def register_user(client: AsyncClient, mock_verification_code=None) -> dict:
+    # Step 1: Init
+    res = await client.post(REGISTER_INIT_URL, json={"email": VALID_EMAIL})
+    assert res.status_code == 200, res.text
+
+    # Step 2: Store verification code
+    if mock_verification_code:
+        await mock_verification_code(VALID_EMAIL, VALID_CODE)
+
+    # Step 3: Verify
+    res = await client.post(REGISTER_VERIFY_URL, json={
+        "email": VALID_EMAIL,
+        "code": VALID_CODE,
+        "password": VALID_PASSWORD,
+    })
+    assert res.status_code == 200, res.text
+    data = res.json()
+
+    # Step 4: Complete profile
+    headers = {"Authorization": f"Bearer {data['access_token']}"}
+    res = await client.post(
+        REGISTER_COMPLETE_URL,
+        json=COMPLETE_PROFILE,
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+
+    return res.json()
 
 
 class TestSubscriptions:
@@ -17,21 +61,21 @@ class TestSubscriptions:
         res = await client.get(SUBSCRIPTION_PLANS_URL)
         assert res.status_code == 200
         body = res.json()
-        
+
         assert "plans" in body
         assert len(body["plans"]) == 3
-        
+
         plan_ids = [p["id"] for p in body["plans"]]
         assert "monthly" in plan_ids
         assert "quarterly" in plan_ids
         assert "yearly" in plan_ids
-        
+
         # Check monthly plan structure
         monthly = body["plans"][0]
         expected_fields = ["id", "name", "days", "price_rials", "price_usd", "discount_percent"]
         for field in expected_fields:
             assert field in monthly
-        
+
         assert monthly["days"] == 30
         assert monthly["price_rials"] > 0
 
@@ -40,11 +84,11 @@ class TestSubscriptions:
         res = await client.post(SUBSCRIPTION_PURCHASE_URL, json={"plan_id": "monthly"})
         assert res.status_code == 401
 
-    async def test_purchase_returns_redirect_url(self, client: AsyncClient):
+    async def test_purchase_returns_redirect_url(self, client: AsyncClient, mock_verification_code):
         """Purchase should return mock ZarinPal redirect URL."""
-        data = await register_user(client)
+        data = await register_user(client, mock_verification_code)
         headers = {"Authorization": f"Bearer {data['access_token']}"}
-        
+
         res = await client.post(
             SUBSCRIPTION_PURCHASE_URL,
             json={"plan_id": "monthly"},
@@ -52,17 +96,17 @@ class TestSubscriptions:
         )
         assert res.status_code == 200
         body = res.json()
-        
+
         assert "redirect_url" in body
         assert "authority" in body
         assert "sandbox.zarinpal.com" in body["redirect_url"]
         assert len(body["authority"]) == 36
 
-    async def test_purchase_invalid_plan(self, client: AsyncClient):
+    async def test_purchase_invalid_plan(self, client: AsyncClient, mock_verification_code):
         """Purchase with invalid plan ID should return 400."""
-        data = await register_user(client)
+        data = await register_user(client, mock_verification_code)
         headers = {"Authorization": f"Bearer {data['access_token']}"}
-        
+
         res = await client.post(
             SUBSCRIPTION_PURCHASE_URL,
             json={"plan_id": "invalid_plan"},
@@ -71,15 +115,15 @@ class TestSubscriptions:
         assert res.status_code == 400
         assert "Invalid plan" in res.json()["detail"]
 
-    async def test_get_my_subscription_after_welcome_bonus(self, client: AsyncClient):
+    async def test_get_my_subscription_after_welcome_bonus(self, client: AsyncClient, mock_verification_code):
         """After registration, user should have active welcome bonus subscription."""
-        data = await register_user(client)
+        data = await register_user(client, mock_verification_code)
         headers = {"Authorization": f"Bearer {data['access_token']}"}
-        
+
         res = await client.get(SUBSCRIPTION_MY_URL, headers=headers)
         assert res.status_code == 200
         body = res.json()
-        
+
         assert body["is_premium"] is True
         assert body["plan"] == "welcome_bonus"
         assert body["source"] == "welcome_bonus"
@@ -92,32 +136,31 @@ class TestSubscriptions:
         res = await client.get(SUBSCRIPTION_MY_URL)
         assert res.status_code == 401
 
-    async def test_cancel_subscription(self, client: AsyncClient):
+    async def test_cancel_subscription(self, client: AsyncClient, mock_verification_code):
         """Cancelling subscription should change status to cancelled."""
-        data = await register_user(client)
+        data = await register_user(client, mock_verification_code)
         headers = {"Authorization": f"Bearer {data['access_token']}"}
-        
+
         # Cancel
         res = await client.post(SUBSCRIPTION_CANCEL_URL, headers=headers)
         assert res.status_code == 200
         body = res.json()
         assert body["success"] is True
         assert "cancelled" in body["message"]
-        
+
         # Check subscription status
         my_res = await client.get(SUBSCRIPTION_MY_URL, headers=headers)
         my_body = my_res.json()
         assert my_body["status"] == "cancelled"
 
-    async def test_cancel_subscription_no_active(self, client: AsyncClient):
+    async def test_cancel_subscription_no_active(self, client: AsyncClient, mock_verification_code):
         """Cancelling when no active subscription should return 404."""
-        # Create a user and somehow remove premium? For now, test structure
-        data = await register_user(client)
+        data = await register_user(client, mock_verification_code)
         headers = {"Authorization": f"Bearer {data['access_token']}"}
-        
+
         # Cancel once
         await client.post(SUBSCRIPTION_CANCEL_URL, headers=headers)
-        
+
         # Cancel again - should fail
         res = await client.post(SUBSCRIPTION_CANCEL_URL, headers=headers)
         assert res.status_code == 404
@@ -128,10 +171,10 @@ class TestSubscriptions:
         res = await client.post(SUBSCRIPTION_CANCEL_URL)
         assert res.status_code == 401
 
-    async def test_verify_payment_mock_success(self, client: AsyncClient):
+    async def test_verify_payment_mock_success(self, client: AsyncClient, mock_verification_code):
         """Mock verify endpoint should return success."""
-        data = await register_user(client)
-        
+        data = await register_user(client, mock_verification_code)
+
         # Call verify with mock params
         res = await client.get(
             SUBSCRIPTION_VERIFY_URL,

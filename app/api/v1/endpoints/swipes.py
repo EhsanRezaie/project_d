@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.orm import selectinload
 from datetime import date
 from uuid import UUID
 
@@ -60,7 +61,9 @@ async def swipe(
     
     # Check if target user exists and is active
     result = await session.execute(
-        select(User).where(
+        select(User)
+        .options(selectinload(User.profile))
+        .where(
             User.id == body.user_id,
             User.is_active == True
         )

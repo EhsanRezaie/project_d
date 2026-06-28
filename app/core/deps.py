@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from jose import JWTError, jwt
 import uuid
 
+from sqlalchemy.orm import selectinload
 from app.db.session import get_session
 from app.models.user import User
 from app.core.config import settings
@@ -124,7 +125,7 @@ async def get_admin_user(
     
     # Get existing admin user from database
     result = await session.execute(
-        select(User).where(User.email == "admin@test.com")
+        select(User).options(selectinload(User.profile)).where(User.email == "admin@test.com")
     )
     admin_user = result.scalar_one_or_none()
     

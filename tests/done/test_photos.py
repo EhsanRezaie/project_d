@@ -189,13 +189,13 @@ class TestUploadPhoto:
         assert photos[0]["is_main"] is True
         assert photos[1]["is_main"] is False
 
-    async def test_upload_enforces_max_six_photos(self, client, auth_headers):
-        for _ in range(6):
+    async def test_upload_enforces_max_photos(self, client, auth_headers):
+        for _ in range(9):
             body = await upload_and_get_id(client, auth_headers)
         files = make_upload_file()
         resp = await client.post("/api/v1/users/me/photos", headers=auth_headers, files=files)
         assert resp.status_code == 400
-        assert "maximum 6" in resp.json()["detail"].lower()
+        assert "maximum 9" in resp.json()["detail"].lower()
 
     async def test_uploaded_photo_url_is_a_real_signed_url_and_is_fetchable(self, client, auth_headers):
         """End-to-end against REAL MinIO: the URL returned on upload must

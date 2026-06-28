@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from app.db.session import get_session
 from app.core.deps import get_admin_user
 from app.core.limiter import limiter
+from sqlalchemy.orm import selectinload
 from app.models.user import User
+from app.models.user_profile import UserProfile
 from app.models.notification import Notification
 from app.schemas.admin import (
     AdminMessageRequest,
@@ -29,10 +31,10 @@ async def admin_send_announcement(
     """Admin: Send announcement to all active users (or premium only)"""
     
     # Build query for target users
-    query = select(User).where(User.is_active == True)
+    query = select(User).options(selectinload(User.profile)).where(User.is_active == True)
     
     if body.to_premium_only:
-        query = query.where(User.premium_until > datetime.now(timezone.utc))
+        query = query.join(User.profile).where(UserProfile.premium_until > datetime.now(timezone.utc))
     
     result = await session.execute(query)
     users = result.scalars().all()
@@ -91,5 +93,5 @@ async def admin_send_test_announcement(
         success=True,
         message="Test announcement sent to admin",
         user_id=admin.id,
-        user_name=admin.name
+        user_name=admin.profile.name if admin.profile else None
     )
