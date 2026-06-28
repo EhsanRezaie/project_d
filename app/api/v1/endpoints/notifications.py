@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from uuid import UUID
 
 from app.db.session import get_session
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
 from app.models.user import User
 from app.models.notification import Notification
@@ -55,21 +55,21 @@ async def mark_notifications_read(
     request: Request,
     body: MarkReadRequest,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ):
     """Mark notification(s) as read"""
     
     await session.execute(
         select(Notification).where(
             Notification.id.in_(body.notification_ids),
-            Notification.user_id == current_user.id
+            Notification.user_id == current_user_id
         )
     )
     
     await session.execute(
         Notification.__table__.update()
         .where(Notification.id.in_(body.notification_ids))
-        .where(Notification.user_id == current_user.id)
+        .where(Notification.user_id == current_user_id)
         .values(is_read=True)
     )
     await session.commit()
@@ -81,14 +81,14 @@ async def delete_notification(
     request: Request,
     notification_id: UUID,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ):
     """Delete a notification"""
     
     result = await session.execute(
         select(Notification).where(
             Notification.id == notification_id,
-            Notification.user_id == current_user.id
+            Notification.user_id == current_user_id
         )
     )
     notification = result.scalar_one_or_none()

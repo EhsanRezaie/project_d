@@ -11,7 +11,7 @@ from app.db.session import get_session
 from app.models.user import User
 from app.models.match import Match
 from app.models.message import Message
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
 from app.schemas.message import (
     MessageResponse, MessageListResponse, TextMessageRequest,
@@ -448,10 +448,10 @@ async def mark_delivered(
     request: Request,
     body: MarkReadRequest,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ) -> dict:
     """Mark messages as delivered"""
-    await mark_messages_as_delivered(session, body.message_ids, current_user.id)
+    await mark_messages_as_delivered(session, body.message_ids, current_user_id)
     return {"message": f"{len(body.message_ids)} messages marked as delivered"}
 
 
@@ -461,10 +461,10 @@ async def mark_read(
     request: Request,
     body: MarkReadRequest,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ) -> dict:
     """Mark messages as read"""
-    await mark_messages_as_read(session, body.message_ids, current_user.id)
+    await mark_messages_as_read(session, body.message_ids, current_user_id)
     return {"message": f"{len(body.message_ids)} messages marked as read"}
 
 
@@ -475,10 +475,10 @@ async def delete_message_endpoint(
     message_id: UUID,
     delete_for: str = "me",
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ) -> dict:
     """Delete a message (for me or for everyone)"""
-    success, error = await delete_message(session, message_id, current_user.id, delete_for)
+    success, error = await delete_message(session, message_id, current_user_id, delete_for)
     if not success:
         raise HTTPException(status_code=400, detail=error)
     return {"message": f"Message deleted for {delete_for}"}

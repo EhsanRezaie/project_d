@@ -57,11 +57,16 @@ class NotificationService:
         """Send match notification to both users"""
         # Get both users
         from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
         from app.models.user import User
 
-        result1 = await self.db.execute(select(User).where(User.id == user1_id))
+        result1 = await self.db.execute(
+            select(User).options(selectinload(User.profile)).where(User.id == user1_id)
+        )
         user1 = result1.scalar_one_or_none()
-        result2 = await self.db.execute(select(User).where(User.id == user2_id))
+        result2 = await self.db.execute(
+            select(User).options(selectinload(User.profile)).where(User.id == user2_id)
+        )
         user2 = result2.scalar_one_or_none()
 
         if user1:

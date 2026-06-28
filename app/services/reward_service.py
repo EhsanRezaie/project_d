@@ -74,14 +74,13 @@ class RewardService:
         
         return daily_limit
     
-    async def get_remaining_likes(self, user: User) -> int:
+    async def get_remaining_likes(self, user_id: UUID, is_premium: bool) -> int:
         """Get remaining likes for today. Returns -1 for unlimited."""
-        # ✅ FIX: Check profile exists and is_premium
-        if user.profile and user.profile.is_premium:
+        if is_premium:
             return -1
         
         today = date.today()
-        daily_limit = await self.get_or_create_daily_limit(user.id, today)
+        daily_limit = await self.get_or_create_daily_limit(user_id, today)
         
         available = settings.FREE_USER_DAILY_LIKES + daily_limit.ad_likes_bonus - daily_limit.likes_used
         return max(0, available)
@@ -98,23 +97,22 @@ class RewardService:
         available = settings.FREE_USER_DAILY_CHATS + daily_limit.ad_chats_bonus - daily_limit.chats_used
         return max(0, available)
     
-    async def consume_like(self, user: User) -> bool:
+    async def consume_like(self, user_id: UUID, is_premium: bool) -> bool:
         """Consume one like. Returns True if successful."""
-        # ✅ FIX: Check profile exists and is_premium
-        if user.profile and user.profile.is_premium:
+        if is_premium:
             return True
         
-        remaining = await self.get_remaining_likes(user)
+        remaining = await self.get_remaining_likes(user_id, is_premium)
         if remaining <= 0:
             return False
         
         today = date.today()
-        daily_limit = await self.get_or_create_daily_limit(user.id, today)
+        daily_limit = await self.get_or_create_daily_limit(user_id, today)
         daily_limit.likes_used += 1
         await self.db.commit()
 
         # Update Redis cache
-        cache_key = key_daily_limits(user.id, today.isoformat())
+        cache_key = key_daily_limits(user_id, today.isoformat())
         await cache_set(redis_client, cache_key, {
             "likes_used": daily_limit.likes_used,
             "chats_used": daily_limit.chats_used,

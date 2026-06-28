@@ -5,7 +5,7 @@ from uuid import UUID
 from datetime import datetime, timedelta
 
 from app.db.session import get_session
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
 from app.models.user import User
 from app.models.report import Report
@@ -21,12 +21,12 @@ async def report_user(
     user_id: UUID,
     body: ReportRequest,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user_id: UUID = Depends(get_current_user_id),
 ):
     """Report a user for inappropriate behavior"""
     
     # Cannot report yourself
-    if user_id == current_user.id:
+    if user_id == current_user_id:
         raise HTTPException(status_code=400, detail="Cannot report yourself")
     
     # Check if target user exists
@@ -42,7 +42,7 @@ async def report_user(
     twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
     existing = await session.execute(
         select(Report).where(
-            Report.reporter_id == current_user.id,
+            Report.reporter_id == current_user_id,
             Report.reported_id == user_id,
             Report.created_at > twenty_four_hours_ago
         )
@@ -52,7 +52,7 @@ async def report_user(
     
     # Create report
     report = Report(
-        reporter_id=current_user.id,
+        reporter_id=current_user_id,
         reported_id=user_id,
         reason=body.reason,
         status="pending"

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from jose import JWTError, jwt
-import uuid
+from uuid import UUID
 
 from sqlalchemy.orm import selectinload
 from app.db.session import get_session
@@ -78,6 +78,43 @@ async def get_current_user(
         )
     
     return user
+
+
+async def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> UUID:
+    """
+    Lightweight dependency — validates JWT only, zero DB queries.
+    Returns user_id as UUID.
+    Use for endpoints that only need current_user.id:
+      POST /swipes, POST /messages/delivered, POST /messages/read,
+      DELETE /messages/{message_id}, POST /notifications/read,
+      DELETE /notifications/{id}, POST /blocks/{id}/block,
+      POST /blocks/{id}/unblock, POST /reports/{user_id}
+    """
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = decode_token(credentials.credentials, ACCESS_TOKEN_TYPE)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    return UUID(user_id)
 
 
 async def get_current_active_user(
