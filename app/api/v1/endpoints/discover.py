@@ -15,6 +15,10 @@ from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.schemas.discover import ProfileResponse, DiscoverResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("discover")
+
 router = APIRouter(prefix="/discover", tags=["discover"])
 
 

@@ -19,6 +19,10 @@ from app.schemas.admin import (
 )
 from app.services.chat_service import get_message_for_admin
 
+from app.core.logging import get_logger
+
+logger = get_logger("admin_messages")
+
 router = APIRouter(prefix="/admin/messages", tags=["admin"])
 
 

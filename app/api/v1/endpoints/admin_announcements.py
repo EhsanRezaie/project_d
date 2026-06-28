@@ -17,6 +17,10 @@ from app.schemas.admin import (
     AdminAnnouncementResponse
 )
 
+from app.core.logging import get_logger
+
+logger = get_logger("admin_announcements")
+
 router = APIRouter(prefix="/admin/announcements", tags=["admin"])
 
 

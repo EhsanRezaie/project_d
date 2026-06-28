@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     FORCE_UPDATE_MESSAGE: str
 
     # ============================================
+    # Error Tracking (GlitchTip)
+    # ============================================
+    GLITCHTIP_DSN: str = ""
+
+    # ============================================
     # Pydantic Config
     # ============================================
     class Config:

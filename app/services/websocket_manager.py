@@ -34,7 +34,7 @@ class WebSocketManager:
             self.active_connections[user_id] = set()
         self.active_connections[user_id].add(websocket)
         
-        logger.info(f"WebSocket connected for user {user_id}")
+        logger.info("WebSocket connected", user_id=user_id)
     
     async def disconnect(self, websocket: WebSocket, user_id: str):
         """Remove WebSocket connection"""
@@ -43,12 +43,12 @@ class WebSocketManager:
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
         
-        logger.info(f"WebSocket disconnected for user {user_id}")
+        logger.info("WebSocket disconnected", user_id=user_id)
     
     async def send_personal_message(self, user_id: str, message: dict):
         """Send message to a specific user via all their active connections"""
         if user_id not in self.active_connections:
-            logger.debug(f"No active connection for user {user_id}")
+            logger.debug("No active connection for user", user_id=user_id)
             return
         
         data = json.dumps(message)
@@ -58,7 +58,7 @@ class WebSocketManager:
             try:
                 await websocket.send_text(data)
             except Exception as e:
-                logger.error(f"Failed to send message to user {user_id}: {e}")
+                logger.error("Failed to send message", user_id=user_id, error=str(e))
                 disconnected.append(websocket)
         
         for ws in disconnected:
@@ -85,7 +85,7 @@ class WebSocketManager:
         await self.send_personal_message(user1_id, message1)
         await self.send_personal_message(user2_id, message2)
         
-        logger.info(f"Match broadcast sent for match {match_id}")
+        logger.info("Match broadcast sent", match_id=match_id)
     
     # ==================== Chat Methods ====================
     
@@ -98,7 +98,7 @@ class WebSocketManager:
             self.chat_connections[key] = set()
         self.chat_connections[key].add(websocket)
         
-        logger.info(f"Chat WebSocket connected for match {match_id}, user {user_id}")
+        logger.info("Chat WebSocket connected", match_id=match_id, user_id=user_id)
     
     async def remove_chat_connection(self, match_id: str, user_id: str, websocket: WebSocket):
         """Remove a chat WebSocket connection"""
@@ -108,7 +108,7 @@ class WebSocketManager:
             if not self.chat_connections[key]:
                 del self.chat_connections[key]
         
-        logger.info(f"Chat WebSocket disconnected for match {match_id}, user {user_id}")
+        logger.info("Chat WebSocket disconnected", match_id=match_id, user_id=user_id)
     
     async def send_to_match(self, match_id: str, sender_id: str, message: dict, other_user_id: str = None):
         """
@@ -126,7 +126,7 @@ class WebSocketManager:
                     try:
                         await ws.send_text(data)
                     except Exception as e:
-                        logger.error(f"Failed to send to {other_key}: {e}")
+                        logger.error("Failed to send to other", other_key=other_key, error=str(e))
         
         # Also send back to sender (for confirmation)
         sender_key = f"chat:{match_id}:{sender_id}"
@@ -135,7 +135,7 @@ class WebSocketManager:
                 try:
                     await ws.send_text(data)
                 except Exception as e:
-                    logger.error(f"Failed to send to {sender_key}: {e}")
+                    logger.error("Failed to send to sender", sender_key=sender_key, error=str(e))
 
 
 # Create singleton instance

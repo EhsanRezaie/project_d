@@ -43,6 +43,20 @@ from app.api.v1.websocket.chat import router as chat_websocket_router
 from app.core.logging import setup_logging
 setup_logging()
 
+if settings.GLITCHTIP_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    sentry_sdk.init(
+        dsn=settings.GLITCHTIP_DSN,
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            SqlalchemyIntegration(),
+        ],
+        traces_sample_rate=0.1,
+        environment=settings.ENVIRONMENT,
+    )
+
 
 app = FastAPI(
     title=settings.APP_NAME,

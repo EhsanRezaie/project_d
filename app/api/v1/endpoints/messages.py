@@ -28,6 +28,10 @@ from app.services.chat_service import (
 from app.services.media_service import MediaService
 from app.services.websocket_manager import websocket_manager
 
+from app.core.logging import get_logger
+
+logger = get_logger("messages")
+
 router = APIRouter(prefix="/messages", tags=["messages"])
 
 

@@ -1,6 +1,9 @@
 """
 Email service for sending verification codes, password reset, etc.
 """
+from app.core.logging import get_logger
+
+logger = get_logger("services.email_service")
 
 
 async def send_verification_code(email: str, code: str) -> bool:

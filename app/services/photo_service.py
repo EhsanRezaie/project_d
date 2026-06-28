@@ -74,7 +74,7 @@ class PhotoService:
             return True, None
 
         except Exception as e:
-            logger.error(f"Image validation error: {e}")
+            logger.error("Image validation error", error=str(e))
             return False, "Invalid or corrupted image file"
 
     @staticmethod
@@ -124,7 +124,7 @@ class PhotoService:
                 ContentType="image/jpeg",
             )
 
-        logger.info(f"Uploaded photo {key} to private bucket")
+            logger.info("Uploaded photo to private bucket", key=key)
         return key
 
     @staticmethod
@@ -141,7 +141,7 @@ class PhotoService:
                     continue  # not in this bucket
                 await s3.delete_object(Bucket=bucket, Key=key)
                 deleted = True
-                logger.info(f"Deleted photo {key} from {bucket}")
+                logger.info("Deleted photo", key=key, bucket=bucket)
 
         return deleted
 
@@ -169,7 +169,7 @@ class PhotoService:
             )
             await s3.delete_object(Bucket=settings.S3_PRIVATE_BUCKET, Key=key)
 
-        logger.info(f"Published photo {key} to public bucket")
+        logger.info("Published photo to public bucket", key=key)
 
     @staticmethod
     async def unpublish_photo(user_id: str, photo_id: str) -> None:
@@ -189,7 +189,7 @@ class PhotoService:
             )
             await s3.delete_object(Bucket=settings.S3_PUBLIC_BUCKET, Key=key)
 
-        logger.info(f"Unpublished photo {key} back to private bucket")
+        logger.info("Unpublished photo back to private bucket", key=key)
 
     @staticmethod
     async def get_photo_url(key: str, status: str) -> str:

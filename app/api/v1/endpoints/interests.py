@@ -8,6 +8,10 @@ from app.schemas.interest import InterestResponse
 from app.core.redis import redis_client
 from app.core.cache import cache_get, cache_set, key_interests, TTL_INTERESTS
 
+from app.core.logging import get_logger
+
+logger = get_logger("interests")
+
 router = APIRouter(prefix="/interests", tags=["interests"])
 
 

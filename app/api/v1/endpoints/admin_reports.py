@@ -12,6 +12,10 @@ from app.models.user import User
 from app.models.report import Report
 from app.schemas.admin import AdminReportResponse, AdminReportUpdate
 
+from app.core.logging import get_logger
+
+logger = get_logger("admin_reports")
+
 router = APIRouter(prefix="/admin/reports", tags=["admin"])
 
 

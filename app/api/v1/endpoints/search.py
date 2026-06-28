@@ -16,6 +16,10 @@ from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.schemas.search import SearchProfileResponse, SearchResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("search")
+
 router = APIRouter(prefix="/search", tags=["search"])
 
 

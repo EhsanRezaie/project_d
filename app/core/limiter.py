@@ -1,6 +1,9 @@
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from app.core.config import settings
+from app.core.logging import get_logger
+
+logger = get_logger("core.limiter")
 
 # Uses Redis as backend so limits are shared across multiple workers
 limiter = Limiter(

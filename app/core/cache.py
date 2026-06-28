@@ -1,6 +1,9 @@
 import json
 from uuid import UUID
 from redis.asyncio import Redis
+from app.core.logging import get_logger
+
+logger = get_logger("core.cache")
 
 # ── TTLs ──────────────────────────────────────────────────────────────────────
 TTL_INTERESTS       = 86400      # 24h  — seed data, never changes at runtime

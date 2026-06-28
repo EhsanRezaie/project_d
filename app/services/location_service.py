@@ -87,7 +87,7 @@ def _countries_cached() -> list[dict]:
             key=lambda c: c["name"]
         )
     except Exception as e:
-        logger.error(f"Error loading countries: {e}")
+        logger.error("Error loading countries", error=str(e))
         return []
 
 
@@ -119,7 +119,7 @@ def _states_cached(country_iso2: str) -> list[dict]:
             key=lambda s: s["name"]
         )
     except Exception as e:
-        logger.error(f"Error loading states for {country_iso2}: {e}")
+        logger.error("Error loading states", country=country_iso2, error=str(e))
         return []
 
 
@@ -164,7 +164,7 @@ def _cities_by_state_cached(country_iso2: str, state_code: str) -> list[dict]:
         return result
         
     except Exception as e:
-        logger.error(f"Error loading cities for state {state_code}: {e}")
+        logger.error("Error loading cities for state", state_code=state_code, error=str(e))
         return []
 
 
@@ -182,7 +182,7 @@ def _cities_by_country_cached(country_iso2: str) -> list[dict]:
         return result
         
     except Exception as e:
-        logger.error(f"Error loading cities for country {country_iso2}: {e}")
+        logger.error("Error loading cities for country", country=country_iso2, error=str(e))
         return []
 
 
@@ -231,7 +231,7 @@ def search_cities_by_name(
         )
         return [_city_to_dict(c) for c in results]
     except Exception as e:
-        logger.error(f"Error searching cities: {e}")
+        logger.error("Error searching cities", error=str(e))
         return []
 
 
@@ -272,7 +272,7 @@ async def reverse_geocode(lat: float, lng: float, redis_client=None) -> Optional
             if cached:
                 return json.loads(cached)
         except Exception as e:
-            logger.warning("Redis cache read failed: %s", e)
+            logger.warning("Redis cache read failed", error=str(e))
 
     result = await _nominatim_reverse(lat, lng)
     if result is None:
@@ -282,7 +282,7 @@ async def reverse_geocode(lat: float, lng: float, redis_client=None) -> Optional
         try:
             await redis_client.setex(cache_key, REVERSE_GC_CACHE_TTL, json.dumps(result))
         except Exception as e:
-            logger.warning("Redis cache write failed: %s", e)
+            logger.warning("Redis cache write failed", error=str(e))
 
     return result
 
@@ -325,10 +325,10 @@ async def _nominatim_reverse(lat: float, lng: float) -> Optional[dict]:
         }
 
     except httpx.TimeoutException:
-        logger.error("Nominatim timed out for (%s, %s)", lat, lng)
+        logger.error("Nominatim timed out", lat=lat, lng=lng)
         return None
     except Exception as e:
-        logger.error("Reverse geocoding failed for (%s, %s): %s", lat, lng, e)
+        logger.error("Reverse geocoding failed", lat=lat, lng=lng, error=str(e))
         return None
 
 

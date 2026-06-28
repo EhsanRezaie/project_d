@@ -14,6 +14,9 @@ from app.schemas.subscription import (
     PurchaseResponse, VerifyResponse, SubscriptionStatusResponse,
     CancelSubscriptionResponse
 )
+from app.core.logging import get_logger
+
+logger = get_logger("services.subscriptions")
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 

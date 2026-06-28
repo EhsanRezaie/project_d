@@ -20,6 +20,10 @@ from app.schemas.discover import SwipeRequest, SwipeResponse
 from app.schemas.swipe import SwipeStatsResponse
 from app.services.websocket_manager import websocket_manager
 
+from app.core.logging import get_logger
+
+logger = get_logger("swipes")
+
 router = APIRouter(prefix="/swipes", tags=["swipes"])
 
 

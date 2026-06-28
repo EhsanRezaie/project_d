@@ -84,11 +84,11 @@ class MediaService:
                     ExpiresIn=settings.S3_SIGNED_URL_EXPIRE_SECONDS,
                 )
 
-            logger.info(f"Uploaded chat photo to MinIO: {key}")
+            logger.info("Uploaded chat photo to MinIO", key=key)
             return True, url, None
 
         except Exception as e:
-            logger.error(f"Failed to save photo: {e}")
+            logger.error("Failed to save photo", error=str(e))
             return False, None, "Invalid image file"
 
     @staticmethod
@@ -139,11 +139,11 @@ class MediaService:
                     ExpiresIn=settings.S3_SIGNED_URL_EXPIRE_SECONDS,
                 )
 
-            logger.info(f"Uploaded chat voice to MinIO: {key}")
+            logger.info("Uploaded chat voice to MinIO", key=key)
             return True, url, None
 
         except Exception as e:
-            logger.error(f"Failed to save voice: {e}")
+            logger.error("Failed to save voice", error=str(e))
             return False, None, "Failed to save voice message"
 
     @staticmethod
@@ -178,8 +178,8 @@ class MediaService:
                 except Exception:
                     pass
                 
-            logger.info(f"Deleted chat media: {key}")
+            logger.info("Deleted chat media", key=key)
             return True
         except Exception as e:
-            logger.error(f"Failed to delete media: {e}")
+            logger.error("Failed to delete media", error=str(e))
             return False

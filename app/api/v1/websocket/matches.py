@@ -40,11 +40,11 @@ async def websocket_matches(
                 await websocket.send_text("pong")
             else:
                 # Log other messages but don't process
-                logger.debug(f"Received from user {user_id}: {data}")
+                logger.debug("Received message", user_id=user_id, data=data)
                 
     except WebSocketDisconnect:
         await websocket_manager.disconnect(websocket, str(user_id))
-        logger.info(f"WebSocket disconnected for user {user_id}")
+        logger.info("WebSocket disconnected", user_id=user_id)
     except Exception as e:
-        logger.error(f"WebSocket error for user {user_id}: {e}")
+        logger.error("WebSocket error", user_id=user_id, error=str(e))
         await websocket_manager.disconnect(websocket, str(user_id))

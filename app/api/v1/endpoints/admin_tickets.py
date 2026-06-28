@@ -13,6 +13,10 @@ from app.models.ticket import Ticket
 from app.schemas.admin import AdminTicketResponse, AdminTicketUpdate
 from app.schemas.ticket import TicketListResponse
 
+from app.core.logging import get_logger
+
+logger = get_logger("admin_tickets")
+
 router = APIRouter(prefix="/admin/tickets", tags=["admin"])
 
 
