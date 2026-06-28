@@ -17,37 +17,6 @@ from app.services.notification_service import NotificationService
 router = APIRouter(prefix="/matches", tags=["matches"])
 
 
-async def get_user_main_photo_url(session: AsyncSession, user_id: UUID) -> str | None:
-    """Get user's main approved photo URL"""
-    result = await session.execute(
-        select(Photo.url).where(
-            Photo.user_id == user_id,
-            Photo.is_main == True,
-            Photo.status == "approved"
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-async def get_last_message(session: AsyncSession, match_id: UUID) -> dict | None:
-    """Get last message for a match"""
-    result = await session.execute(
-        select(Message)
-        .where(Message.match_id == match_id)
-        .order_by(Message.sent_at.desc())
-        .limit(1)
-    )
-    message = result.scalar_one_or_none()
-    
-    if message:
-        return {
-            "content": message.content,
-            "sent_at": message.sent_at,
-            "is_read": message.is_read
-        }
-    return None
-
-
 @router.get("", response_model=MatchListResponse)
 @limiter.limit("60/minute")
 async def get_matches(
@@ -61,11 +30,12 @@ async def get_matches(
     Get all active matches for current user.
     Returns matches sorted by most recent message or match date.
     """
-    
-    # Find all matches where current user is user1 or user2 - EAGER LOAD users + profiles
+
     query = select(Match).options(
         selectinload(Match.user1).selectinload(User.profile),
-        selectinload(Match.user2).selectinload(User.profile)
+        selectinload(Match.user1).selectinload(User.photos),
+        selectinload(Match.user2).selectinload(User.profile),
+        selectinload(Match.user2).selectinload(User.photos),
     ).where(
         or_(
             Match.user1_id == current_user.id,
@@ -73,31 +43,48 @@ async def get_matches(
         ),
         Match.is_active == True
     ).order_by(Match.matched_at.desc())
-    
-    # Count total
+
     count_query = select(func.count()).select_from(query.subquery())
     total = await session.scalar(count_query)
-    
-    # Apply pagination
+
     query = query.offset(offset).limit(limit)
     result = await session.execute(query)
     matches = result.scalars().all()
-    
-    # Build response
+
+    # Single query for all last messages (eliminates N+1)
+    last_messages = {}
+    if matches:
+        match_ids = [m.id for m in matches]
+        last_msg_query = (
+            select(Message)
+            .where(
+                Message.match_id.in_(match_ids),
+                Message.is_deleted_for_all == False
+            )
+            .order_by(Message.match_id, Message.sent_at.desc())
+            .distinct(Message.match_id)
+        )
+        last_msg_result = await session.execute(last_msg_query)
+        for msg in last_msg_result.scalars().all():
+            last_messages[msg.match_id] = msg
+
     match_responses = []
     for match in matches:
-        # Get the other user
         if match.user1_id == current_user.id:
             other_user = match.user2
         else:
             other_user = match.user1
-        
-        # Get other user's main photo (separate query to avoid complexity)
-        main_photo_url = await get_user_main_photo_url(session, other_user.id)
-        
-        # Get last message
-        last_message = await get_last_message(session, match.id)
-        
+
+        main_photo = next((p for p in other_user.photos if p.is_main and p.status == "approved"), None) if other_user.photos else None
+        main_photo_url = main_photo.url if main_photo else None
+
+        last_msg = last_messages.get(match.id)
+        last_message = LastMessageResponse(
+            content=last_msg.content,
+            sent_at=last_msg.sent_at,
+            is_read=last_msg.is_read
+        ) if last_msg else None
+
         match_responses.append(MatchResponse(
             id=match.id,
             matched_at=match.matched_at,
@@ -107,13 +94,9 @@ async def get_matches(
                 age=other_user.profile.age,
                 main_photo_url=main_photo_url,
             ),
-            last_message=LastMessageResponse(
-                content=last_message["content"],
-                sent_at=last_message["sent_at"],
-                is_read=last_message["is_read"]
-            ) if last_message else None
+            last_message=last_message
         ))
-    
+
     return MatchListResponse(
         matches=match_responses,
         total=total or 0
@@ -131,10 +114,12 @@ async def get_match_detail(
     """
     Get detailed information about a specific match.
     """
-    
+
     query = select(Match).options(
         selectinload(Match.user1).selectinload(User.profile),
-        selectinload(Match.user2).selectinload(User.profile)
+        selectinload(Match.user1).selectinload(User.photos),
+        selectinload(Match.user2).selectinload(User.profile),
+        selectinload(Match.user2).selectinload(User.photos),
     ).where(
         Match.id == match_id,
         Match.is_active == True,
@@ -143,20 +128,21 @@ async def get_match_detail(
             Match.user2_id == current_user.id
         )
     )
-    
+
     result = await session.execute(query)
     match = result.scalar_one_or_none()
-    
+
     if not match:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Match not found"
         )
-    
-    # Get both users' main photos
-    user1_photo = await get_user_main_photo_url(session, match.user1_id)
-    user2_photo = await get_user_main_photo_url(session, match.user2_id)
-    
+
+    user1_photo = next((p for p in match.user1.photos if p.is_main and p.status == "approved"), None) if match.user1.photos else None
+    user1_photo_url = user1_photo.url if user1_photo else None
+    user2_photo = next((p for p in match.user2.photos if p.is_main and p.status == "approved"), None) if match.user2.photos else None
+    user2_photo_url = user2_photo.url if user2_photo else None
+
     return MatchDetailResponse(
         id=match.id,
         matched_at=match.matched_at,
@@ -164,13 +150,13 @@ async def get_match_detail(
             id=match.user1.id,
             name=match.user1.profile.name,
             age=match.user1.profile.age,
-            main_photo_url=user1_photo,
+            main_photo_url=user1_photo_url,
         ),
         user2=MatchUserResponse(
             id=match.user2.id,
             name=match.user2.profile.name,
             age=match.user2.profile.age,
-            main_photo_url=user2_photo,
+            main_photo_url=user2_photo_url,
         ),
         is_active=match.is_active
     )
