@@ -1,5 +1,5 @@
 # app/services/chat_service.py
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 from typing import Optional, Tuple, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -382,12 +382,12 @@ async def delete_message(
         if message.sender_id != user_id:
             return False, "Only the sender can delete for everyone"
 
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
         if message.sent_at < one_hour_ago:
             return False, "Cannot delete for everyone after 1 hour. Use delete for me instead."
 
         message.is_deleted_for_all = True
-        message.deleted_at = datetime.utcnow()
+        message.deleted_at = datetime.now(timezone.utc)
         message._content = "[Message deleted]"  # Store as-is (not encrypted)
     else:
         if message.sender_id == user_id:
