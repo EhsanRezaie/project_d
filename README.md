@@ -319,9 +319,12 @@ Static reference tables (e.g. `interests`) are populated from JSON files under `
 ```bash
 # Seed / update interests from app/db/seed_data/interests.json
 python -m app.db.scripts.seed_interests
+
+# Seed 1000 dummy users (test1@test.com … test1000@test.com, password: 12345678)
+python -m app.db.scripts.seed_dummy_users
 ```
 
-Run this after migrations on first setup, and again any time `interests.json` is edited (e.g. adding a new interest, changing an icon).
+Run these after migrations on first setup. Interests can be re-run any time `interests.json` is edited. Dummy users can be re-run safely — existing `%@test.com` users are deleted first.
 
 ---
 
@@ -333,7 +336,7 @@ dating-app/
 │   ├── api/v1/endpoints/   # Route handlers
 │   ├── core/               # Config, security, dependencies
 │   ├── db/                 # Database engine, session, seed data & scripts
-│   │   ├── seed_data/      # JSON reference data (interests, etc.)
+│   │   ├── seed_data/      # JSON reference data (interests, prompts, dummy_users)
 │   │   └── scripts/        # Idempotent seed/sync scripts
 │   ├── models/             # SQLAlchemy models
 │   ├── schemas/            # Pydantic schemas (request/response)
