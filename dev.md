@@ -984,6 +984,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 28 | **Performance Phase 2+3 — Redis caching (static + user data + daily limits)** | ✅ |
 | 29 | **Performance Phase 4.1 — get_current_user_id lightweight dependency** | ✅ |
 | 30 | **Performance Phase 4.2-4.5 — Eager loading, DB Haversine, BackgroundTasks, Cursor pagination** | ✅ |
+| 31 | **Schema audit + Redoc accuracy — all endpoints now declare response_model** | ✅ |
 
 ---
 
@@ -1387,6 +1388,54 @@ alembic downgrade -1
 - `app/api/v1/endpoints/matches.py` — last-message N+1 eliminated, photo eager load
 - `app/api/v1/endpoints/swipes.py` — BackgroundTasks for match notification + WebSocket
 - `app/api/v1/endpoints/messages.py` — Cursor pagination, BackgroundTasks for WebSocket sends
+
+**Tests: 511 passing ✅**
+
+---
+
+### ✅ Session 31 Complete — Schema Audit & Redoc Accuracy
+
+Every endpoint in the app now declares a proper `response_model`, so Redoc shows accurate schemas for the Flutter client.
+
+**Bug Fix:**
+| File | Change |
+|------|--------|
+| `blocks.py:132` | `current_user.profile.name` → `user.profile.name` (was returning blocker's name, not blocked user's name) |
+| `blocks.py:118` | Added `selectinload(User.profile)` to prevent `MissingGreenlet` on async lazy load |
+
+**Endpoints wired with existing schemas (6):**
+
+| Endpoint | Schema |
+|----------|--------|
+| `GET /swipes/stats` | `SwipeStatsResponse` |
+| `POST /rewards/ad-watched` | `AdRewardResponse` |
+| `GET /rewards/my-limits` | `DailyLimitsResponse` |
+| `GET /referrals/my-code` | `ReferralCodeResponse` |
+| `POST /referrals/claim` | `ClaimReferralResponse` |
+| `GET /referrals/stats` | `ReferralStatsResponse` |
+
+**New schema models created (12):**
+
+| File | Models |
+|------|--------|
+| `location.py` | `LocationUpdateResponse` |
+| `message.py` | `MessageActionResponse`, `ForwardMessageResponse` |
+| `admin.py` | `AdminPendingPhotoResponse`, `AdminPhotoActionResponse`, `AdminPhotoRejectResponse`, `AdminPhotoVerifyResponse`, `AdminPhotoStatsResponse`, `AdminUserPhotoResponse`, `AdminMessageDecryptResponse`, `AdminMessageDeleteResponse`, `AdminReportedMessageResponse`, `UserActivityEntry` |
+| `swipe.py` | Updated `SwipeStatsResponse` to match actual endpoint return; removed 5 dead models |
+
+**Admin endpoints wired (11):**
+- `GET /admin/photos/pending`, `POST /approve`, `POST /reject`, `GET /stats`, `GET /{id}`, `POST /verify-face`, `GET /users/{uid}/photos`
+- `GET /admin/messages/{id}/decrypt`, `DELETE /admin/messages/{id}`, `GET /admin/messages/reports/{id}/message`
+- `GET /admin/users/{uid}/activity`
+
+**Other endpoints wired (6):**
+- `PATCH /locations/me/location-gps` and `location-manual`
+- `POST /messages/delivered`, `/read`, `DELETE /messages/{id}`, `POST /messages/{id}/forward`
+
+**Dead code removed:**
+- `swipe.py`: Deleted unused `SwipeResponse`, `SwipeHistoryResponse`, `SwipeListResponse`, `SwipeDirection`, old `SwipeRequest`
+
+**AdminPhotoDetailResponse** — added missing `user_email` field.
 
 **Tests: 511 passing ✅**
 

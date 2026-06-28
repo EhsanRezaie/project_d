@@ -92,6 +92,7 @@ class AdminPhotoDetailResponse(BaseModel):
     id: UUID
     user_id: UUID
     user_name: str
+    user_email: str
     url: str
     is_main: bool
     status: str
@@ -127,3 +128,87 @@ class AdminAnnouncementResponse(BaseModel):
     success: bool
     message: str
     recipient_count: int
+
+
+# Photo moderation pending list
+class AdminPendingPhotoResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    user_name: Optional[str] = None
+    user_email: str
+    url: str
+    is_main: bool
+    status: str
+    face_verified: bool = False
+    created_at: Optional[str] = None
+
+
+class AdminPhotoActionResponse(BaseModel):
+    message: str
+    photo_id: str
+
+
+class AdminPhotoRejectResponse(BaseModel):
+    message: str
+    photo_id: str
+    reason: str
+
+
+class AdminPhotoVerifyResponse(BaseModel):
+    message: str
+    photo_id: str
+    face_verified: bool
+
+
+class AdminPhotoStatsResponse(BaseModel):
+    pending: int
+    approved: int
+    rejected: int
+    total: int
+
+
+class AdminUserPhotoResponse(BaseModel):
+    id: UUID
+    url: str
+    is_main: bool
+    status: str
+    reject_reason: Optional[str] = None
+    face_verified: bool = False
+    order: int
+    created_at: Optional[str] = None
+
+
+# Message moderation
+class AdminMessageDecryptResponse(BaseModel):
+    message_id: str
+    sender_id: str
+    receiver_id: str
+    match_id: Optional[str] = None
+    content: str
+    sent_at: Optional[str] = None
+    is_accepted: bool
+
+
+class AdminMessageDeleteResponse(BaseModel):
+    message: str
+    message_id: str
+    reason: str
+
+
+class AdminReportedMessageResponse(BaseModel):
+    report_id: str
+    message_id: str
+    content: str
+    sender_id: str
+    receiver_id: str
+    sent_at: Optional[str] = None
+    report_reason: str
+    report_description: Optional[str] = None
+
+
+# User activity
+class UserActivityEntry(BaseModel):
+    date: str
+    swipes: int
+    matches: int
+    messages: int

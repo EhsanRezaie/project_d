@@ -12,12 +12,17 @@ from app.models.report import Report
 from app.core.deps import get_admin_user
 from app.core.encryption import decrypt_message
 from app.schemas.message import MessageResponse
+from app.schemas.admin import (
+    AdminMessageDecryptResponse,
+    AdminMessageDeleteResponse,
+    AdminReportedMessageResponse,
+)
 from app.services.chat_service import get_message_for_admin
 
 router = APIRouter(prefix="/admin/messages", tags=["admin"])
 
 
-@router.get("/{message_id}/decrypt")
+@router.get("/{message_id}/decrypt", response_model=AdminMessageDecryptResponse)
 async def admin_decrypt_message(
     message_id: UUID,
     session: AsyncSession = Depends(get_session),
@@ -43,7 +48,7 @@ async def admin_decrypt_message(
     }
 
 
-@router.delete("/{message_id}")
+@router.delete("/{message_id}", response_model=AdminMessageDeleteResponse)
 async def admin_delete_message(
     message_id: UUID,
     reason: str = "Violates terms of service",
@@ -75,7 +80,7 @@ async def admin_delete_message(
     }
 
 
-@router.get("/reports/{report_id}/message")
+@router.get("/reports/{report_id}/message", response_model=AdminReportedMessageResponse)
 async def admin_view_reported_message(
     report_id: UUID,
     session: AsyncSession = Depends(get_session),

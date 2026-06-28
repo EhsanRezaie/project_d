@@ -19,6 +19,7 @@ from app.schemas.location import (
     ProvinceResponse,
     CityResponse,
     ReverseGeocodeResponse,
+    LocationUpdateResponse,
 )
 from app.core.logging import get_logger
 from app.core.redis import redis_client
@@ -202,7 +203,7 @@ async def city_centroid(
 # Authenticated: update user location
 # ============================================================================
 
-@router.patch("/me/location-gps")
+@router.patch("/me/location-gps", response_model=LocationUpdateResponse)
 @limiter.limit("10/minute")
 async def update_location_gps(
     request: Request,
@@ -247,7 +248,7 @@ async def update_location_gps(
     }
 
 
-@router.patch("/me/location-manual")
+@router.patch("/me/location-manual", response_model=LocationUpdateResponse)
 @limiter.limit("10/minute")
 async def update_location_manual(
     request: Request,

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from uuid import UUID
 
 from app.db.session import get_session
@@ -117,6 +118,7 @@ async def list_blocks(
     
     result = await session.execute(
         select(Block, User)
+        .options(selectinload(User.profile))
         .join(User, Block.blocked_id == User.id)
         .where(Block.blocker_id == current_user.id)
         .order_by(Block.created_at.desc())
@@ -129,7 +131,7 @@ async def list_blocks(
         blocks.append(BlockResponse(
             id=block.id,
             blocked_user_id=user.id,
-            blocked_user_name=current_user.profile.name,
+            blocked_user_name=user.profile.name,
             blocked_at=block.created_at.isoformat(),
         ))
     

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.referral_reward import ReferralReward
 from app.services.reward_service import RewardService
+from app.schemas.referral import ReferralCodeResponse, ClaimReferralResponse, ReferralStatsResponse
 
 router = APIRouter(prefix="/referrals", tags=["referrals"])
 
@@ -21,7 +22,7 @@ def generate_referral_code() -> str:
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 
-@router.get("/my-code")
+@router.get("/my-code", response_model=ReferralCodeResponse)
 @limiter.limit("30/minute")
 async def get_my_referral_code(
     request: Request,
@@ -40,7 +41,7 @@ async def get_my_referral_code(
     }
 
 
-@router.post("/claim")
+@router.post("/claim", response_model=ClaimReferralResponse)
 @limiter.limit("10/minute")
 async def claim_referral(
     request: Request,
@@ -112,7 +113,7 @@ async def claim_referral(
     }
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=ReferralStatsResponse)
 @limiter.limit("30/minute")
 async def get_referral_stats(
     request: Request,

@@ -16,7 +16,8 @@ from app.core.limiter import limiter
 from app.schemas.message import (
     MessageResponse, MessageListResponse, TextMessageRequest,
     SendMessageResponse, DeleteMessageRequest, ForwardMessageRequest,
-    MarkReadRequest, MessageStatusResponse, AcceptChatResponse
+    MarkReadRequest, MessageStatusResponse, AcceptChatResponse,
+    MessageActionResponse, ForwardMessageResponse,
 )
 from app.services.chat_service import (
     can_start_new_chat, check_unmatched_message_limit, accept_unmatched_chat,
@@ -478,7 +479,7 @@ async def accept_chat(
     )
 
 
-@router.post("/delivered")
+@router.post("/delivered", response_model=MessageActionResponse)
 @limiter.limit("100/minute")
 async def mark_delivered(
     request: Request,
@@ -491,7 +492,7 @@ async def mark_delivered(
     return {"message": f"{len(body.message_ids)} messages marked as delivered"}
 
 
-@router.post("/read")
+@router.post("/read", response_model=MessageActionResponse)
 @limiter.limit("100/minute")
 async def mark_read(
     request: Request,
@@ -504,7 +505,7 @@ async def mark_read(
     return {"message": f"{len(body.message_ids)} messages marked as read"}
 
 
-@router.delete("/{message_id}")
+@router.delete("/{message_id}", response_model=MessageActionResponse)
 @limiter.limit("30/minute")
 async def delete_message_endpoint(
     request: Request,
@@ -520,7 +521,7 @@ async def delete_message_endpoint(
     return {"message": f"Message deleted for {delete_for}"}
 
 
-@router.post("/{message_id}/forward")
+@router.post("/{message_id}/forward", response_model=ForwardMessageResponse)
 @limiter.limit("30/minute")
 async def forward_message_endpoint(
     request: Request,

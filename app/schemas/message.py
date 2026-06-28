@@ -95,3 +95,14 @@ class SendMessageResponse(BaseModel):
     sent_at: datetime
     requires_acceptance: bool = False
     chat_accepted: bool = True
+
+
+class MessageActionResponse(BaseModel):
+    """Response for simple message actions (delivered, read, delete)."""
+    message: str
+
+
+class ForwardMessageResponse(BaseModel):
+    """Response for forwarding a message."""
+    message: str
+    new_message_id: str
