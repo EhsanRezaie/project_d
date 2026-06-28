@@ -1,10 +1,8 @@
-# app/api/v1/endpoints/search.py
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, Float
 from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import JSONB
-from math import radians, sin, cos, sqrt, atan2
 from datetime import datetime, timedelta, date
 
 from app.db.session import get_session
@@ -21,21 +19,14 @@ from app.schemas.search import SearchProfileResponse, SearchResponse
 router = APIRouter(prefix="/search", tags=["search"])
 
 
-def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """Calculate distance in km between two coordinates."""
-    if not lat1 or not lng1 or not lat2 or not lng2:
-        return None
-    
-    R = 6371
-    lat1_rad = radians(lat1)
-    lat2_rad = radians(lat2)
-    delta_lat = radians(lat2 - lat1)
-    delta_lng = radians(lng2 - lng1)
-    
-    a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lng / 2) ** 2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    
-    return R * c
+def haversine_distance(lat1, lng1, lat2_col, lng2_col):
+    """Haversine distance as SQL expression. Returns km."""
+    cos_val = (
+        func.cos(func.radians(lat1)) * func.cos(func.radians(lat2_col)) *
+        func.cos(func.radians(lng2_col) - func.radians(lng1)) +
+        func.sin(func.radians(lat1)) * func.sin(func.radians(lat2_col))
+    )
+    return 6371 * func.acos(func.least(1.0, func.greatest(-1.0, cos_val)))
 
 
 @router.get("", response_model=SearchResponse)
@@ -74,43 +65,21 @@ async def search_users(
 ) -> SearchResponse:
     """
     Search users with advanced filters.
-    Users who blocked you are excluded.
-    Users you blocked are excluded.
+    Filters, distance, sort, and pagination all happen at the database level.
     """
-    
-    # Get current user's profile
-    user_result = await session.execute(
-        select(User)
-        .options(
-            selectinload(User.profile),
-            selectinload(User.settings),
-            selectinload(User.photos),
-            selectinload(User.user_interests).selectinload(UserInterest.interest),
-        )
-        .where(User.id == current_user.id)
-    )
-    current_user_full = user_result.scalar_one_or_none()
-    
-    if not current_user_full or not current_user_full.profile:
+
+    if not current_user.profile:
         return SearchResponse(users=[], total=0, next_offset=None)
-    
-    current_profile = current_user_full.profile
-    
-    # Calculate birth date range from age
+
+    current_profile = current_user.profile
+
     today = date.today()
-    
-    # For age_min: max_birth_date = today - age_min years (youngest)
-    # For age_max: min_birth_date = today - (age_max + 1) years (oldest)
     max_birth_date = today - timedelta(days=age_min * 365)
     min_birth_date = today - timedelta(days=(age_max + 1) * 365)
-    
-    # Users who YOU blocked
+
     blocked_user_ids = select(Block.blocked_id).where(Block.blocker_id == current_user.id)
-    
-    # Users who blocked YOU
     blocked_by_user_ids = select(Block.blocker_id).where(Block.blocked_id == current_user.id)
-    
-    # Base query with eager loading
+
     query = select(User).options(
         selectinload(User.profile),
         selectinload(User.settings),
@@ -119,16 +88,14 @@ async def search_users(
     ).where(
         User.is_active == True,
         User.id != current_user.id,
-        User.id.not_in(blocked_user_ids),      # ← Users you blocked
-        User.id.not_in(blocked_by_user_ids),   # ← Users who blocked you
+        User.id.not_in(blocked_user_ids),
+        User.id.not_in(blocked_by_user_ids),
     )
-    
-    # Join with UserProfile for filtering
+
     query = query.join(UserProfile, User.id == UserProfile.user_id)
-    
-    # Filters
+
     query = query.where(UserProfile.birth_date.between(min_birth_date, max_birth_date))
-    
+
     if gender:
         query = query.where(UserProfile.gender == gender)
     if height_min:
@@ -163,16 +130,14 @@ async def search_users(
         query = query.where(UserProfile.drinking == drinking)
     if political_orientation:
         query = query.where(UserProfile.political_orientation == political_orientation)
-    
-    # Languages filter (multi-value - AND condition)
+
     if languages:
         lang_list = [lang.strip() for lang in languages.split(",") if lang.strip()]
         if lang_list:
             query = query.where(
                 UserProfile.languages.cast(JSONB).contains(lang_list)
             )
-    
-    # Interests filter (multi-value - AND condition)
+
     if interests:
         interest_list = [i.strip() for i in interests.split(",") if i.strip()]
         if interest_list:
@@ -187,14 +152,12 @@ async def search_users(
                 .having(func.count(UserInterest.interest_id) == len(interest_list))
                 .subquery()
             )
-            
             query = query.where(
                 User.id.in_(
                     select(interest_count_subquery.c.user_id)
                 )
             )
-    
-    # Has photos filter
+
     if has_photos is not None:
         if has_photos:
             query = query.where(
@@ -208,75 +171,69 @@ async def search_users(
                 .where(Photo.user_id == User.id, Photo.status == "approved")
                 .as_scalar() == 0
             )
-    
-    # Execute query
-    result = await session.execute(query)
-    users = result.scalars().all()
-    
-    # Process users with distance calculation
-    users_with_distance = []
-    for user in users:
-        if not user.profile:
-            continue
-            
-        distance = None
-        if distance_km and current_profile.lat and current_profile.lng and user.profile.lat and user.profile.lng:
-            distance = calculate_distance(
-                current_profile.lat, current_profile.lng,
-                user.profile.lat, user.profile.lng
-            )
-            if distance > distance_km:
-                continue
-        
-        # Get main photo URL
-        main_photo_url = None
-        if user.photos:
-            main_photo = next((p for p in user.photos if p.is_main and p.status == "approved"), None)
-            if main_photo:
-                main_photo_url = main_photo.url
-        
-        users_with_distance.append({
-            "user": user,
-            "distance": distance,
-            "main_photo_url": main_photo_url,
-        })
-    
-    # Sorting
-    if sort_by == "recent":
-        users_with_distance.sort(key=lambda x: x["user"].created_at, reverse=(sort_order == "desc"))
-    elif sort_by == "distance":
-        users_with_distance.sort(key=lambda x: x["distance"] if x["distance"] else 999999)
-    elif sort_by == "age":
-        users_with_distance.sort(key=lambda x: x["user"].profile.age, reverse=(sort_order == "desc"))
+
+    has_coords = current_profile.lat is not None and current_profile.lng is not None
+
+    if has_coords:
+        distance_expr = haversine_distance(
+            current_profile.lat, current_profile.lng,
+            UserProfile.lat, UserProfile.lng
+        )
+        if distance_km:
+            query = query.where(distance_expr <= distance_km)
+        query = query.add_columns(distance_expr.label("distance_km"))
+    else:
+        query = query.add_columns(func.cast(None, Float).label("distance_km"))
+        if sort_by == "distance":
+            sort_by = "recent"
+
+    if sort_by == "age":
+        col = UserProfile.birth_date
+        query = query.order_by(col.asc() if sort_order == "desc" else col.desc())
+    elif sort_by == "distance" and has_coords:
+        col = distance_expr
+        if sort_order == "desc":
+            query = query.order_by(col.desc().nullslast())
+        else:
+            query = query.order_by(col.asc().nullslast())
     elif sort_by == "name":
-        users_with_distance.sort(key=lambda x: x["user"].profile.name if x["user"].profile else "", reverse=(sort_order == "desc"))
-    
-    # Pagination
-    total = len(users_with_distance)
-    paginated = users_with_distance[offset:offset + limit]
-    
-    # Build response with ALL fields
+        col = UserProfile.name
+        query = query.order_by(col.desc() if sort_order == "desc" else col.asc())
+    else:
+        col = User.created_at
+        query = query.order_by(col.desc() if sort_order == "desc" else col.asc())
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await session.scalar(count_query)
+
+    query = query.offset(offset).limit(limit)
+    result = await session.execute(query)
+    rows = result.all()
+
     response_users = []
-    for item in paginated:
-        user = item["user"]
+    for row in rows:
+        user = row[0]
+        distance = row[1]
         profile = user.profile
         settings = user.settings
-        
+
         if not profile:
             continue
-        
+
         hide_last_seen = settings.hide_last_seen if settings else False
         hide_online_status = settings.hide_online_status if settings else False
-        
-        # Get user interests
+
         user_interests = []
         if user.user_interests:
             user_interests = [ui.interest.name for ui in user.user_interests if ui.interest]
-        
+
+        main_photo = next((p for p in user.photos if p.is_main and p.status == "approved"), None) if user.photos else None
+        main_photo_url = main_photo.url if main_photo else None
+
         response_users.append(SearchProfileResponse(
             id=user.id,
             name=profile.name,
-            age=profile.age,  # ✅ Uses profile.age property
+            age=profile.age,
             gender=profile.gender,
             bio=profile.bio,
             height=profile.height,
@@ -296,15 +253,15 @@ async def search_users(
             country=profile.country,
             province=profile.province,
             city=profile.city,
-            distance_km=round(item["distance"], 1) if item["distance"] and item["distance"] != 999999 else None,
-            main_photo_url=item["main_photo_url"],
+            distance_km=round(distance, 1) if distance is not None else None,
+            main_photo_url=main_photo_url,
             is_premium=profile.is_premium,
             is_verified=profile.is_verified if profile.is_verified is not None else False,
             last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else None,
             hide_last_seen=hide_last_seen,
             hide_online_status=hide_online_status
         ))
-    
+
     return SearchResponse(
         users=response_users,
         total=total,
