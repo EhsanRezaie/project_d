@@ -76,3 +76,68 @@ async def invalidate_user_cache(redis: Redis, user_id: UUID):
         await redis.delete(*keys)
     except Exception:
         pass
+
+
+# ── Discover Card Stack ──────────────────────────────────────────────────────
+DISCOVER_STACK_TTL = 1800    # 30 minutes
+DISCOVER_STACK_SIZE = 50     # pre-fetch 50 cards at a time
+SWIPED_SET_TTL = 7 * 86400   # 7 days
+
+
+def key_discover_stack(user_id: UUID) -> str:
+    return f"cache:discover:{user_id}:stack"
+
+
+async def pop_discover_stack(redis: Redis, user_id: UUID, count: int) -> list[str]:
+    """Pop `count` user IDs from the cached discover stack."""
+    key = key_discover_stack(user_id)
+    try:
+        pipe = redis.pipeline()
+        pipe.lrange(key, 0, count - 1)
+        pipe.ltrim(key, count, -1)
+        results = await pipe.execute()
+        return results[0]
+    except Exception:
+        return []
+
+
+async def set_discover_stack(redis: Redis, user_id: UUID, user_ids: list[str]):
+    """Replace the discover stack with a new list of user IDs."""
+    key = key_discover_stack(user_id)
+    try:
+        await redis.delete(key)
+        if user_ids:
+            await redis.lpush(key, *reversed(user_ids))
+            await redis.expire(key, DISCOVER_STACK_TTL)
+    except Exception:
+        pass
+
+
+async def invalidate_discover_stack(redis: Redis, user_id: UUID):
+    """Invalidate discover stack (e.g. on location update)."""
+    try:
+        await redis.delete(key_discover_stack(user_id))
+    except Exception:
+        pass
+
+
+# ── Swipe Deduplication ──────────────────────────────────────────────────────
+
+async def record_swipe_cache(redis: Redis, swiper_id: UUID, swipee_id: UUID):
+    """Add a swipe to the Redis set for fast exclusion in discover."""
+    key = f"swiped:{swiper_id}"
+    try:
+        await redis.sadd(key, str(swipee_id))
+        await redis.expire(key, SWIPED_SET_TTL)
+    except Exception:
+        pass
+
+
+async def get_swiped_ids(redis: Redis, user_id: UUID) -> set[str]:
+    """Get all swiped user IDs from Redis set."""
+    key = f"swiped:{user_id}"
+    try:
+        members = await redis.smembers(key)
+        return {m for m in members}
+    except Exception:
+        return set()

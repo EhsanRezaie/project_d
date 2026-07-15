@@ -15,6 +15,11 @@ from app.models.user_interest import UserInterest
 from app.models.user_prompt import UserPrompt
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
+from app.core.redis import redis_client
+from app.core.cache import (
+    pop_discover_stack, set_discover_stack, get_swiped_ids,
+    DISCOVER_STACK_SIZE,
+)
 from app.schemas.discover import ProfileResponse, DiscoverResponse
 from app.utils.geo import fuzz_distance
 
@@ -67,9 +72,8 @@ async def discover(
     max_birth_date = today - timedelta(days=age_min * 365)
     min_birth_date = today - timedelta(days=(age_max + 1) * 365)
 
-    swiped_user_ids = select(Swipe.to_user).where(
-        Swipe.from_user == current_user.id
-    ).subquery()
+    # --- Swipe deduplication via Redis set (fast path) ---
+    swiped_ids = await get_swiped_ids(redis_client, current_user.id)
 
     blocked_user_ids = select(Block.blocked_id).where(
         Block.blocker_id == current_user.id
@@ -89,6 +93,9 @@ async def discover(
     )
     matched_user_ids = matched_as_user1.union(matched_as_user2).subquery()
 
+    # Build exclusion list: blocked + matched from DB, swiped from Redis
+    exclude_ids = list(swiped_ids) if swiped_ids else []
+
     query = select(User).options(
         selectinload(User.profile),
         selectinload(User.settings),
@@ -99,11 +106,20 @@ async def discover(
         User.is_active == True,
         User.id != current_user.id,
         UserProfile.birth_date.between(min_birth_date, max_birth_date),
-        User.id.not_in(select(swiped_user_ids.c.to_user)),
         User.id.not_in(select(blocked_user_ids.c.blocked_id)),
         User.id.not_in(select(blocked_by_user_ids.c.blocker_id)),
         User.id.not_in(select(matched_user_ids.c.user2_id)),
     )
+
+    # Exclude swiped users via Redis set (if populated), else fall back to DB
+    if exclude_ids:
+        query = query.where(User.id.not_in(exclude_ids))
+    else:
+        # Redis set empty or unavailable — fall back to DB subquery
+        swiped_db_ids = select(Swipe.to_user).where(
+            Swipe.from_user == current_user.id
+        ).subquery()
+        query = query.where(User.id.not_in(select(swiped_db_ids.c.to_user)))
 
     if gender:
         query = query.where(UserProfile.gender == gender)

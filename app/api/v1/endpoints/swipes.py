@@ -16,6 +16,8 @@ from app.models.match import Match
 from app.models.photo import Photo
 from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
+from app.core.redis import redis_client
+from app.core.cache import record_swipe_cache
 from app.schemas.discover import SwipeRequest, SwipeResponse
 from app.schemas.swipe import SwipeStatsResponse
 from app.services.websocket_manager import websocket_manager
@@ -179,6 +181,9 @@ async def swipe(
     )
     session.add(new_swipe)
     await session.flush()
+
+    # Record swipe in Redis set for fast discover exclusion
+    await record_swipe_cache(redis_client, current_user_id, body.user_id)
     
     # Send like notification (only if recipient is premium)
     if body.direction == "like":
