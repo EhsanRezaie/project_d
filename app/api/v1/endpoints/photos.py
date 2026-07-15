@@ -244,8 +244,10 @@ async def set_main_photo(
 
 
 @router.patch("/order", response_model=list[PhotoResponse])
+@limiter.limit("10/minute")
 async def reorder_photos(
-    request: PhotoUpdateOrderRequest,
+    request: Request,
+    body: PhotoUpdateOrderRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):

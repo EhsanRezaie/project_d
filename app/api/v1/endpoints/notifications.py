@@ -65,14 +65,7 @@ async def mark_notifications_read(
     current_user_id: UUID = Depends(get_current_user_id),
 ):
     """Mark notification(s) as read"""
-    
-    await session.execute(
-        select(Notification).where(
-            Notification.id.in_(body.notification_ids),
-            Notification.user_id == current_user_id
-        )
-    )
-    
+
     await session.execute(
         Notification.__table__.update()
         .where(Notification.id.in_(body.notification_ids))
