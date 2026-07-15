@@ -35,8 +35,8 @@
 | Health checks for Docker | ❌ Missing |
 | Nginx reverse proxy | ❌ Missing |
 | HTTPS / SSL | ❌ Missing |
-| Discover card stack pre-caching | ❌ Missing |
-| Swipe deduplication (Redis set) | ❌ Missing |
+| Discover card stack pre-caching | ✅ Done (Session 41) |
+| Swipe deduplication (Redis set) | ✅ Done (Session 41) |
 | Photo moderation pipeline | ❌ Partial |
 
 ---

@@ -1054,6 +1054,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 38 | **Per-match message rate limit — 30/min per sender per chat** | ✅ |
 | 39 | **Daily report limit — 5 reports/day per user** | ✅ |
 | 40 | **CORS fix — configurable origins via CORS_ORIGINS env var** | ✅ |
+| 41 | **Redis perf — swipe deduplication + discover card stack cache** | ✅ |
 
 ---
 
@@ -1666,3 +1667,14 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | Configurable origins via `.env` | ✅ |
 | Default: wildcard with credentials disabled (mobile-only) | ✅ |
 | Restricted methods and headers | ✅ |
+
+### ✅ Session 41 Complete — Redis Performance (Swipe Dedup + Discover Cache)
+
+| Feature | Status |
+|---------|--------|
+| `swiped:{user_id}` Redis set (7-day TTL) for fast exclusion | ✅ |
+| Discover endpoint uses Redis set for swiped user exclusion | ✅ |
+| DB subquery fallback when Redis set is empty | ✅ |
+| `record_swipe_cache()` called on every swipe action | ✅ |
+| Discover card stack cache functions (pop/set/invalidate) | ✅ |
+| `app/core/cache.py` — all cache helpers centralized | ✅ |
