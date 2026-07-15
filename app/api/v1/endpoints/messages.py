@@ -28,6 +28,7 @@ from app.services.chat_service import (
 from app.services.media_service import MediaService
 from app.services.notification_service import NotificationService
 from app.services.websocket_manager import websocket_manager
+import app.core.redis as redis
 
 from app.core.logging import get_logger
 
@@ -250,6 +251,19 @@ async def send_text_message(
     )
     if not can_send:
         raise HTTPException(status_code=403, detail=reason)
+
+    # Per-match message rate limit (30/min per sender per chat)
+    rate_key = f"msg_rate:{current_user.id}:{match_id or other_user_id}"
+    try:
+        count = await redis.redis_client.incr(rate_key)
+        if count == 1:
+            await redis.redis_client.expire(rate_key, 60)
+        if count > 30:
+            raise HTTPException(status_code=429, detail="Sending too fast. Please slow down.")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning("Redis rate limit check failed, allowing message")
 
     # Create message with encryption
     new_message = await create_encrypted_message(
