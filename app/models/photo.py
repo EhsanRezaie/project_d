@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, SmallInteger, Text, ForeignKey, DateTime, func, JSON, Index, text
+from sqlalchemy import Column, String, Boolean, SmallInteger, Text, ForeignKey, DateTime, Float, func, JSON, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -22,6 +22,7 @@ class Photo(Base):
     # Moderation fields
     status = Column(String(20), default="pending")
     reject_reason = Column(Text, nullable=True)
+    nsfw_score = Column(Float, nullable=True)
 
     # Face verification
     face_verified = Column(Boolean, default=False)

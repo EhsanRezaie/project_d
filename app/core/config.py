@@ -131,6 +131,12 @@ class Settings(BaseSettings):
     FCM_SERVICE_ACCOUNT_PATH: str = ""
 
     # ============================================
+    # NSFW Detection
+    # ============================================
+    NSFW_ENABLED: bool = True
+    NSFW_THRESHOLD: float = 0.8
+
+    # ============================================
     # CORS
     # ============================================
     CORS_ORIGINS: str = ""

@@ -12,6 +12,7 @@ from app.core.limiter import limiter
 from app.core.redis import redis_client
 from app.core.cache import invalidate_user_cache
 from app.services.photo_service import PhotoService
+from app.services.nsfw_service import nsfw_service
 from app.schemas.photo import (
     PhotoResponse,
     PhotoUploadResponse,
@@ -72,6 +73,17 @@ async def upload_photo(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
+        )
+
+    # NSFW check
+    is_safe, nsfw_score = await nsfw_service.check_image(file_data)
+    if not is_safe:
+        # Auto-reject and quarantine
+        photo_id = str(uuid.uuid4())
+        await nsfw_service.quarantine_photo(file_data, str(current_user.id), photo_id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Photo rejected: content policy violation.",
         )
 
     # Check photo limit (max 6 photos)
