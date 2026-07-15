@@ -17,3 +17,5 @@ from app.models.interest import Interest
 from app.models.user_interest import UserInterest
 from app.models.prompt import Prompt
 from app.models.user_prompt import UserPrompt
+from app.models.admin_log import AdminLog
+from app.models.device_token import DeviceToken
