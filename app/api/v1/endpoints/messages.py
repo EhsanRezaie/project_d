@@ -26,6 +26,7 @@ from app.services.chat_service import (
     get_decrypted_message_for_client, get_message_for_admin
 )
 from app.services.media_service import MediaService
+from app.services.notification_service import NotificationService
 from app.services.websocket_manager import websocket_manager
 
 from app.core.logging import get_logger
@@ -261,7 +262,15 @@ async def send_text_message(
         reply_to_id=body.reply_to_id,
         is_accepted=is_accepted or match_id is not None,
     )
-    
+
+    # Send push notification to receiver
+    notification_service = NotificationService(session)
+    await notification_service.notify_message(
+        receiver_id=other_user_id,
+        sender_name=current_user.profile.name,
+        match_id=match_id or other_user_id,
+    )
+
     await session.flush()
 
     # Increment new chat counter if this is a new chat

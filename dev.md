@@ -377,6 +377,11 @@ PLAY_STORE_URL=https://play.google.com/store/apps/details?id=your.app.id
 APP_STORE_URL=https://apps.apple.com/app/your-app-id
 FORCE_UPDATE_ENABLED=false
 FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue using the app.
+
+# ============================================
+# FCM Push Notifications
+# ============================================
+FCM_SERVICE_ACCOUNT_PATH=firebase-service-account.json
 ```
 
 ### `.env.test`
@@ -566,6 +571,19 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | reports | User reports |
 | tickets | Support tickets |
 
+### `device_tokens` Table (Push Notifications)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | Primary key |
+| user_id | UUID (FK → users) | CASCADE delete |
+| token | VARCHAR | FCM registration token |
+| platform | VARCHAR(10) | "android" or "ios" |
+| created_at | TIMESTAMPTZ | |
+| updated_at | TIMESTAMPTZ | |
+
+Constraints: unique(`user_id`, `token`), index on `user_id`
+
 ---
 
 ## 7. API Reference
@@ -667,7 +685,7 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/messages/{identifier}` | GET | Get chat history (decrypted) |
-| `/messages/{identifier}/text` | POST | Send text message (encrypted) |
+| `/messages/{identifier}/text` | POST | Send text message (encrypted, sends push) |
 | `/messages/{identifier}/photo` | POST | Send photo message (caption encrypted) |
 | `/messages/{identifier}/voice` | POST | Send voice message |
 | `/messages/{identifier}/accept` | POST | Accept unmatched chat |
@@ -676,6 +694,13 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | `/messages/{message_id}` | DELETE | Delete message |
 | `/messages/{message_id}/forward` | POST | Forward message (re-encrypted) |
 | `/messages/{message_id}/status` | GET | Get message status |
+
+### Push Notification Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/notifications/device-token` | POST | Register/update FCM device token |
+| `/notifications/device-token/{id}` | DELETE | Remove device token |
 
 ### Admin Messages Endpoints
 
@@ -837,6 +862,40 @@ Replaced local-disk `uploads/` storage with MinIO (self-hosted, S3-compatible), 
 - On admin approval, `PhotoService.publish_photo()` copies the object from `photos-private` → `photos-public` and deletes the original
 - `PhotoService.get_photo_url(key, status)` resolves the correct URL at read time: public URL if `approved`, signed private URL otherwise
 
+### Push Notification Architecture (FCM)
+
+Firebase Cloud Messaging for real-time push notifications on Android/iOS.
+
+**Push Triggers:**
+
+| Event | Recipients | Title |
+|-------|-----------|-------|
+| Like | Liked user only | "Someone liked you!" |
+| Match | Both matched users | "It's a match!" |
+| Message | Receiver only | "New message" |
+
+**Architecture:**
+- `PushService.send_to_user()` — static method, looks up `DeviceToken` records, sends `MulticastMessage` via Firebase Admin SDK
+- Lazy Firebase init — only initializes on first send, gracefully no-ops if `FCM_SERVICE_ACCOUNT_PATH` not set
+- Auto-cleanup of invalid tokens (`registration-token-not-registered`, `invalid-registration-token`)
+- `NotificationService` calls `PushService` after creating DB notification records
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `app/services/push_service.py` | FCM send + token cleanup |
+| `app/models/device_token.py` | `device_tokens` table (user_id, token, platform) |
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `app/services/notification_service.py` | Added `PushService.send_to_user()` calls in `notify_like()`, `notify_match()`, `notify_message()` |
+| `app/api/v1/endpoints/notifications.py` | Added POST/DELETE `/device-token` endpoints |
+| `app/api/v1/endpoints/messages.py` | Added `NotificationService.notify_message()` call after text message creation |
+| `app/models/user.py` | Added `device_tokens` relationship |
+| `app/core/config.py` | Added `FCM_SERVICE_ACCOUNT_PATH` setting |
+| `requirements.txt` | Added `firebase-admin==6.8.0` |
+
 ### Discover & Search Architecture (Session 23)
 
 **Discover Endpoint (`/discover`):**
@@ -988,6 +1047,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 31 | **Schema audit + Redoc accuracy — all endpoints now declare response_model** | ✅ |
 | 32 | **WebSocket tests — push shape validation + manager unit tests** | ✅ |
 | 33 | **Structured logging + GlitchTip error tracking** | ✅ |
+| 34 | **Push notifications (FCM) + Device tokens + messages fix** | ✅ |
 
 ---
 
@@ -998,16 +1058,16 @@ Real push notifications via Firebase Cloud Messaging, real ZarinPal integration,
 
 ### Tasks
 
-#### 1. Push Notifications (FCM)
+#### 1. Push Notifications (FCM) ✅ DONE
 
-**Files to Create:**
+**Files Created:**
 
 | File | Purpose |
 |------|---------|
 | `app/services/push_service.py` | FCM send_push(), send_to_topic() |
 | `app/models/device_token.py` | Store FCM tokens per user/device |
 
-**Files to Update:**
+**Files Updated:**
 
 | File | Changes |
 |------|---------|
@@ -1050,7 +1110,7 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 
 | Session | Test Files | Tests | Status |
 |---------|------------|-------|--------|
-| All | 30 test files in `tests/done/` | **547** | **✅ All passing** |
+| All | 31 test files in `tests/done/` | **556** | **✅ All passing** |
 | 25 | test_auth, test_users, test_photos, test_prompts, test_settings, test_encryption | 101 | ✅ |
 | 25 | test_swipes, test_matches, test_blocks, test_discover, test_search | 110 | ✅ |
 | 25 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 79 | ✅ |
@@ -1058,6 +1118,7 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 | 25 | test_admin_dashboard, test_admin_messages, test_admin_photos | 56 | ✅ |
 | 25 | test_admin_reports, test_admin_tickets, test_admin_users | 70 | ✅ |
 | 32 | test_websocket | 9 | ✅ |
+| 34 | test_push_notifications | 9 | ✅ |
 
 ### Run All Tests
 
@@ -1328,7 +1389,6 @@ alembic downgrade -1
 | Face verification UI | Medium | 21 |
 | Persian translations for all screens | High | — |
 | Real ZarinPal integration | High | 15 |
-| FCM push notifications | High | 15 |
 | Real face-match API (photo verification) | Medium | — |
 | Flutter Discover Screen | High | 20 |
 | Flutter Search Screen | High | 20 |
@@ -1466,7 +1526,7 @@ Every endpoint in the app now declares a proper `response_model`, so Redoc shows
 |------|--------|
 | `chat_service.py:385-390` | `datetime.utcnow()` → `datetime.now(timezone.utc)` — fixed "can't compare offset-naive and offset-aware datetimes" crash in `delete_for="everyone"` branch |
 
-**Tests: 547 passing ✅** (was 538)
+**Tests: 556 passing ✅** (was 547)
 
 ---
 
@@ -1513,3 +1573,21 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 
 **Then: Session 15 — Push Notifications + Real Payment + Production Ready (Backend)**
 ```
+
+### ✅ Session 34 Complete — Push Notifications (FCM) + Device Tokens + Messages Fix
+
+| Feature | Status |
+|---------|--------|
+| `app/services/push_service.py` — FCM MulticastMessage send + token cleanup | ✅ |
+| `app/models/device_token.py` — device_tokens table (user_id, token, platform) | ✅ |
+| `NotificationService.notify_like()` — sends push to liked user | ✅ |
+| `NotificationService.notify_match()` — sends push to both matched users | ✅ |
+| `NotificationService.notify_message()` — sends push to message receiver | ✅ |
+| POST `/notifications/device-token` — register/update FCM token | ✅ |
+| DELETE `/notifications/device-token/{id}` — remove device token | ✅ |
+| `messages.py` — added `notify_message()` call after text message creation | ✅ |
+| `User.device_tokens` relationship | ✅ |
+| `FCM_SERVICE_ACCOUNT_PATH` in config + .env | ✅ |
+| `firebase-admin==6.8.0` dependency | ✅ |
+| `tests/done/test_push_notifications.py` — 9 tests (6 device token + 3 push) | ✅ |
+| **Total: 556 tests passing** | **✅** |

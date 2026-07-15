@@ -50,4 +50,5 @@ class User(Base):
     referral_rewards_received = relationship("ReferralReward", foreign_keys="ReferralReward.invited_id", back_populates="invited")
     user_interests = relationship("UserInterest", back_populates="user", cascade="all, delete-orphan")
     prompts = relationship("UserPrompt", back_populates="user", cascade="all, delete-orphan")
+    device_tokens = relationship("DeviceToken", back_populates="user", cascade="all, delete-orphan")
     

@@ -8,10 +8,13 @@ from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
 from app.models.user import User
 from app.models.notification import Notification
+from app.models.device_token import DeviceToken
 from app.schemas.notification import (
     NotificationResponse,
     NotificationListResponse,
-    MarkReadRequest
+    MarkReadRequest,
+    DeviceTokenRequest,
+    DeviceTokenResponse,
 )
 
 from app.core.logging import get_logger
@@ -101,4 +104,65 @@ async def delete_notification(
         raise HTTPException(status_code=404, detail="Notification not found")
     
     await session.delete(notification)
+    await session.commit()
+
+
+@router.post("/device-token", response_model=DeviceTokenResponse)
+@limiter.limit("10/minute")
+async def register_device_token(
+    request: Request,
+    body: DeviceTokenRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Register or update a device token for push notifications."""
+    # Check if token already exists for this user
+    result = await session.execute(
+        select(DeviceToken).where(
+            DeviceToken.user_id == current_user.id,
+            DeviceToken.token == body.token,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.platform = body.platform
+        await session.flush()
+        token_obj = existing
+    else:
+        token_obj = DeviceToken(
+            user_id=current_user.id,
+            token=body.token,
+            platform=body.platform,
+        )
+        session.add(token_obj)
+        await session.flush()
+
+    return DeviceTokenResponse(
+        id=token_obj.id,
+        token=token_obj.token,
+        platform=token_obj.platform,
+    )
+
+
+@router.delete("/device-token/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def delete_device_token(
+    request: Request,
+    token_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove a device token (e.g. on logout)."""
+    result = await session.execute(
+        select(DeviceToken).where(
+            DeviceToken.id == token_id,
+            DeviceToken.user_id == current_user.id,
+        )
+    )
+    token_obj = result.scalar_one_or_none()
+    if not token_obj:
+        raise HTTPException(status_code=404, detail="Device token not found")
+
+    await session.delete(token_obj)
     await session.commit()

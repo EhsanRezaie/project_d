@@ -124,6 +124,11 @@ class Settings(BaseSettings):
     GLITCHTIP_DSN: str = ""
 
     # ============================================
+    # FCM Push Notifications
+    # ============================================
+    FCM_SERVICE_ACCOUNT_PATH: str = ""
+
+    # ============================================
     # Pydantic Config
     # ============================================
     class Config:
