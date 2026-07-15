@@ -70,13 +70,15 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS
+# CORS — mobile apps don't use CORS, but Swagger/Redoc UI does in dev
+# Set CORS_ORIGINS in .env for production (e.g. "https://yourapp.ir,https://api.yourapp.ir")
+_cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins or ["*"],
+    allow_credentials=bool(_cors_origins),
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # GZip
