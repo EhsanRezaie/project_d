@@ -32,6 +32,7 @@ from app.api.v1.endpoints.locations import router as locations_router
 from app.api.v1.endpoints.interests import router as interests_router
 from app.api.v1.endpoints.prompts import router as prompts_router
 from app.api.v1.endpoints.admin_messages import router as admin_messages_router
+from app.api.v1.endpoints.admin_auth import router as admin_auth_router
 from app.api.v1.endpoints.system import router as admin_system_router
 
 
@@ -110,6 +111,7 @@ app.include_router(locations_router, prefix="/api/v1")
 app.include_router(interests_router, prefix="/api/v1")
 app.include_router(prompts_router, prefix="/api/v1")
 app.include_router(admin_messages_router, prefix="/api/v1")
+app.include_router(admin_auth_router, prefix="/api/v1")
 app.include_router(admin_system_router, prefix="/api/v1")
 
 # WebSocket Routers

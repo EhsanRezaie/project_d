@@ -104,3 +104,36 @@ def decode_refresh_token(token: str) -> Optional[str]:
     """Returns user_id if valid, None otherwise."""
     payload = decode_token(token, REFRESH_TOKEN_TYPE)
     return payload.get("sub") if payload else None
+
+
+# ---------------------------------------------------------------------------
+# Admin JWT
+# ---------------------------------------------------------------------------
+
+ADMIN_TOKEN_TYPE = "admin"
+ADMIN_TOKEN_EXPIRE_MINUTES = 60
+
+
+def create_admin_token(admin_id: str) -> str:
+    """Create a short-lived admin JWT token."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ADMIN_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "sub": admin_id,
+        "type": ADMIN_TOKEN_TYPE,
+        "role": "admin",
+        "exp": expire,
+        "jti": secrets.token_urlsafe(16),
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, settings.ADMIN_SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_admin_token(token: str) -> Optional[dict]:
+    """Decode and validate admin JWT. Returns payload or None."""
+    try:
+        payload = jwt.decode(token, settings.ADMIN_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("role") != "admin":
+            return None
+        return payload
+    except JWTError:
+        return None

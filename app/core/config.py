@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # Admin
     # ============================================
     ADMIN_SECRET_KEY: str = ""
+    ADMIN_USERNAME: str = ""
+    ADMIN_PASSWORD_HASH: str = ""
 
     # ============================================
     # Redis Settings

@@ -189,6 +189,18 @@ async def register_init(
     await redis.store_verification_code(body.email, code, ttl=300)
     await send_verification_code(body.email, code)
 
+    # Track registration IP for abuse detection (3+ from same IP in 24h = suspicious)
+    client_ip = request.client.host if request.client else "unknown"
+    ip_key = f"reg_ip:{client_ip}"
+    try:
+        ip_count = await redis.redis_client.incr(ip_key)
+        if ip_count == 1:
+            await redis.redis_client.expire(ip_key, 86400)
+        if ip_count >= 3:
+            logger.warning("suspicious_registration_pattern", ip=client_ip, count=ip_count)
+    except Exception:
+        pass  # Redis failure shouldn't block registration
+
     return RegisterInitResponse(
         message="If this email is new, a verification code has been sent.",
         email=body.email,
@@ -350,7 +362,16 @@ async def login(
 ):
     user = await get_user_by_email(session, body.email)
 
-    if not user or not user.password_hash or not verify_password(body.password, user.password_hash):
+    if not user or not user.password_hash:
+        # Run dummy bcrypt to normalize timing (prevents email enumeration via timing)
+        DUMMY_HASH = "$2b$12$BmmIBosrql7pMrMRmgS9ielrTKurq90SXrUIRwPgKbA.36rRDh0ie"
+        verify_password(body.password, DUMMY_HASH)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password.",
+        )
+
+    if not verify_password(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
