@@ -16,6 +16,7 @@ from app.schemas.photo import (
     PhotoResponse,
     PhotoUploadResponse,
     PhotoUpdateCropRequest,
+    PhotoUpdateOrderRequest,
 )
 
 from app.core.logging import get_logger
@@ -220,10 +221,10 @@ async def set_main_photo(
             detail="Photo not found",
         )
 
-    if photo.status != "approved":
+    if photo.status == "rejected":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only approved photos can be set as main",
+            detail="Rejected photos cannot be set as main",
         )
 
     # Remove main flag from all photos
@@ -240,6 +241,48 @@ async def set_main_photo(
     await invalidate_user_cache(redis_client, current_user.id)
 
     return await _to_photo_response(photo)
+
+
+@router.patch("/order", response_model=list[PhotoResponse])
+async def reorder_photos(
+    request: PhotoUpdateOrderRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Reorder photos.
+    Accepts a mapping of photo_id -> new order for the current user.
+    """
+    photos = (
+        await session.execute(
+            select(Photo).where(
+                Photo.user_id == current_user.id,
+                Photo.id.in_(request.orders.keys()),
+            )
+        )
+    ).scalars().all()
+
+    if len(photos) != len(request.orders):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="One or more photos not found",
+        )
+
+    for photo in photos:
+        photo.order = request.orders[photo.id]
+
+    await session.commit()
+    await invalidate_user_cache(redis_client, current_user.id)
+
+    all_photos = (
+        await session.execute(
+            select(Photo)
+            .where(Photo.user_id == current_user.id)
+            .order_by(Photo.order)
+        )
+    ).scalars().all()
+
+    return [await _to_photo_response(p) for p in all_photos]
 
 
 # =============================================================================
