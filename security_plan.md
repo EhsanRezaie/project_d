@@ -25,7 +25,7 @@
 | SQLAlchemy ORM (no raw SQL) | ✅ | No SQL injection risk |
 | HTTPS / TLS | ❌ | Nginx + SSL not yet configured |
 | Secrets in `.env` | ⚠️ | `SECRET_KEY=your-secret-key` in example — change in prod |
-| CORS policy | ❌ | Wildcard origins — needs fix |
+| CORS policy | ✅ | Configurable via CORS_ORIGINS env var |
 | Security headers | ❌ | No X-Frame-Options, CSP, HSTS, etc. |
 | File upload validation | ✅ | Size, dimension, EXIF stripping, PIL format validation |
 | Photo content scanning | ❌ | No NSFW detection before serving |
@@ -951,7 +951,7 @@ docker exec dating_minio mc admin user remove local minioadmin
 - [ ] Create `POST /admin/login` endpoint (Section 2.1)
 - [ ] Create `admin_logs` table + migration (Section 2.2)
 - [ ] Add `log_admin_action()` to all admin endpoints (Section 2.2)
-- [ ] Add CORS configuration to `main.py` (Section 5.1)
+- [x] Add CORS configuration to `main.py` (Section 5.1) ✅ Session 40
 - [x] Disable Swagger/Redoc in production (Section 5.3) ✅ Session 35
 
 ### 🟡 Session D — Infrastructure + WebSocket Security

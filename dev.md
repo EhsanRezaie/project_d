@@ -1053,6 +1053,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 37 | **Location fuzzing — ±500m noise on discover/search distance** | ✅ |
 | 38 | **Per-match message rate limit — 30/min per sender per chat** | ✅ |
 | 39 | **Daily report limit — 5 reports/day per user** | ✅ |
+| 40 | **CORS fix — configurable origins via CORS_ORIGINS env var** | ✅ |
 
 ---
 
@@ -1656,3 +1657,12 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | Redis counter `reports:{user_id}:{date}`, 5/day | ✅ |
 | 24h TTL window per reporter per day | ✅ |
 | Graceful fallback if Redis unavailable | ✅ |
+
+### ✅ Session 40 Complete — CORS Fix
+
+| Feature | Status |
+|---------|--------|
+| `CORS_ORIGINS` setting in config.py | ✅ |
+| Configurable origins via `.env` | ✅ |
+| Default: wildcard with credentials disabled (mobile-only) | ✅ |
+| Restricted methods and headers | ✅ |
