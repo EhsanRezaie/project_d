@@ -1055,6 +1055,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 39 | **Daily report limit — 5 reports/day per user** | ✅ |
 | 40 | **CORS fix — configurable origins via CORS_ORIGINS env var** | ✅ |
 | 41 | **Redis perf — swipe deduplication + discover card stack cache** | ✅ |
+| 42 | **Security hardening — constant-time login, IP tracking, admin JWT + audit log** | ✅ |
 
 ---
 
@@ -1678,3 +1679,15 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | `record_swipe_cache()` called on every swipe action | ✅ |
 | Discover card stack cache functions (pop/set/invalidate) | ✅ |
 | `app/core/cache.py` — all cache helpers centralized | ✅ |
+
+### ✅ Session 42 Complete — Security Hardening
+
+| Feature | Status |
+|---------|--------|
+| Constant-time password check in login (dummy bcrypt) | ✅ |
+| Registration IP tracking in Redis (3+/24h = flagged) | ✅ |
+| Admin JWT tokens (`POST /admin/login`, 60min expiry) | ✅ |
+| Admin audit log model + service (`admin_logs` table) | ✅ |
+| Admin dependency supports both JWT and legacy `X-Admin-Key` | ✅ |
+| `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` config | ✅ |
+| Migration: `alembic revision --autogenerate -m 'add admin_logs'` | ⏳ |

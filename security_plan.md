@@ -19,7 +19,7 @@
 | MinIO private/public bucket split | ✅ | Pending photos behind signed URLs |
 | Google OAuth | ✅ | |
 | Rate limiting (`limiter.py`) | ✅ | Redis-backed, per-endpoint + per-match message rate + daily report limit |
-| Admin key (`X-Admin-Key` header) | ⚠️ | Weak — static string, not JWT |
+| Admin key (`X-Admin-Key` header) | ✅ | JWT tokens supported, legacy key still works |
 | GZip middleware | ✅ | Not security, but noted |
 | Input validation (Pydantic) | ✅ | All schemas use Pydantic |
 | SQLAlchemy ORM (no raw SQL) | ✅ | No SQL injection risk |
@@ -927,12 +927,12 @@ docker exec dating_minio mc admin user remove local minioadmin
 
 - [x] Shorten `ACCESS_TOKEN_EXPIRE_MINUTES` to 15 (Section 1.1) ✅ Session 35
 - [x] Add uniform error message to login (Section 1.3 — Fix 1) ✅ (was already done)
-- [ ] Add constant-time password check to login (Section 1.3 — Fix 2)
+- [x] Add constant-time password check to login (Section 1.3 — Fix 2) ✅ Session 42
 - [x] Add OTP attempt counter (5 attempts max) (Section 1.4) ✅ Session 35
 - [x] Apply same attempt counter to password reset (Section 1.5) ✅ Session 35
 - [x] Add `token_version` increment to password reset (Section 1.5) ✅ (was already done)
 - [ ] Generate real `SECRET_KEY` and `ENCRYPTION_SECRET` for production (Section 6.1)
-- [ ] Verify `.gitignore` covers all secret files (Section 6.2)
+- [x] Verify `.gitignore` covers all secret files (Section 6.2) ✅ Session 41
 
 ### 🔴 Session B — IDOR Protection
 
@@ -947,10 +947,10 @@ docker exec dating_minio mc admin user remove local minioadmin
 
 ### 🟡 Session C — Admin Security
 
-- [ ] Replace static `X-Admin-Key` with JWT admin tokens (Section 2.1)
-- [ ] Create `POST /admin/login` endpoint (Section 2.1)
-- [ ] Create `admin_logs` table + migration (Section 2.2)
-- [ ] Add `log_admin_action()` to all admin endpoints (Section 2.2)
+- [x] Replace static `X-Admin-Key` with JWT admin tokens (Section 2.1) ✅ Session 42
+- [x] Create `POST /admin/login` endpoint (Section 2.1) ✅ Session 42
+- [x] Create `admin_logs` table + migration (Section 2.2) ✅ Session 42
+- [x] Add `log_admin_action()` to all admin endpoints (Section 2.2) ✅ Session 42
 - [x] Add CORS configuration to `main.py` (Section 5.1) ✅ Session 40
 - [x] Disable Swagger/Redoc in production (Section 5.3) ✅ Session 35
 
@@ -968,9 +968,9 @@ docker exec dating_minio mc admin user remove local minioadmin
 - [x] Add location fuzzing (±500m) to discover/search distance response (Section 7.1) ✅ Session 37
 - [x] Add per-match message rate limit (30/min) (Section 7.5) ✅ Session 38
 - [x] Add report abuse daily limit (5 reports/day) (Section 7.4) ✅ Session 39
-- [ ] Add registration IP logging (Section 7.3)
-- [ ] Add same-IP registration detection (Section 7.3)
-- [ ] Document `ENCRYPTION_SECRET` rotation procedure (Section 6.3)
+- [x] Add registration IP logging (Section 7.3) ✅ Session 42
+- [x] Add same-IP registration detection (Section 7.3) ✅ Session 42
+- [x] Document `ENCRYPTION_SECRET` rotation procedure (Section 6.3) ✅ (already in security_plan.md)
 
 ### 🟢 Session F — Account Enumeration (lower priority, but clean)
 
