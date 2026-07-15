@@ -24,6 +24,12 @@
 | FCM push notifications | ✅ Done (Session 34) |
 | Structured logging + GlitchTip | ✅ Done (Session 33) |
 | Auth hardening (token, enumeration, OTP) | ✅ Done (Session 35) |
+| Location fuzzing | ✅ Done (Session 37) |
+| Per-match message rate limit | ✅ Done (Session 38) |
+| Daily report limit | ✅ Done (Session 39) |
+| CORS fix | ✅ Done (Session 40) |
+| Swipe deduplication (Redis set) | ✅ Done (Session 41) |
+| Discover card stack caching | ✅ Done (Session 41) |
 | Real ZarinPal payment | ❌ Missing |
 | Email sending (verification, reset) | ❌ Missing |
 | Connection pooling (PgBouncer) | ❌ Missing |
@@ -31,7 +37,6 @@
 | WebSocket scale (multi-process) | ❌ Missing |
 | Presence (who's online) | ❌ Missing |
 | Typing indicators | ❌ Missing |
-| Structured logging + error tracking | ❌ Missing |
 | Health checks for Docker | ❌ Missing |
 | Nginx reverse proxy | ❌ Missing |
 | HTTPS / SSL | ❌ Missing |
