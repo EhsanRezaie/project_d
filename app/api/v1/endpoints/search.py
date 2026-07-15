@@ -15,6 +15,7 @@ from app.models.block import Block
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.schemas.search import SearchProfileResponse, SearchResponse
+from app.utils.geo import fuzz_distance
 
 from app.core.logging import get_logger
 
@@ -257,7 +258,7 @@ async def search_users(
             country=profile.country,
             province=profile.province,
             city=profile.city,
-            distance_km=round(distance, 1) if distance is not None else None,
+            distance_km=fuzz_distance(distance),
             main_photo_url=main_photo_url,
             is_premium=profile.is_premium,
             is_verified=profile.is_verified if profile.is_verified is not None else False,

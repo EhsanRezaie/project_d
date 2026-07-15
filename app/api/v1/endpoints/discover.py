@@ -16,6 +16,7 @@ from app.models.user_prompt import UserPrompt
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.schemas.discover import ProfileResponse, DiscoverResponse
+from app.utils.geo import fuzz_distance
 
 from app.core.logging import get_logger
 
@@ -189,7 +190,7 @@ async def discover(
             country=profile.country,
             province=profile.province,
             city=profile.city,
-            distance_km=round(distance, 1) if distance is not None else None,
+            distance_km=fuzz_distance(distance),
             main_photo_url=main_photo_url,
             photos=approved_photos if approved_photos else None,
             interests=interests if interests else None,
