@@ -18,7 +18,7 @@
 | Bcrypt password hashing | ✅ (assumed) | `password_hash` column exists |
 | MinIO private/public bucket split | ✅ | Pending photos behind signed URLs |
 | Google OAuth | ✅ | |
-| Rate limiting (`limiter.py`) | ⚠️ | Exists, Redis-backed, coverage partial |
+| Rate limiting (`limiter.py`) | ✅ | Redis-backed, per-endpoint + per-match message rate + daily report limit |
 | Admin key (`X-Admin-Key` header) | ⚠️ | Weak — static string, not JWT |
 | GZip middleware | ✅ | Not security, but noted |
 | Input validation (Pydantic) | ✅ | All schemas use Pydantic |
@@ -965,9 +965,9 @@ docker exec dating_minio mc admin user remove local minioadmin
 
 ### 🟢 Session E — Dating App Specific
 
-- [ ] Add location fuzzing (±500m) to discover/search distance response (Section 7.1)
-- [ ] Add per-match message rate limit (30/min) (Section 7.5)
-- [ ] Add report abuse daily limit (5 reports/day) (Section 7.4)
+- [x] Add location fuzzing (±500m) to discover/search distance response (Section 7.1) ✅ Session 37
+- [x] Add per-match message rate limit (30/min) (Section 7.5) ✅ Session 38
+- [x] Add report abuse daily limit (5 reports/day) (Section 7.4) ✅ Session 39
 - [ ] Add registration IP logging (Section 7.3)
 - [ ] Add same-IP registration detection (Section 7.3)
 - [ ] Document `ENCRYPTION_SECRET` rotation procedure (Section 6.3)

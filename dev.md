@@ -1050,6 +1050,9 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 34 | **Push notifications (FCM) + Device tokens + messages fix** | ✅ |
 | 35 | **Auth hardening — token expiry, enumeration fix, OTP brute-force, Swagger lockdown** | ✅ |
 | 36 | **IDOR audit + EXIF stripping + dead code cleanup** | ✅ |
+| 37 | **Location fuzzing — ±500m noise on discover/search distance** | ✅ |
+| 38 | **Per-match message rate limit — 30/min per sender per chat** | ✅ |
+| 39 | **Daily report limit — 5 reports/day per user** | ✅ |
 
 ---
 
@@ -1628,3 +1631,28 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | Rate limiter added to `reorder_photos` (10/minute) | ✅ |
 | Dead `select` query removed from `mark_notifications_read` | ✅ |
 | Pillow `getdata()` deprecation warning fixed | ✅ |
+
+### ✅ Session 37 Complete — Location Fuzzing
+
+| Feature | Status |
+|---------|--------|
+| `app/utils/geo.py` — `fuzz_distance()` adds ±500m noise | ✅ |
+| Applied to `GET /discover` distance_km responses | ✅ |
+| Applied to `GET /search` distance_km responses | ✅ |
+| DB coordinates remain exact (Haversine filter unaffected) | ✅ |
+
+### ✅ Session 38 Complete — Per-Match Message Rate Limit
+
+| Feature | Status |
+|---------|--------|
+| Redis counter `msg_rate:{sender_id}:{chat_id}`, 30/min | ✅ |
+| 60s TTL window per sender per chat | ✅ |
+| Graceful fallback if Redis unavailable | ✅ |
+
+### ✅ Session 39 Complete — Daily Report Limit
+
+| Feature | Status |
+|---------|--------|
+| Redis counter `reports:{user_id}:{date}`, 5/day | ✅ |
+| 24h TTL window per reporter per day | ✅ |
+| Graceful fallback if Redis unavailable | ✅ |

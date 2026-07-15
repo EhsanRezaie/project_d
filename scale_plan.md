@@ -27,7 +27,7 @@
 | Real ZarinPal payment | ❌ Missing |
 | Email sending (verification, reset) | ❌ Missing |
 | Connection pooling (PgBouncer) | ❌ Missing |
-| Rate limiting per endpoint | ⚠️ Partial |
+| Rate limiting per endpoint | ✅ Done |
 | WebSocket scale (multi-process) | ❌ Missing |
 | Presence (who's online) | ❌ Missing |
 | Typing indicators | ❌ Missing |
