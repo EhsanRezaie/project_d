@@ -27,7 +27,7 @@
 | Secrets in `.env` | ⚠️ | `SECRET_KEY=your-secret-key` in example — change in prod |
 | CORS policy | ❌ | Wildcard origins — needs fix |
 | Security headers | ❌ | No X-Frame-Options, CSP, HSTS, etc. |
-| File upload validation | ⚠️ | Size + dimension limits exist, MIME type check unknown |
+| File upload validation | ✅ | Size, dimension, EXIF stripping, PIL format validation |
 | Photo content scanning | ❌ | No NSFW detection before serving |
 | Account enumeration protection | ✅ | register/init returns same response for all emails |
 | OTP brute-force protection | ✅ | 5 max attempts per code (register + password reset) |
@@ -936,14 +936,14 @@ docker exec dating_minio mc admin user remove local minioadmin
 
 ### 🔴 Session B — IDOR Protection
 
-- [ ] Add match membership check to all `/messages/{identifier}` endpoints (Section 3.1)
-- [ ] Add ownership check to all photo mutation endpoints (Section 3.2)
-- [ ] Add ownership check to notification delete/read endpoints (Section 3.3)
-- [ ] Add ownership check to ticket read endpoint (Section 3.4)
-- [ ] Add sender/receiver check to message delete (Section 3.5)
-- [ ] Add MIME type validation to photo upload (Section 4.1)
-- [ ] Add image dimension check to photo upload (Section 4.2)
-- [ ] Add EXIF stripping to photo upload (Section 4.3)
+- [x] Add match membership check to all `/messages/{identifier}` endpoints (Section 3.1) ✅ (already done)
+- [x] Add ownership check to all photo mutation endpoints (Section 3.2) ✅ (already done)
+- [x] Add ownership check to notification delete/read endpoints (Section 3.3) ✅ (already done)
+- [x] Add ownership check to ticket read endpoint (Section 3.4) ✅ (already done)
+- [x] Add sender/receiver check to message delete (Section 3.5) ✅ (already done)
+- [x] Add MIME type validation to photo upload (Section 4.1) ✅ (PIL implicit validation)
+- [x] Add image dimension check to photo upload (Section 4.2) ✅ (already done)
+- [x] Add EXIF stripping to photo upload (Section 4.3) ✅ Session 36
 
 ### 🟡 Session C — Admin Security
 

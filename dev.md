@@ -1049,6 +1049,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 33 | **Structured logging + GlitchTip error tracking** | ✅ |
 | 34 | **Push notifications (FCM) + Device tokens + messages fix** | ✅ |
 | 35 | **Auth hardening — token expiry, enumeration fix, OTP brute-force, Swagger lockdown** | ✅ |
+| 36 | **IDOR audit + EXIF stripping + dead code cleanup** | ✅ |
 
 ---
 
@@ -1606,3 +1607,24 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | Swagger/Redoc/OpenAPI disabled when `ENVIRONMENT != "development"` | ✅ |
 | `.env.example` updated with new token expiry | ✅ |
 | Auth tests updated for new behavior (24/24 passing) | ✅ |
+
+### ✅ Session 36 Complete — IDOR Audit + EXIF Stripping
+
+**IDOR audit results (all already solid):**
+| Endpoint | Check | Status |
+|----------|-------|--------|
+| `DELETE /photos/{id}` | `WHERE id AND user_id` | ✅ |
+| `PUT /photos/{id}/main` | `WHERE id AND user_id` | ✅ |
+| `PATCH /photos/{id}/crop` | `WHERE id AND user_id` | ✅ |
+| `DELETE /notifications/{id}` | `WHERE id AND user_id` | ✅ |
+| `POST /notifications/read` | `WHERE user_id` in UPDATE | ✅ |
+| `GET /tickets/{id}` | `WHERE id AND user_id` | ✅ |
+| `DELETE /messages/{id}` | `sender_id == user_id OR receiver_id == user_id` | ✅ |
+
+**Fixes applied:**
+| Feature | Status |
+|---------|--------|
+| EXIF metadata stripped from uploaded photos (prevents GPS/device leakage) | ✅ |
+| Rate limiter added to `reorder_photos` (10/minute) | ✅ |
+| Dead `select` query removed from `mark_notifications_read` | ✅ |
+| Pillow `getdata()` deprecation warning fixed | ✅ |
