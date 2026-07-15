@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, Float
 from sqlalchemy.orm import selectinload
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 from app.db.session import get_session
 from app.models.user import User
@@ -11,6 +11,8 @@ from app.models.photo import Photo
 from app.models.swipe import Swipe
 from app.models.match import Match
 from app.models.block import Block
+from app.models.user_interest import UserInterest
+from app.models.user_prompt import UserPrompt
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.schemas.discover import ProfileResponse, DiscoverResponse
@@ -88,7 +90,10 @@ async def discover(
 
     query = select(User).options(
         selectinload(User.profile),
+        selectinload(User.settings),
         selectinload(User.photos),
+        selectinload(User.user_interests).selectinload(UserInterest.interest),
+        selectinload(User.prompts).selectinload(UserPrompt.prompt),
     ).join(UserProfile, User.id == UserProfile.user_id).where(
         User.is_active == True,
         User.id != current_user.id,
@@ -128,21 +133,71 @@ async def discover(
         if not user.profile:
             continue
 
-        main_photo = next((p for p in user.photos if p.is_main and p.status == "approved"), None) if user.photos else None
-        main_photo_url = main_photo.url if main_photo else None
+        profile = user.profile
+        settings = user.settings
+
+        # Photos — all approved, sorted by order
+        approved_photos = [p.url for p in sorted(
+            [p for p in user.photos if p.status == "approved"],
+            key=lambda p: p.order,
+        )] if user.photos else []
+
+        main_photo_url = approved_photos[0] if approved_photos else None
+
+        # Interests
+        interests = [ui.interest.name for ui in user.user_interests if ui.interest] if user.user_interests else []
+
+        # Prompts (with question text)
+        prompts = [
+            {"prompt_id": str(up.prompt_id), "question": up.prompt.question, "answer": up.answer}
+            for up in user.prompts if up.prompt
+        ] if user.prompts else []
+
+        # Privacy-respecting last_seen
+        last_seen_at = None
+        is_online = None
+        if user.last_seen_at:
+            hide_last_seen = settings.hide_last_seen if settings else False
+            hide_online_status = settings.hide_online_status if settings else False
+            if not hide_last_seen:
+                last_seen_at = user.last_seen_at.isoformat()
+            if not hide_online_status:
+                now = datetime.now(timezone.utc)
+                is_online = (now - user.last_seen_at).total_seconds() < 300
 
         response_users.append(ProfileResponse(
             id=user.id,
-            name=user.profile.name,
-            age=user.profile.age,
-            gender=user.profile.gender,
-            bio=user.profile.bio,
-            height=user.profile.height,
-            weight=user.profile.weight,
+            name=profile.name,
+            age=profile.age,
+            gender=profile.gender,
+            sexual_orientation=profile.sexual_orientation,
+            bio=profile.bio,
+            height=profile.height,
+            weight=profile.weight,
+            body_type=profile.body_type,
+            relationship_status=profile.relationship_status,
+            living_situation=profile.living_situation,
+            children_status=profile.children_status,
+            smoking=profile.smoking,
+            drinking=profile.drinking,
+            education=profile.education,
+            workplace=profile.workplace,
+            religion=profile.religion,
+            ethnicity=profile.ethnicity,
+            political_orientation=profile.political_orientation,
+            languages=profile.languages,
+            country=profile.country,
+            province=profile.province,
+            city=profile.city,
             distance_km=round(distance, 1) if distance is not None else None,
             main_photo_url=main_photo_url,
-            is_premium=user.profile.is_premium,
+            photos=approved_photos if approved_photos else None,
+            interests=interests if interests else None,
+            prompts=prompts if prompts else None,
+            is_premium=profile.is_premium,
             is_verified=user.phone_verified if user.phone_verified is not None else False,
+            last_seen_at=last_seen_at,
+            is_online=is_online,
         ))
 
     has_more = offset + limit < total

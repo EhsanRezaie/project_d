@@ -221,10 +221,10 @@ async def set_main_photo(
             detail="Photo not found",
         )
 
-    if photo.status == "rejected":
+    if photo.status in ("rejected", "pending"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Rejected photos cannot be set as main",
+            detail="Only approved photos can be set as main",
         )
 
     # Remove main flag from all photos
