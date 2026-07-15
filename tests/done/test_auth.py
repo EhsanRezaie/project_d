@@ -106,12 +106,12 @@ class TestRegisterInit:
         assert "message" in data
     
     async def test_register_init_duplicate_email(self, client: AsyncClient, mock_verification_code):
-        """Should reject duplicate email."""
+        """Should return same response for existing email (enumeration protection)."""
         await register_user_full(client, mock_verification_code)
-        
+
         res = await client.post(REGISTER_INIT_URL, json={"email": VALID_EMAIL})
-        assert res.status_code == 409
-        assert "already exists" in res.json()["detail"]
+        assert res.status_code == 200
+        assert "verification" in res.json()["message"].lower()
     
     async def test_register_init_invalid_email(self, client: AsyncClient):
         """Should reject invalid email format."""
@@ -143,16 +143,17 @@ class TestRegisterVerify:
         assert data["user_id"] is not None
     
     async def test_register_verify_invalid_code(self, client: AsyncClient):
-        """Should reject invalid verification code."""
+        """Should reject invalid verification code with attempt count."""
         await client.post(REGISTER_INIT_URL, json={"email": VALID_EMAIL})
-        
+
         res = await client.post(REGISTER_VERIFY_URL, json={
             "email": VALID_EMAIL,
             "code": "000000",
             "password": VALID_PASSWORD,
         })
         assert res.status_code == 400
-        assert "Invalid or expired" in res.json()["detail"]
+        assert "Invalid code" in res.json()["detail"]
+        assert "attempt" in res.json()["detail"]
     
     async def test_register_verify_password_too_short(self, client: AsyncClient, mock_verification_code):
         """Should reject password shorter than 8 characters."""

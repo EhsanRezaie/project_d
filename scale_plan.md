@@ -20,12 +20,14 @@
 | Cursor pagination for chat | ✅ Done |
 | BackgroundTasks for notifications | ✅ Done |
 | GZip middleware | ✅ Done |
-| 511 tests passing | ✅ Done |
-| FCM push notifications | ❌ Missing |
+| 556 tests passing | ✅ Done |
+| FCM push notifications | ✅ Done (Session 34) |
+| Structured logging + GlitchTip | ✅ Done (Session 33) |
+| Auth hardening (token, enumeration, OTP) | ✅ Done (Session 35) |
 | Real ZarinPal payment | ❌ Missing |
 | Email sending (verification, reset) | ❌ Missing |
 | Connection pooling (PgBouncer) | ❌ Missing |
-| Rate limiting per endpoint | ❌ Missing / incomplete |
+| Rate limiting per endpoint | ⚠️ Partial |
 | WebSocket scale (multi-process) | ❌ Missing |
 | Presence (who's online) | ❌ Missing |
 | Typing indicators | ❌ Missing |

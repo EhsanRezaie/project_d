@@ -61,6 +61,9 @@ if settings.GLITCHTIP_DSN:
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
+    docs_url="/api/docs" if settings.ENVIRONMENT == "development" else None,
+    redoc_url="/api/redoc" if settings.ENVIRONMENT == "development" else None,
+    openapi_url="/api/openapi.json" if settings.ENVIRONMENT == "development" else None,
 )
 
 # Rate limiter

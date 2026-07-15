@@ -1048,6 +1048,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 32 | **WebSocket tests — push shape validation + manager unit tests** | ✅ |
 | 33 | **Structured logging + GlitchTip error tracking** | ✅ |
 | 34 | **Push notifications (FCM) + Device tokens + messages fix** | ✅ |
+| 35 | **Auth hardening — token expiry, enumeration fix, OTP brute-force, Swagger lockdown** | ✅ |
 
 ---
 
@@ -1591,3 +1592,17 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | `firebase-admin==6.8.0` dependency | ✅ |
 | `tests/done/test_push_notifications.py` — 9 tests (6 device token + 3 push) | ✅ |
 | **Total: 556 tests passing** | **✅** |
+
+### ✅ Session 35 Complete — Auth Hardening
+
+| Feature | Status |
+|---------|--------|
+| `ACCESS_TOKEN_EXPIRE_MINUTES` reduced from 7 days → 15 minutes | ✅ |
+| `register/init` returns same response for existing emails (enumeration protection) | ✅ |
+| OTP brute-force protection: max 5 attempts per code (register/verify) | ✅ |
+| OTP brute-force protection: max 5 attempts per code (password-reset/verify) | ✅ |
+| `verify_code_with_attempts()` with attempt counter in Redis (JSON format) | ✅ |
+| Backward-compatible with plain-string codes (test fixtures) | ✅ |
+| Swagger/Redoc/OpenAPI disabled when `ENVIRONMENT != "development"` | ✅ |
+| `.env.example` updated with new token expiry | ✅ |
+| Auth tests updated for new behavior (24/24 passing) | ✅ |

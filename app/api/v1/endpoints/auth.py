@@ -175,20 +175,24 @@ async def register_init(
     session: AsyncSession = Depends(get_session),
 ):
     existing = await get_user_by_email(session, body.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists.",
+
+    if existing and existing.registration_status == "onboarding_complete":
+        # Email exists and fully registered — return same response (no code sent)
+        return RegisterInitResponse(
+            message="If this email is new, a verification code has been sent.",
+            email=body.email,
+            expires_in=300,
         )
-    
+
+    # New email OR mid-registration — send (or resend) verification code
     code = generate_verification_code()
     await redis.store_verification_code(body.email, code, ttl=300)
     await send_verification_code(body.email, code)
-    
+
     return RegisterInitResponse(
-        message="Verification code sent to your email",
+        message="If this email is new, a verification code has been sent.",
         email=body.email,
-        expires_in=300
+        expires_in=300,
     )
 
 
@@ -199,13 +203,8 @@ async def register_verify(
     body: RegisterVerifyRequest,
     session: AsyncSession = Depends(get_session),
 ):
-    stored_code = await redis.get_verification_code(body.email)
-    if not stored_code or stored_code != body.code:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification code.",
-        )
-    
+    await redis.verify_code_with_attempts(body.email, body.code)
+
     existing = await get_user_by_email(session, body.email)
     if existing:
         raise HTTPException(
@@ -523,13 +522,8 @@ async def password_reset_verify(
     body: PasswordResetVerifyRequest,
     session: AsyncSession = Depends(get_session),
 ):
-    stored_code = await redis.get_verification_code(body.email)
-    if not stored_code or stored_code != body.code:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired verification code.",
-        )
-    
+    await redis.verify_code_with_attempts(body.email, body.code)
+
     user = await get_user_by_email(session, body.email)
     if not user:
         raise HTTPException(

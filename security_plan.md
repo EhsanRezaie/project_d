@@ -11,26 +11,28 @@
 
 | Control | Status | Notes |
 |---------|--------|-------|
-| JWT access tokens | ✅ | 7-day expiry, `ver` field for invalidation |
+| JWT access tokens | ✅ | 15-min expiry, `ver` field for invalidation |
 | Opaque refresh tokens in Redis | ✅ | 30-day TTL, rotation on use |
-| Token version (`token_version`) | ✅ | Password change increments → old tokens rejected |
+| Token version (`token_version`) | ✅ | Password change/reset increments → old tokens rejected |
 | AES-256-GCM message encryption | ✅ | Per-match key, PBKDF2 derivation |
 | Bcrypt password hashing | ✅ (assumed) | `password_hash` column exists |
 | MinIO private/public bucket split | ✅ | Pending photos behind signed URLs |
 | Google OAuth | ✅ | |
-| Rate limiting (`limiter.py`) | ⚠️ | Exists but coverage unknown |
+| Rate limiting (`limiter.py`) | ⚠️ | Exists, Redis-backed, coverage partial |
 | Admin key (`X-Admin-Key` header) | ⚠️ | Weak — static string, not JWT |
 | GZip middleware | ✅ | Not security, but noted |
 | Input validation (Pydantic) | ✅ | All schemas use Pydantic |
 | SQLAlchemy ORM (no raw SQL) | ✅ | No SQL injection risk |
 | HTTPS / TLS | ❌ | Nginx + SSL not yet configured |
 | Secrets in `.env` | ⚠️ | `SECRET_KEY=your-secret-key` in example — change in prod |
-| CORS policy | ❌ | Unknown — likely wide open |
+| CORS policy | ❌ | Wildcard origins — needs fix |
 | Security headers | ❌ | No X-Frame-Options, CSP, HSTS, etc. |
-| File upload validation | ⚠️ | Size limits exist, MIME type check unknown |
+| File upload validation | ⚠️ | Size + dimension limits exist, MIME type check unknown |
 | Photo content scanning | ❌ | No NSFW detection before serving |
-| Account enumeration protection | ❌ | Register/init likely leaks email existence |
-| Timing attack protection | ❌ | Login likely returns different errors for wrong email vs wrong password |
+| Account enumeration protection | ✅ | register/init returns same response for all emails |
+| OTP brute-force protection | ✅ | 5 max attempts per code (register + password reset) |
+| Timing attack protection | ✅ | Login returns uniform "Incorrect email or password" |
+| Swagger/Redoc in production | ✅ | Disabled when ENVIRONMENT != "development" |
 | Audit log | ❌ | No record of admin actions |
 | Token theft detection | ❌ | No refresh token family tracking |
 
@@ -923,12 +925,12 @@ docker exec dating_minio mc admin user remove local minioadmin
 
 ### 🔴 Session A — Critical Auth Fixes (do before any real users)
 
-- [ ] Shorten `ACCESS_TOKEN_EXPIRE_MINUTES` to 15 (Section 1.1)
-- [ ] Add uniform error message to login (Section 1.3 — Fix 1)
+- [x] Shorten `ACCESS_TOKEN_EXPIRE_MINUTES` to 15 (Section 1.1) ✅ Session 35
+- [x] Add uniform error message to login (Section 1.3 — Fix 1) ✅ (was already done)
 - [ ] Add constant-time password check to login (Section 1.3 — Fix 2)
-- [ ] Add OTP attempt counter (5 attempts max) (Section 1.4)
-- [ ] Apply same attempt counter to password reset (Section 1.5)
-- [ ] Add `token_version` increment to password reset (Section 1.5)
+- [x] Add OTP attempt counter (5 attempts max) (Section 1.4) ✅ Session 35
+- [x] Apply same attempt counter to password reset (Section 1.5) ✅ Session 35
+- [x] Add `token_version` increment to password reset (Section 1.5) ✅ (was already done)
 - [ ] Generate real `SECRET_KEY` and `ENCRYPTION_SECRET` for production (Section 6.1)
 - [ ] Verify `.gitignore` covers all secret files (Section 6.2)
 
@@ -950,7 +952,7 @@ docker exec dating_minio mc admin user remove local minioadmin
 - [ ] Create `admin_logs` table + migration (Section 2.2)
 - [ ] Add `log_admin_action()` to all admin endpoints (Section 2.2)
 - [ ] Add CORS configuration to `main.py` (Section 5.1)
-- [ ] Disable Swagger/Redoc in production (Section 5.3)
+- [x] Disable Swagger/Redoc in production (Section 5.3) ✅ Session 35
 
 ### 🟡 Session D — Infrastructure + WebSocket Security
 
@@ -972,7 +974,7 @@ docker exec dating_minio mc admin user remove local minioadmin
 
 ### 🟢 Session F — Account Enumeration (lower priority, but clean)
 
-- [ ] Unify register/init response regardless of email existence (Section 1.2)
+- [x] Unify register/init response regardless of email existence (Section 1.2) ✅ Session 35
 
 ---
 
