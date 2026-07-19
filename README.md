@@ -204,7 +204,7 @@ After starting the server, open your browser:
 - **API docs (Swagger):** http://localhost:8000/docs
 - **API docs (ReDoc):** http://localhost:8000/redoc
 - **MinIO console:** http://localhost:9001 (login `minioadmin` / `minioadmin`) → browse uploaded photos, confirm `photos-public` and `photos-private` buckets exist
-- **GlitchTip dashboard:** http://localhost:8080 (login `admin@glitchtip.local` / `admin123`) → error tracking dashboard
+- **GlitchTip dashboard:** http://localhost:8080 (login `admin@glitchtip.dev` / `admin123`) → error tracking dashboard
 
 ---
 
@@ -444,7 +444,7 @@ sleep 15
 docker exec dating_glitchtip python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
-User.objects.create_superuser(email='admin@glitchtip.local', password='admin123')
+User.objects.create_superuser(email='admin@glitchtip.dev', password='admin123')
 print('Admin created successfully')
 "
 
@@ -460,7 +460,7 @@ OrgOwner = apps.get_model('organizations_ext', 'OrganizationOwner')
 ProjectModel = apps.get_model('projects', 'Project')
 KeyModel = apps.get_model('projects', 'ProjectKey')
 
-user = User.objects.get(email='admin@glitchtip.local')
+user = User.objects.get(email='admin@glitchtip.dev')
 org = OrgModel.objects.create(name='DatingApp', slug='datingapp')
 org_user = OrgUser.objects.create(user=user, organization=org, role=0)
 OrgOwner.objects.create(organization_user=org_user, organization=org)
@@ -494,7 +494,7 @@ uvicorn app.main:app --reload
 
 # 2. Open the GlitchTip dashboard
 #    http://localhost:8080
-#    Login: admin@glitchtip.local / admin123
+#    Login: admin@glitchtip.dev / admin123
 
 # 3. Send a test error from a separate terminal:
 source venv/bin/activate
@@ -564,6 +564,11 @@ with sentry_sdk.push_scope() as scope:
 | `dating_glitchtip_db_init` | `glitchtip-db-init` | One-shot: creates the `glitchtip` database |
 
 ### Troubleshooting
+
+**500 error on `/api/0/users/me/` after login:**
+- Caused by using a `.local` email domain (e.g. `admin@glitchtip.local`) — Pydantic rejects `.local` as a reserved TLD
+- Fix: use a real domain like `admin@glitchtip.dev` or `admin@yourdomain.com`
+- If already created: `docker exec dating_glitchtip python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); u = User.objects.get(is_superuser=True); u.email = 'admin@glitchtip.dev'; u.save()"`
 
 **Events not showing up in dashboard:**
 - Check the worker is running: `docker ps --filter "name=dating_glitchtip_worker"`
