@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from uuid import UUID
+import uuid
 
 from app.core.config import settings
 from app.db.session import get_session
@@ -104,6 +105,7 @@ async def upload_photo(
         order=len(photos),
         is_main=len(photos) == 0,  # First photo becomes main
         status="pending",
+        nsfw_score=nsfw_score,
     )
     session.add(new_photo)
     await session.flush()  # Get ID

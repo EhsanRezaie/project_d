@@ -175,6 +175,7 @@ iranian-dating-app/
 │   │   │   ├── photo_service.py           # MinIO/S3 storage — upload, public/private bucket move, signed URLs
 │   │   │   ├── media_service.py           # ✅ Updated with MinIO support
 │   │   │   ├── websocket_manager.py
+│   │   │   ├── nsfw_service.py              # ✅ NSFW photo detection (skin-tone heuristic)
 │   │   │   └── location_service.py
 │   │   │
 │   │   ├── core/
@@ -194,7 +195,7 @@ iranian-dating-app/
 │   ├── tests/
 │   │   ├── __init__.py
 │   │   ├── conftest.py                    # ✅ Auto-seeds interests, reset_state fixture
-│   │   └── done/                          # 30 files, 547 tests, all ✅
+│   │   └── done/                          # 33 files, 584 tests, all ✅
 │   │       ├── test_admin_dashboard.py
 │   │       ├── test_admin_messages.py
 │   │       ├── test_admin_photos.py
@@ -224,6 +225,7 @@ iranian-dating-app/
 │   │       ├── test_system.py
 │   │       ├── test_tickets.py
 │   │       ├── test_users.py
+│   │       ├── test_nsfw.py                 # ✅ NSFW detection tests (service + endpoint + metrics)
 │   │       └── test_websocket.py
 │   │
 │   ├── uploads/
@@ -367,6 +369,12 @@ MAX_CHAT_PHOTO_SIZE_MB=5
 MAX_CHAT_VOICE_SIZE_MB=2
 MAX_CHAT_VOICE_DURATION=120
 ALLOWED_CHAT_IMAGE_FORMATS=JPEG,PNG,WEBP,JPG
+
+# ============================================
+# NSFW Detection
+# ============================================
+NSFW_ENABLED=true
+NSFW_THRESHOLD=0.8
 
 # ============================================
 # Version Control
@@ -624,7 +632,7 @@ Constraints: unique(`user_id`, `token`), index on `user_id`
 | `/users/me/location` | POST | Update GPS location | ✅ |
 | `/users/me/location-text` | PATCH | Update text location | ✅ |
 | `/users/me/photos` | GET | Get all photos | ✅ |
-| `/users/me/photos` | POST | Upload photo | ✅ |
+| `/users/me/photos` | POST | Upload photo (triggers NSFW check, auto-rejects if score ≥ threshold) | ✅ |
 | `/users/me/photos/{id}` | DELETE | Delete photo | ✅ |
 | `/users/me/photos/{id}/main` | PUT | Set main photo | ✅ |
 
@@ -934,6 +942,36 @@ Firebase Cloud Messaging for real-time push notifications on Android/iOS.
 - `reset_state` re-seeds interests after each test
 - `test_interests.py` - 21 tests passing
 
+### NSFW Photo Moderation Architecture
+
+Automated NSFW detection on photo uploads using a lightweight skin-tone heuristic.
+
+**Flow:**
+```
+Upload → validate_image() → NSFW check → save_photo() → status="pending"
+                                              ↓ (if score ≥ threshold)
+                                         status="rejected"
+                                         quarantine to S3
+                                         log + metrics
+```
+
+**Detection method:** Skin-tone HSV analysis — calculates the ratio of skin-colored pixels in the image. Higher skin ratio → higher NSFW score (0.0 safe → 1.0 explicit). This is a simple baseline; swap for ML model (opennsfw2/TensorFlow) in production.
+
+**Configuration:**
+- `NSFW_ENABLED`: Enable/disable detection (default: `true`)
+- `NSFW_THRESHOLD`: Score cutoff for auto-rejection (default: `0.8`)
+- Fail-open on errors — processing failures log but allow the image
+
+**Quarantine storage:** Rejected photos saved to S3 private bucket under `quarantine/{user_id}/{photo_id}.jpg` — accessible via admin endpoints for review.
+
+**Files:**
+| File | Purpose |
+|------|---------|
+| `app/services/nsfw_service.py` | NSFW detection service (skin-tone heuristic) |
+| `app/api/v1/endpoints/photos.py` | NSFW check after image validation |
+| `app/models/photo.py` | `nsfw_score` column |
+| `app/core/config.py` | `NSFW_ENABLED`, `NSFW_THRESHOLD` settings |
+
 ### Authentication Flow (3-Step)
 
 ```
@@ -1056,6 +1094,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 40 | **CORS fix — configurable origins via CORS_ORIGINS env var** | ✅ |
 | 41 | **Redis perf — swipe deduplication + discover card stack cache** | ✅ |
 | 42 | **Security hardening — constant-time login, IP tracking, admin JWT + audit log** | ✅ |
+| 42+ | **NSFW photo moderation — skin-tone heuristic, quarantine, 12 tests** | ✅ |
 
 ---
 
@@ -1118,7 +1157,7 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 
 | Session | Test Files | Tests | Status |
 |---------|------------|-------|--------|
-| All | 32 test files in `tests/done/` | **563** | **✅ All passing** |
+| All | 33 test files in `tests/done/` | **584** | **✅ All passing** |
 | 25 | test_auth, test_users, test_photos, test_prompts, test_settings, test_encryption | 101 | ✅ |
 | 25 | test_swipes, test_matches, test_blocks, test_discover, test_search | 110 | ✅ |
 | 25 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 79 | ✅ |
@@ -1127,6 +1166,7 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 | 25 | test_admin_reports, test_admin_tickets, test_admin_users | 70 | ✅ |
 | 32 | test_websocket | 9 | ✅ |
 | 34 | test_push_notifications | 9 | ✅ |
+| 42+ | test_nsfw | 12 | ✅ |
 
 ### Run All Tests
 

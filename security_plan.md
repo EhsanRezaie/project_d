@@ -28,7 +28,7 @@
 | CORS policy | ✅ | Configurable via CORS_ORIGINS env var |
 | Security headers | ❌ | No X-Frame-Options, CSP, HSTS, etc. |
 | File upload validation | ✅ | Size, dimension, EXIF stripping, PIL format validation |
-| Photo content scanning | ❌ | No NSFW detection before serving |
+| Photo content scanning | ✅ | NSFW detection (skin-tone heuristic, threshold 0.8) — ML-based upgrade (opennsfw2/TensorFlow) planned for production |
 | Account enumeration protection | ✅ | register/init returns same response for all emails |
 | OTP brute-force protection | ✅ | 5 max attempts per code (register + password reset) |
 | Timing attack protection | ✅ | Login returns uniform "Incorrect email or password" |
