@@ -12,6 +12,8 @@ from app.core.limiter import limiter
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.users import router as users_router
 from app.api.v1.endpoints.photos import router as photos_router  
+from app.api.v1.endpoints.verify import router as verify_router
+from app.api.v1.endpoints.test_face_verification import router as test_face_verification_router
 from app.api.v1.endpoints.discover import router as discover_router
 from app.api.v1.endpoints.swipes import router as swipes_router  
 from app.api.v1.endpoints.search import router as search_router
@@ -89,6 +91,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(photos_router, prefix="/api/v1")  
+app.include_router(verify_router, prefix="/api/v1")
+app.include_router(test_face_verification_router, prefix="/api/v1")
 app.include_router(discover_router, prefix="/api/v1")
 app.include_router(swipes_router, prefix="/api/v1")  
 app.include_router(search_router, prefix="/api/v1")

@@ -216,3 +216,24 @@ class PhotoService:
                 ExpiresIn=settings.S3_SIGNED_URL_EXPIRE_SECONDS,
             )
         return url
+    @staticmethod
+    async def download_photo_bytes(key: str) -> bytes:
+        """Download raw photo bytes from MinIO (public or private bucket)."""
+        async with _s3_client() as s3:
+            # Try public bucket first (approved photos)
+            try:
+                response = await s3.get_object(
+                    Bucket=settings.S3_PUBLIC_BUCKET, Key=key
+                )
+                return await response["Body"].read()
+            except ClientError:
+                pass
+            # Fall back to private bucket (pending photos)
+            try:
+                response = await s3.get_object(
+                    Bucket=settings.S3_PRIVATE_BUCKET, Key=key
+                )
+                return await response["Body"].read()
+            except ClientError as e:
+                logger.error("download_photo_failed", key=key, error=str(e))
+                raise

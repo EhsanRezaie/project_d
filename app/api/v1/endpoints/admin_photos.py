@@ -48,7 +48,7 @@ router = APIRouter(prefix="/admin/photos", tags=["admin"])
 # automatically (see _AUTO_FACE_VERIFY below) so the moderation queue
 # isn't blocked on a feature that doesn't exist yet.
 # =====================================================================
-_AUTO_FACE_VERIFY = True
+_AUTO_FACE_VERIFY = False
 
 
 @router.get("/pending", response_model=list[AdminPendingPhotoResponse])

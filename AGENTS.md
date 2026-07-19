@@ -31,3 +31,15 @@ Message keys derived on-the-fly from `match_id + ENCRYPTION_SECRET` (PBKDF2, 100
 
 ## Imports
 Most `app/` package `__init__.py` files are empty — no barrel imports.
+
+## Face verification
+`face_verification_service.py` is a singleton using InsightFace buffalo_l model. Model is lazy-loaded on first request (thread-safe via `threading.Lock`). All CPU-bound work (OpenCV decode, InsightFace inference) runs in `asyncio.run_in_executor` to avoid blocking the event loop.
+
+Challenge state lives in Redis (`verify_challenge:{user_id}`, 10-min TTL). Cooldowns (`verify_cooldown:{user_id}`, 24h TTL) and daily attempt counters (`verify_attempts:{user_id}:{date}`, 24h TTL) are also Redis-only.
+
+`_AUTO_FACE_VERIFY = False` in admin_photos.py — the temporary bypass is disabled. Photo uploads no longer auto-set `face_verified=True`.
+
+Test endpoint: `POST /admin/face-verification/test` accepts a video + user_id, runs the full pipeline, returns per-step debug JSON without modifying any DB records.
+
+## Face verification tests
+`tests/done/test_face_verification.py` has 28 tests covering challenge generation, verification status, video submission (with mocked face service), and pure unit tests for the service layer. All InsightFace/OpenCV calls are mocked in endpoint tests; only the service unit tests run real numpy/cosine comparisons.

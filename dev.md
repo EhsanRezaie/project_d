@@ -1437,7 +1437,7 @@ alembic downgrade -1
 | Face verification UI | Medium | 21 |
 | Persian translations for all screens | High | — |
 | Real ZarinPal integration | High | 15 |
-| Real face-match API (photo verification) | Medium | — |
+| Real face-match API (photo verification) | Medium | ✅ Session 43 |
 | Flutter Discover Screen | High | 20 |
 | Flutter Search Screen | High | 20 |
 | Flutter Chat System | High | 20 |
@@ -1731,3 +1731,69 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | Admin dependency supports both JWT and legacy `X-Admin-Key` | ✅ |
 | `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` config | ✅ |
 | Migration: `alembic revision --autogenerate -m 'add admin_logs'` | ⏳ |
+### ✅ Session 43 Complete — Face Verification (Selfie Video Liveness + Face Match)
+
+| Feature | Status |
+|---------|--------|
+| InsightFace + OpenCV + ONNX Runtime face detection | ✅ |
+| Singleton model loading (lazy, thread-safe) | ✅ |
+| Challenge-response liveness (blink, turn_left, turn_right, smile, nod) | ✅ |
+| Eye Aspect Ratio (EAR) blink detection | ✅ |
+| Head pose estimation (yaw/pitch/roll via solvePnP) | ✅ |
+| Smile detection via mouth ratio | ✅ |
+| 512-d face embedding extraction + averaging | ✅ |
+| Cosine similarity comparison against profile photos | ✅ |
+| Redis-based challenge state (10-min TTL) | ✅ |
+| Redis-based daily attempt limiting (3/day) | ✅ |
+| Redis-based cooldown (24h after success) | ✅ |
+| `UserProfile.verified_at` column + migration | ✅ |
+| `PhotoService.download_photo_bytes()` for MinIO download | ✅ |
+| Admin test endpoint for pipeline debugging | ✅ |
+| Auto-face-verify bypass disabled | ✅ |
+
+#### New Files
+| File | Purpose |
+|------|---------|
+| `app/services/face_verification_service.py` | Core engine: model, liveness, embeddings, comparison |
+| `app/api/v1/endpoints/verify.py` | User-facing verification endpoints |
+| `app/api/v1/endpoints/test_face_verification.py` | Admin test/debug endpoint |
+| `app/schemas/verify.py` | Pydantic schemas for verification |
+| `alembic/versions/b3c4d5e6f7a8_add_verified_at.py` | Migration for verified_at |
+
+#### Modified Files
+| File | Change |
+|------|--------|
+| `requirements.txt` | Added insightface, opencv-python-headless, onnxruntime |
+| `app/core/config.py` | Added 16 FACE_VERIFICATION_* settings |
+| `app/models/user_profile.py` | Added `verified_at` column |
+| `app/services/photo_service.py` | Added `download_photo_bytes()` |
+| `app/main.py` | Registered verify + test_face_verification routers |
+| `app/api/v1/endpoints/admin_photos.py` | `_AUTO_FACE_VERIFY = False` |
+
+#### New Endpoints
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/users/me/verify/challenge` | POST | User | Generate random liveness challenge |
+| `/users/me/verify` | POST | User | Submit selfie video for verification |
+| `/users/me/verify/status` | GET | User | Check verification status + cooldown |
+| `/admin/face-verification/test` | POST | Admin | Test full pipeline with debug output |
+
+#### Configuration (in .env)
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `FACE_VERIFICATION_MODEL` | `buffalo_l` | InsightFace model name |
+| `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold |
+| `FACE_VERIFICATION_FRAME_RATE` | `2` | Frames per second to sample |
+| `FACE_VERIFICATION_VIDEO_MIN_SECONDS` | `4` | Minimum video duration |
+| `FACE_VERIFICATION_VIDEO_MAX_SECONDS` | `15` | Maximum video duration |
+| `FACE_VERIFICATION_CHALLENGE_TTL` | `600` | Challenge expiry (10 min) |
+| `FACE_VERIFICATION_COOLDOWN_TTL` | `86400` | Cooldown between attempts (24h) |
+| `FACE_VERIFICATION_MAX_ATTEMPTS_PER_DAY` | `3` | Daily attempt limit |
+
+#### Tests (28 total)
+| Test Class | Count | Coverage |
+|------------|-------|----------|
+| TestChallengeGeneration | 6 | Challenge gen, Redis storage, already verified, no auth, cooldown, daily limit |
+| TestVerificationStatus | 4 | Not verified, already verified, cooldown active, no auth |
+| TestVideoSubmission | 12 | No challenge_id, expired, mismatch, too short, too large, already verified, no photos, liveness fail, low similarity, success, cooldown set, no auth |
+| TestFaceVerificationService | 6 | Cosine similarity (3 cases), EAR calculation, challenge types, config settings |
