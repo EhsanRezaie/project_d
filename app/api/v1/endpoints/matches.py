@@ -13,6 +13,7 @@ from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.schemas.match import MatchResponse, MatchListResponse, MatchDetailResponse, MatchUserResponse, LastMessageResponse
 from app.services.notification_service import NotificationService
+from app.services.photo_service import PhotoService
 
 from app.core.logging import get_logger
 
@@ -80,7 +81,7 @@ async def get_matches(
             other_user = match.user1
 
         main_photo = next((p for p in other_user.photos if p.is_main and p.status == "approved"), None) if other_user.photos else None
-        main_photo_url = main_photo.url if main_photo else None
+        main_photo_url = await PhotoService.get_photo_url(main_photo.url, main_photo.status) if main_photo else None
 
         last_msg = last_messages.get(match.id)
         last_message = LastMessageResponse(
@@ -143,9 +144,9 @@ async def get_match_detail(
         )
 
     user1_photo = next((p for p in match.user1.photos if p.is_main and p.status == "approved"), None) if match.user1.photos else None
-    user1_photo_url = user1_photo.url if user1_photo else None
+    user1_photo_url = await PhotoService.get_photo_url(user1_photo.url, user1_photo.status) if user1_photo else None
     user2_photo = next((p for p in match.user2.photos if p.is_main and p.status == "approved"), None) if match.user2.photos else None
-    user2_photo_url = user2_photo.url if user2_photo else None
+    user2_photo_url = await PhotoService.get_photo_url(user2_photo.url, user2_photo.status) if user2_photo else None
 
     return MatchDetailResponse(
         id=match.id,

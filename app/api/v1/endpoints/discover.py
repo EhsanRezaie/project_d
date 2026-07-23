@@ -16,6 +16,7 @@ from app.models.user_prompt import UserPrompt
 from app.core.deps import get_current_user
 from app.core.limiter import limiter
 from app.core.redis import redis_client
+from app.services.photo_service import PhotoService
 from app.core.cache import (
     pop_discover_stack, set_discover_stack, get_swiped_ids,
     DISCOVER_STACK_SIZE,
@@ -153,11 +154,15 @@ async def discover(
         profile = user.profile
         settings = user.settings
 
-        # Photos — all approved, sorted by order
-        approved_photos = [p.url for p in sorted(
+        # Photos — all approved, sorted by order, resolve to full URLs
+        approved_photos_raw = sorted(
             [p for p in user.photos if p.status == "approved"],
             key=lambda p: p.order,
-        )] if user.photos else []
+        ) if user.photos else []
+        approved_photos = [
+            await PhotoService.get_photo_url(p.url, p.status)
+            for p in approved_photos_raw
+        ]
 
         main_photo_url = approved_photos[0] if approved_photos else None
 

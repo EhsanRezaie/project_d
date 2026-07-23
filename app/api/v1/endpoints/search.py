@@ -13,6 +13,7 @@ from app.models.interest import Interest
 from app.models.photo import Photo
 from app.models.block import Block
 from app.core.deps import get_current_user
+from app.services.photo_service import PhotoService
 from app.core.limiter import limiter
 from app.schemas.search import SearchProfileResponse, SearchResponse
 from app.utils.geo import fuzz_distance
@@ -233,7 +234,7 @@ async def search_users(
             user_interests = [ui.interest.name for ui in user.user_interests if ui.interest]
 
         main_photo = next((p for p in user.photos if p.is_main and p.status == "approved"), None) if user.photos else None
-        main_photo_url = main_photo.url if main_photo else None
+        main_photo_url = await PhotoService.get_photo_url(main_photo.url, main_photo.status) if main_photo else None
 
         response_users.append(SearchProfileResponse(
             id=user.id,

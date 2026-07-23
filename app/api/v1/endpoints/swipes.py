@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.user_profile import UserProfile
 from app.models.swipe import Swipe
 from app.models.match import Match
+from app.services.photo_service import PhotoService
 from app.models.photo import Photo
 from app.core.deps import get_current_user, get_current_user_id
 from app.core.limiter import limiter
@@ -30,15 +31,18 @@ router = APIRouter(prefix="/swipes", tags=["swipes"])
 
 
 async def get_user_main_photo_url(session: AsyncSession, user_id: UUID) -> str | None:
-    """Get user's main approved photo URL"""
+    """Get user's main approved photo URL (resolved to full URL)"""
     result = await session.execute(
-        select(Photo.url).where(
+        select(Photo.url, Photo.status).where(
             Photo.user_id == user_id,
             Photo.is_main == True,
             Photo.status == "approved"
         )
     )
-    return result.scalar_one_or_none()
+    row = result.one_or_none()
+    if row:
+        return await PhotoService.get_photo_url(row[0], row[1])
+    return None
 
 
 async def _background_match_notification(
