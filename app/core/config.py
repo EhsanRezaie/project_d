@@ -49,19 +49,19 @@ class Settings(BaseSettings):
     # ============================================
     # Daily Limits & Rewards
     # ============================================
-    FREE_USER_DAILY_LIKES: int
-    FREE_USER_DAILY_CHATS: int
-    AD_REWARD_LIKES_BONUS: int
-    AD_REWARD_CHATS_BONUS: int
-    MAX_AD_REWARDS_PER_DAY: int
-    WELCOME_BONUS_DAYS: int
-    REFERRAL_INVITER_DAYS: int
-    REFERRAL_INVITED_DAYS: int
-    SUBSCRIPTION_MONTHLY_DAYS: int
-    SUBSCRIPTION_QUARTERLY_DAYS: int
-    SUBSCRIPTION_YEARLY_DAYS: int
-    SUBSCRIPTION_QUARTERLY_DISCOUNT: int
-    SUBSCRIPTION_YEARLY_DISCOUNT: int
+    FREE_USER_DAILY_LIKES: int = 20
+    FREE_USER_DAILY_CHATS: int = 10
+    AD_REWARD_LIKES_BONUS: int = 5
+    AD_REWARD_CHATS_BONUS: int = 3
+    MAX_AD_REWARDS_PER_DAY: int = 2
+    WELCOME_BONUS_DAYS: int = 7
+    REFERRAL_INVITER_DAYS: int = 3
+    REFERRAL_INVITED_DAYS: int = 3
+    SUBSCRIPTION_MONTHLY_DAYS: int = 30
+    SUBSCRIPTION_QUARTERLY_DAYS: int = 90
+    SUBSCRIPTION_YEARLY_DAYS: int = 365
+    SUBSCRIPTION_QUARTERLY_DISCOUNT: int = 15
+    SUBSCRIPTION_YEARLY_DISCOUNT: int = 30
 
     # ============================================
     # Payment
@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     MAX_CHAT_PHOTO_SIZE_MB: int = 5
     MAX_CHAT_VOICE_SIZE_MB: int = 2
     MAX_CHAT_VOICE_DURATION: int = 120
-    ALLOWED_CHAT_IMAGE_FORMATS: str
+    ALLOWED_CHAT_IMAGE_FORMATS: str = "JPEG,PNG,WEBP,JPG"
     
     # ============================================
     # MinIO / S3 Settings (NO DEFAULTS - MUST BE IN .env)
@@ -99,26 +99,26 @@ class Settings(BaseSettings):
     # ===========================================
     # Encryption
     # ===========================================
-    ENCRYPTION_SECRET: str
+    ENCRYPTION_SECRET: str = "your-super-secret-32-byte-key-here-change-in-production"
     
     # ============================================
     # App Version
     # ============================================
-    APP_VERSION: str
-    MIN_ANDROID_VERSION: str
-    MIN_IOS_VERSION: str
+    APP_VERSION: str = "1.0.0"
+    MIN_ANDROID_VERSION: str = "1.0.0"
+    MIN_IOS_VERSION: str = "1.0.0"
     
     # ============================================
     # App Store Links
     # ============================================
-    PLAY_STORE_URL: str
-    APP_STORE_URL: str
-    
+    PLAY_STORE_URL: str = "https://play.google.com/store/apps/details?id=your.app.id"
+    APP_STORE_URL: str = "https://apps.apple.com/app/your-app-id"
+
     # ============================================
     # Force Update
     # ============================================
-    FORCE_UPDATE_ENABLED: bool
-    FORCE_UPDATE_MESSAGE: str
+    FORCE_UPDATE_ENABLED: bool = False
+    FORCE_UPDATE_MESSAGE: str = "A critical update is available. Please update to continue using the app."
 
     # ============================================
     # Error Tracking (GlitchTip)
