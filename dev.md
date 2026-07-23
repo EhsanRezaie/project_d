@@ -175,6 +175,7 @@ iranian-dating-app/
 │   │   │   ├── photo_service.py           # MinIO/S3 storage — upload, public/private bucket move, signed URLs
 │   │   │   ├── media_service.py           # ✅ Updated with MinIO support
 │   │   │   ├── websocket_manager.py
+│   │   │   ├── nsfw_service.py              # ✅ NSFW photo detection (skin-tone heuristic)
 │   │   │   └── location_service.py
 │   │   │
 │   │   ├── core/
@@ -194,7 +195,7 @@ iranian-dating-app/
 │   ├── tests/
 │   │   ├── __init__.py
 │   │   ├── conftest.py                    # ✅ Auto-seeds interests, reset_state fixture
-│   │   └── done/                          # 30 files, 547 tests, all ✅
+│   │   └── done/                          # 33 files, 584 tests, all ✅
 │   │       ├── test_admin_dashboard.py
 │   │       ├── test_admin_messages.py
 │   │       ├── test_admin_photos.py
@@ -224,6 +225,7 @@ iranian-dating-app/
 │   │       ├── test_system.py
 │   │       ├── test_tickets.py
 │   │       ├── test_users.py
+│   │       ├── test_nsfw.py                 # ✅ NSFW detection tests (service + endpoint + metrics)
 │   │       └── test_websocket.py
 │   │
 │   ├── uploads/
@@ -369,6 +371,12 @@ MAX_CHAT_VOICE_DURATION=120
 ALLOWED_CHAT_IMAGE_FORMATS=JPEG,PNG,WEBP,JPG
 
 # ============================================
+# NSFW Detection
+# ============================================
+NSFW_ENABLED=true
+NSFW_THRESHOLD=0.8
+
+# ============================================
 # Version Control
 # ============================================
 MIN_ANDROID_VERSION=1.0.0
@@ -377,6 +385,11 @@ PLAY_STORE_URL=https://play.google.com/store/apps/details?id=your.app.id
 APP_STORE_URL=https://apps.apple.com/app/your-app-id
 FORCE_UPDATE_ENABLED=false
 FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue using the app.
+
+# ============================================
+# FCM Push Notifications
+# ============================================
+FCM_SERVICE_ACCOUNT_PATH=firebase-service-account.json
 ```
 
 ### `.env.test`
@@ -566,6 +579,19 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | reports | User reports |
 | tickets | Support tickets |
 
+### `device_tokens` Table (Push Notifications)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | Primary key |
+| user_id | UUID (FK → users) | CASCADE delete |
+| token | VARCHAR | FCM registration token |
+| platform | VARCHAR(10) | "android" or "ios" |
+| created_at | TIMESTAMPTZ | |
+| updated_at | TIMESTAMPTZ | |
+
+Constraints: unique(`user_id`, `token`), index on `user_id`
+
 ---
 
 ## 7. API Reference
@@ -606,7 +632,7 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | `/users/me/location` | POST | Update GPS location | ✅ |
 | `/users/me/location-text` | PATCH | Update text location | ✅ |
 | `/users/me/photos` | GET | Get all photos | ✅ |
-| `/users/me/photos` | POST | Upload photo | ✅ |
+| `/users/me/photos` | POST | Upload photo (triggers NSFW check, auto-rejects if score ≥ threshold) | ✅ |
 | `/users/me/photos/{id}` | DELETE | Delete photo | ✅ |
 | `/users/me/photos/{id}/main` | PUT | Set main photo | ✅ |
 
@@ -667,7 +693,7 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/messages/{identifier}` | GET | Get chat history (decrypted) |
-| `/messages/{identifier}/text` | POST | Send text message (encrypted) |
+| `/messages/{identifier}/text` | POST | Send text message (encrypted, sends push) |
 | `/messages/{identifier}/photo` | POST | Send photo message (caption encrypted) |
 | `/messages/{identifier}/voice` | POST | Send voice message |
 | `/messages/{identifier}/accept` | POST | Accept unmatched chat |
@@ -676,6 +702,13 @@ FORCE_UPDATE_MESSAGE=A critical update is available. Please update to continue u
 | `/messages/{message_id}` | DELETE | Delete message |
 | `/messages/{message_id}/forward` | POST | Forward message (re-encrypted) |
 | `/messages/{message_id}/status` | GET | Get message status |
+
+### Push Notification Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/notifications/device-token` | POST | Register/update FCM device token |
+| `/notifications/device-token/{id}` | DELETE | Remove device token |
 
 ### Admin Messages Endpoints
 
@@ -837,6 +870,40 @@ Replaced local-disk `uploads/` storage with MinIO (self-hosted, S3-compatible), 
 - On admin approval, `PhotoService.publish_photo()` copies the object from `photos-private` → `photos-public` and deletes the original
 - `PhotoService.get_photo_url(key, status)` resolves the correct URL at read time: public URL if `approved`, signed private URL otherwise
 
+### Push Notification Architecture (FCM)
+
+Firebase Cloud Messaging for real-time push notifications on Android/iOS.
+
+**Push Triggers:**
+
+| Event | Recipients | Title |
+|-------|-----------|-------|
+| Like | Liked user only | "Someone liked you!" |
+| Match | Both matched users | "It's a match!" |
+| Message | Receiver only | "New message" |
+
+**Architecture:**
+- `PushService.send_to_user()` — static method, looks up `DeviceToken` records, sends `MulticastMessage` via Firebase Admin SDK
+- Lazy Firebase init — only initializes on first send, gracefully no-ops if `FCM_SERVICE_ACCOUNT_PATH` not set
+- Auto-cleanup of invalid tokens (`registration-token-not-registered`, `invalid-registration-token`)
+- `NotificationService` calls `PushService` after creating DB notification records
+
+**Files Created:**
+| File | Purpose |
+|------|---------|
+| `app/services/push_service.py` | FCM send + token cleanup |
+| `app/models/device_token.py` | `device_tokens` table (user_id, token, platform) |
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `app/services/notification_service.py` | Added `PushService.send_to_user()` calls in `notify_like()`, `notify_match()`, `notify_message()` |
+| `app/api/v1/endpoints/notifications.py` | Added POST/DELETE `/device-token` endpoints |
+| `app/api/v1/endpoints/messages.py` | Added `NotificationService.notify_message()` call after text message creation |
+| `app/models/user.py` | Added `device_tokens` relationship |
+| `app/core/config.py` | Added `FCM_SERVICE_ACCOUNT_PATH` setting |
+| `requirements.txt` | Added `firebase-admin==6.8.0` |
+
 ### Discover & Search Architecture (Session 23)
 
 **Discover Endpoint (`/discover`):**
@@ -874,6 +941,36 @@ Replaced local-disk `uploads/` storage with MinIO (self-hosted, S3-compatible), 
 - `conftest.py` auto-seeds interests in `setup_database`
 - `reset_state` re-seeds interests after each test
 - `test_interests.py` - 21 tests passing
+
+### NSFW Photo Moderation Architecture
+
+Automated NSFW detection on photo uploads using a lightweight skin-tone heuristic.
+
+**Flow:**
+```
+Upload → validate_image() → NSFW check → save_photo() → status="pending"
+                                              ↓ (if score ≥ threshold)
+                                         status="rejected"
+                                         quarantine to S3
+                                         log + metrics
+```
+
+**Detection method:** Skin-tone HSV analysis — calculates the ratio of skin-colored pixels in the image. Higher skin ratio → higher NSFW score (0.0 safe → 1.0 explicit). This is a simple baseline; swap for ML model (opennsfw2/TensorFlow) in production.
+
+**Configuration:**
+- `NSFW_ENABLED`: Enable/disable detection (default: `true`)
+- `NSFW_THRESHOLD`: Score cutoff for auto-rejection (default: `0.8`)
+- Fail-open on errors — processing failures log but allow the image
+
+**Quarantine storage:** Rejected photos saved to S3 private bucket under `quarantine/{user_id}/{photo_id}.jpg` — accessible via admin endpoints for review.
+
+**Files:**
+| File | Purpose |
+|------|---------|
+| `app/services/nsfw_service.py` | NSFW detection service (skin-tone heuristic) |
+| `app/api/v1/endpoints/photos.py` | NSFW check after image validation |
+| `app/models/photo.py` | `nsfw_score` column |
+| `app/core/config.py` | `NSFW_ENABLED`, `NSFW_THRESHOLD` settings |
 
 ### Authentication Flow (3-Step)
 
@@ -988,6 +1085,16 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 31 | **Schema audit + Redoc accuracy — all endpoints now declare response_model** | ✅ |
 | 32 | **WebSocket tests — push shape validation + manager unit tests** | ✅ |
 | 33 | **Structured logging + GlitchTip error tracking** | ✅ |
+| 34 | **Push notifications (FCM) + Device tokens + messages fix** | ✅ |
+| 35 | **Auth hardening — token expiry, enumeration fix, OTP brute-force, Swagger lockdown** | ✅ |
+| 36 | **IDOR audit + EXIF stripping + dead code cleanup** | ✅ |
+| 37 | **Location fuzzing — ±500m noise on discover/search distance** | ✅ |
+| 38 | **Per-match message rate limit — 30/min per sender per chat** | ✅ |
+| 39 | **Daily report limit — 5 reports/day per user** | ✅ |
+| 40 | **CORS fix — configurable origins via CORS_ORIGINS env var** | ✅ |
+| 41 | **Redis perf — swipe deduplication + discover card stack cache** | ✅ |
+| 42 | **Security hardening — constant-time login, IP tracking, admin JWT + audit log** | ✅ |
+| 42+ | **NSFW photo moderation — skin-tone heuristic, quarantine, 12 tests** | ✅ |
 
 ---
 
@@ -998,16 +1105,16 @@ Real push notifications via Firebase Cloud Messaging, real ZarinPal integration,
 
 ### Tasks
 
-#### 1. Push Notifications (FCM)
+#### 1. Push Notifications (FCM) ✅ DONE
 
-**Files to Create:**
+**Files Created:**
 
 | File | Purpose |
 |------|---------|
 | `app/services/push_service.py` | FCM send_push(), send_to_topic() |
 | `app/models/device_token.py` | Store FCM tokens per user/device |
 
-**Files to Update:**
+**Files Updated:**
 
 | File | Changes |
 |------|---------|
@@ -1050,7 +1157,7 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 
 | Session | Test Files | Tests | Status |
 |---------|------------|-------|--------|
-| All | 30 test files in `tests/done/` | **547** | **✅ All passing** |
+| All | 33 test files in `tests/done/` | **584** | **✅ All passing** |
 | 25 | test_auth, test_users, test_photos, test_prompts, test_settings, test_encryption | 101 | ✅ |
 | 25 | test_swipes, test_matches, test_blocks, test_discover, test_search | 110 | ✅ |
 | 25 | test_rewards, test_referrals, test_subscriptions, test_daily_limits | 79 | ✅ |
@@ -1058,6 +1165,8 @@ CREATE INDEX idx_messages_match ON messages(match_id, created_at DESC);
 | 25 | test_admin_dashboard, test_admin_messages, test_admin_photos | 56 | ✅ |
 | 25 | test_admin_reports, test_admin_tickets, test_admin_users | 70 | ✅ |
 | 32 | test_websocket | 9 | ✅ |
+| 34 | test_push_notifications | 9 | ✅ |
+| 42+ | test_nsfw | 12 | ✅ |
 
 ### Run All Tests
 
@@ -1328,8 +1437,7 @@ alembic downgrade -1
 | Face verification UI | Medium | 21 |
 | Persian translations for all screens | High | — |
 | Real ZarinPal integration | High | 15 |
-| FCM push notifications | High | 15 |
-| Real face-match API (photo verification) | Medium | — |
+| Real face-match API (photo verification) | Medium | ✅ Session 43 |
 | Flutter Discover Screen | High | 20 |
 | Flutter Search Screen | High | 20 |
 | Flutter Chat System | High | 20 |
@@ -1466,7 +1574,7 @@ Every endpoint in the app now declares a proper `response_model`, so Redoc shows
 |------|--------|
 | `chat_service.py:385-390` | `datetime.utcnow()` → `datetime.now(timezone.utc)` — fixed "can't compare offset-naive and offset-aware datetimes" crash in `delete_for="everyone"` branch |
 
-**Tests: 547 passing ✅** (was 538)
+**Tests: 556 passing ✅** (was 547)
 
 ---
 
@@ -1513,3 +1621,179 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 
 **Then: Session 15 — Push Notifications + Real Payment + Production Ready (Backend)**
 ```
+
+### ✅ Session 34 Complete — Push Notifications (FCM) + Device Tokens + Messages Fix
+
+| Feature | Status |
+|---------|--------|
+| `app/services/push_service.py` — FCM MulticastMessage send + token cleanup | ✅ |
+| `app/models/device_token.py` — device_tokens table (user_id, token, platform) | ✅ |
+| `NotificationService.notify_like()` — sends push to liked user | ✅ |
+| `NotificationService.notify_match()` — sends push to both matched users | ✅ |
+| `NotificationService.notify_message()` — sends push to message receiver | ✅ |
+| POST `/notifications/device-token` — register/update FCM token | ✅ |
+| DELETE `/notifications/device-token/{id}` — remove device token | ✅ |
+| `messages.py` — added `notify_message()` call after text message creation | ✅ |
+| `User.device_tokens` relationship | ✅ |
+| `FCM_SERVICE_ACCOUNT_PATH` in config + .env | ✅ |
+| `firebase-admin==6.8.0` dependency | ✅ |
+| `tests/done/test_push_notifications.py` — 9 tests (6 device token + 3 push) | ✅ |
+| **Total: 556 tests passing** | **✅** |
+
+### ✅ Session 35 Complete — Auth Hardening
+
+| Feature | Status |
+|---------|--------|
+| `ACCESS_TOKEN_EXPIRE_MINUTES` reduced from 7 days → 15 minutes | ✅ |
+| `register/init` returns same response for existing emails (enumeration protection) | ✅ |
+| OTP brute-force protection: max 5 attempts per code (register/verify) | ✅ |
+| OTP brute-force protection: max 5 attempts per code (password-reset/verify) | ✅ |
+| `verify_code_with_attempts()` with attempt counter in Redis (JSON format) | ✅ |
+| Backward-compatible with plain-string codes (test fixtures) | ✅ |
+| Swagger/Redoc/OpenAPI disabled when `ENVIRONMENT != "development"` | ✅ |
+| `.env.example` updated with new token expiry | ✅ |
+| Auth tests updated for new behavior (24/24 passing) | ✅ |
+
+### ✅ Session 36 Complete — IDOR Audit + EXIF Stripping
+
+**IDOR audit results (all already solid):**
+| Endpoint | Check | Status |
+|----------|-------|--------|
+| `DELETE /photos/{id}` | `WHERE id AND user_id` | ✅ |
+| `PUT /photos/{id}/main` | `WHERE id AND user_id` | ✅ |
+| `PATCH /photos/{id}/crop` | `WHERE id AND user_id` | ✅ |
+| `DELETE /notifications/{id}` | `WHERE id AND user_id` | ✅ |
+| `POST /notifications/read` | `WHERE user_id` in UPDATE | ✅ |
+| `GET /tickets/{id}` | `WHERE id AND user_id` | ✅ |
+| `DELETE /messages/{id}` | `sender_id == user_id OR receiver_id == user_id` | ✅ |
+
+**Fixes applied:**
+| Feature | Status |
+|---------|--------|
+| EXIF metadata stripped from uploaded photos (prevents GPS/device leakage) | ✅ |
+| Rate limiter added to `reorder_photos` (10/minute) | ✅ |
+| Dead `select` query removed from `mark_notifications_read` | ✅ |
+| Pillow `getdata()` deprecation warning fixed | ✅ |
+
+### ✅ Session 37 Complete — Location Fuzzing
+
+| Feature | Status |
+|---------|--------|
+| `app/utils/geo.py` — `fuzz_distance()` adds ±500m noise | ✅ |
+| Applied to `GET /discover` distance_km responses | ✅ |
+| Applied to `GET /search` distance_km responses | ✅ |
+| DB coordinates remain exact (Haversine filter unaffected) | ✅ |
+
+### ✅ Session 38 Complete — Per-Match Message Rate Limit
+
+| Feature | Status |
+|---------|--------|
+| Redis counter `msg_rate:{sender_id}:{chat_id}`, 30/min | ✅ |
+| 60s TTL window per sender per chat | ✅ |
+| Graceful fallback if Redis unavailable | ✅ |
+
+### ✅ Session 39 Complete — Daily Report Limit
+
+| Feature | Status |
+|---------|--------|
+| Redis counter `reports:{user_id}:{date}`, 5/day | ✅ |
+| 24h TTL window per reporter per day | ✅ |
+| Graceful fallback if Redis unavailable | ✅ |
+
+### ✅ Session 40 Complete — CORS Fix
+
+| Feature | Status |
+|---------|--------|
+| `CORS_ORIGINS` setting in config.py | ✅ |
+| Configurable origins via `.env` | ✅ |
+| Default: wildcard with credentials disabled (mobile-only) | ✅ |
+| Restricted methods and headers | ✅ |
+
+### ✅ Session 41 Complete — Redis Performance (Swipe Dedup + Discover Cache)
+
+| Feature | Status |
+|---------|--------|
+| `swiped:{user_id}` Redis set (7-day TTL) for fast exclusion | ✅ |
+| Discover endpoint uses Redis set for swiped user exclusion | ✅ |
+| DB subquery fallback when Redis set is empty | ✅ |
+| `record_swipe_cache()` called on every swipe action | ✅ |
+| Discover card stack cache functions (pop/set/invalidate) | ✅ |
+| `app/core/cache.py` — all cache helpers centralized | ✅ |
+
+### ✅ Session 42 Complete — Security Hardening
+
+| Feature | Status |
+|---------|--------|
+| Constant-time password check in login (dummy bcrypt) | ✅ |
+| Registration IP tracking in Redis (3+/24h = flagged) | ✅ |
+| Admin JWT tokens (`POST /admin/login`, 60min expiry) | ✅ |
+| Admin audit log model + service (`admin_logs` table) | ✅ |
+| Admin dependency supports both JWT and legacy `X-Admin-Key` | ✅ |
+| `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` config | ✅ |
+| Migration: `alembic revision --autogenerate -m 'add admin_logs'` | ⏳ |
+### ✅ Session 43 Complete — Face Verification (Selfie Video Liveness + Face Match)
+
+| Feature | Status |
+|---------|--------|
+| InsightFace + OpenCV + ONNX Runtime face detection | ✅ |
+| Singleton model loading (lazy, thread-safe) | ✅ |
+| Challenge-response liveness (blink, turn_left, turn_right, smile, nod) | ✅ |
+| Eye Aspect Ratio (EAR) blink detection | ✅ |
+| Head pose estimation (yaw/pitch/roll via solvePnP) | ✅ |
+| Smile detection via mouth ratio | ✅ |
+| 512-d face embedding extraction + averaging | ✅ |
+| Cosine similarity comparison against profile photos | ✅ |
+| Redis-based challenge state (10-min TTL) | ✅ |
+| Redis-based daily attempt limiting (3/day) | ✅ |
+| Redis-based cooldown (24h after success) | ✅ |
+| `UserProfile.verified_at` column + migration | ✅ |
+| `PhotoService.download_photo_bytes()` for MinIO download | ✅ |
+| Admin test endpoint for pipeline debugging | ✅ |
+| Auto-face-verify bypass disabled | ✅ |
+
+#### New Files
+| File | Purpose |
+|------|---------|
+| `app/services/face_verification_service.py` | Core engine: model, liveness, embeddings, comparison |
+| `app/api/v1/endpoints/verify.py` | User-facing verification endpoints |
+| `app/api/v1/endpoints/test_face_verification.py` | Admin test/debug endpoint |
+| `app/schemas/verify.py` | Pydantic schemas for verification |
+| `alembic/versions/b3c4d5e6f7a8_add_verified_at.py` | Migration for verified_at |
+
+#### Modified Files
+| File | Change |
+|------|--------|
+| `requirements.txt` | Added insightface, opencv-python-headless, onnxruntime |
+| `app/core/config.py` | Added 16 FACE_VERIFICATION_* settings |
+| `app/models/user_profile.py` | Added `verified_at` column |
+| `app/services/photo_service.py` | Added `download_photo_bytes()` |
+| `app/main.py` | Registered verify + test_face_verification routers |
+| `app/api/v1/endpoints/admin_photos.py` | `_AUTO_FACE_VERIFY = False` |
+
+#### New Endpoints
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/users/me/verify/challenge` | POST | User | Generate random liveness challenge |
+| `/users/me/verify` | POST | User | Submit selfie video for verification |
+| `/users/me/verify/status` | GET | User | Check verification status + cooldown |
+| `/admin/face-verification/test` | POST | Admin | Test full pipeline with debug output |
+
+#### Configuration (in .env)
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `FACE_VERIFICATION_MODEL` | `buffalo_l` | InsightFace model name |
+| `FACE_MATCH_THRESHOLD` | `0.45` | Cosine similarity threshold |
+| `FACE_VERIFICATION_FRAME_RATE` | `2` | Frames per second to sample |
+| `FACE_VERIFICATION_VIDEO_MIN_SECONDS` | `4` | Minimum video duration |
+| `FACE_VERIFICATION_VIDEO_MAX_SECONDS` | `15` | Maximum video duration |
+| `FACE_VERIFICATION_CHALLENGE_TTL` | `600` | Challenge expiry (10 min) |
+| `FACE_VERIFICATION_COOLDOWN_TTL` | `86400` | Cooldown between attempts (24h) |
+| `FACE_VERIFICATION_MAX_ATTEMPTS_PER_DAY` | `3` | Daily attempt limit |
+
+#### Tests (28 total)
+| Test Class | Count | Coverage |
+|------------|-------|----------|
+| TestChallengeGeneration | 6 | Challenge gen, Redis storage, already verified, no auth, cooldown, daily limit |
+| TestVerificationStatus | 4 | Not verified, already verified, cooldown active, no auth |
+| TestVideoSubmission | 12 | No challenge_id, expired, mismatch, too short, too large, already verified, no photos, liveness fail, low similarity, success, cooldown set, no auth |
+| TestFaceVerificationService | 6 | Cosine similarity (3 cases), EAR calculation, challenge types, config settings |

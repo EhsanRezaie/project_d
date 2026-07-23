@@ -85,7 +85,8 @@ class PhotoService:
 
     @staticmethod
     def _optimize_image(file_data: bytes) -> bytes:
-        """Resize/convert/compress, returning ready-to-upload JPEG bytes."""
+        """Resize/convert/compress, returning ready-to-upload JPEG bytes.
+        EXIF metadata is stripped to prevent GPS/device info leakage."""
         image = Image.open(io.BytesIO(file_data))
 
         # Convert to RGB if needed (for PNG with transparency)
@@ -93,14 +94,20 @@ class PhotoService:
             rgb_image = Image.new("RGB", image.size, (255, 255, 255))
             rgb_image.paste(image, mask=image.split()[-1] if image.mode == "RGBA" else None)
             image = rgb_image
+        elif image.mode != "RGB":
+            image = image.convert("RGB")
 
         # Resize if too large (max 1200px)
         max_size = 1200
         if image.width > max_size or image.height > max_size:
             image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
 
+        # Strip EXIF by creating a fresh image from pixel data
+        clean = Image.new(image.mode, image.size)
+        clean.putdata(list(image.get_flattened_data()))
+
         buffer = io.BytesIO()
-        image.save(buffer, "JPEG", quality=85, optimize=True)
+        clean.save(buffer, "JPEG", quality=85, optimize=True)
         return buffer.getvalue()
 
     @staticmethod
@@ -209,3 +216,24 @@ class PhotoService:
                 ExpiresIn=settings.S3_SIGNED_URL_EXPIRE_SECONDS,
             )
         return url
+    @staticmethod
+    async def download_photo_bytes(key: str) -> bytes:
+        """Download raw photo bytes from MinIO (public or private bucket)."""
+        async with _s3_client() as s3:
+            # Try public bucket first (approved photos)
+            try:
+                response = await s3.get_object(
+                    Bucket=settings.S3_PUBLIC_BUCKET, Key=key
+                )
+                return await response["Body"].read()
+            except ClientError:
+                pass
+            # Fall back to private bucket (pending photos)
+            try:
+                response = await s3.get_object(
+                    Bucket=settings.S3_PRIVATE_BUCKET, Key=key
+                )
+                return await response["Body"].read()
+            except ClientError as e:
+                logger.error("download_photo_failed", key=key, error=str(e))
+                raise

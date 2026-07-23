@@ -39,16 +39,8 @@ class NotificationService:
         liker_name: str,
         liker_age: int
     ):
-        """Send like notification (only if recipient is premium)"""
-        from sqlalchemy import select
-        from app.models.user import User
-
-        result = await self.db.execute(select(User).where(User.id == liked_user_id))
-        liked_user = result.scalar_one_or_none()
-
-        """Send like notification to the recipient (all users get like notifications)"""
-
-        await self.create(
+        """Send like notification to the recipient"""
+        notification = await self.create(
             user_id=liked_user_id,
             type="like",
             title="Someone liked you!",
@@ -56,9 +48,18 @@ class NotificationService:
             data={"user_id": str(liker_id)}
         )
 
+        # Push notification
+        from app.services.push_service import PushService
+        await PushService.send_to_user(
+            user_id=liked_user_id,
+            title="Someone liked you!",
+            body=f"{liker_name} (age {liker_age}) liked your profile",
+            data={"type": "like", "user_id": str(liker_id)},
+            db=self.db,
+        )
+
     async def notify_match(self, user1_id: UUID, user2_id: UUID, match_id: UUID):
         """Send match notification to both users"""
-        # Get both users
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
         from app.models.user import User
@@ -72,6 +73,8 @@ class NotificationService:
         )
         user2 = result2.scalar_one_or_none()
 
+        from app.services.push_service import PushService
+
         if user1:
             await self.create(
                 user_id=user1_id,
@@ -79,6 +82,13 @@ class NotificationService:
                 title="It's a match!",
                 body=f"You matched with {user2.profile.name}! Start chatting now.",
                 data={"match_id": str(match_id), "user_id": str(user2_id)}
+            )
+            await PushService.send_to_user(
+                user_id=user1_id,
+                title="It's a match!",
+                body=f"You matched with {user2.profile.name}!",
+                data={"type": "match", "match_id": str(match_id), "user_id": str(user2_id)},
+                db=self.db,
             )
 
         if user2:
@@ -89,6 +99,13 @@ class NotificationService:
                 body=f"You matched with {user1.profile.name}! Start chatting now.",
                 data={"match_id": str(match_id), "user_id": str(user1_id)}
             )
+            await PushService.send_to_user(
+                user_id=user2_id,
+                title="It's a match!",
+                body=f"You matched with {user1.profile.name}!",
+                data={"type": "match", "match_id": str(match_id), "user_id": str(user1_id)},
+                db=self.db,
+            )
 
     async def notify_message(self, receiver_id: UUID, sender_name: str, match_id: UUID):
         """Send message notification when recipient is offline"""
@@ -98,4 +115,13 @@ class NotificationService:
             title="New message",
             body=f"{sender_name} sent you a message",
             data={"match_id": str(match_id)}
+        )
+
+        from app.services.push_service import PushService
+        await PushService.send_to_user(
+            user_id=receiver_id,
+            title="New message",
+            body=f"{sender_name} sent you a message",
+            data={"type": "message", "match_id": str(match_id)},
+            db=self.db,
         )

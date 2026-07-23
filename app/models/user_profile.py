@@ -68,6 +68,7 @@ class UserProfile(Base):
 
     # Verification
     is_verified = Column(Boolean, default=False)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
 
     # Premium
     premium_until = Column(DateTime(timezone=True), nullable=True)

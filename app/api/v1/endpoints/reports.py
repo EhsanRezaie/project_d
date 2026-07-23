@@ -10,6 +10,7 @@ from app.core.limiter import limiter
 from app.models.user import User
 from app.models.report import Report
 from app.schemas.report import ReportRequest, ReportResponse
+import app.core.redis as redis
 
 from app.core.logging import get_logger
 
@@ -53,7 +54,21 @@ async def report_user(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="You have already reported this user recently")
-    
+
+    # Daily report limit (5 per day per user)
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    daily_key = f"reports:{current_user_id}:{today}"
+    try:
+        daily_count = await redis.redis_client.incr(daily_key)
+        if daily_count == 1:
+            await redis.redis_client.expire(daily_key, 86400)
+        if daily_count > 5:
+            raise HTTPException(status_code=429, detail="Report limit reached for today.")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning("Redis daily report limit check failed, allowing report")
+
     # Create report
     report = Report(
         reporter_id=current_user_id,

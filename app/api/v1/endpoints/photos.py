@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from uuid import UUID
+import uuid
 
 from app.core.config import settings
 from app.db.session import get_session
@@ -12,6 +13,7 @@ from app.core.limiter import limiter
 from app.core.redis import redis_client
 from app.core.cache import invalidate_user_cache
 from app.services.photo_service import PhotoService
+from app.services.nsfw_service import nsfw_service
 from app.schemas.photo import (
     PhotoResponse,
     PhotoUploadResponse,
@@ -74,6 +76,17 @@ async def upload_photo(
             detail=error,
         )
 
+    # NSFW check
+    is_safe, nsfw_score = await nsfw_service.check_image(file_data)
+    if not is_safe:
+        # Auto-reject and quarantine
+        photo_id = str(uuid.uuid4())
+        await nsfw_service.quarantine_photo(file_data, str(current_user.id), photo_id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Photo rejected: content policy violation.",
+        )
+
     # Check photo limit (max 6 photos)
     result = await session.execute(
         select(Photo).where(Photo.user_id == current_user.id)
@@ -92,6 +105,7 @@ async def upload_photo(
         order=len(photos),
         is_main=len(photos) == 0,  # First photo becomes main
         status="pending",
+        nsfw_score=nsfw_score,
     )
     session.add(new_photo)
     await session.flush()  # Get ID
@@ -221,10 +235,10 @@ async def set_main_photo(
             detail="Photo not found",
         )
 
-    if photo.status == "rejected":
+    if photo.status in ("rejected", "pending"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Rejected photos cannot be set as main",
+            detail="Only approved photos can be set as main",
         )
 
     # Remove main flag from all photos
@@ -244,8 +258,10 @@ async def set_main_photo(
 
 
 @router.patch("/order", response_model=list[PhotoResponse])
+@limiter.limit("10/minute")
 async def reorder_photos(
-    request: PhotoUpdateOrderRequest,
+    request: Request,
+    body: PhotoUpdateOrderRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):

@@ -839,3 +839,108 @@ class TestDiscover:
         user_ids_after = [u["id"] for u in res_after.json()["users"]]
         
         assert female_id not in user_ids_after
+
+    async def test_discover_returns_all_profile_fields(
+        self,
+        client: AsyncClient,
+        mock_verification_code
+    ):
+        """Discover should return all profile fields (Badoo-style)."""
+        male_headers, _ = await register_and_get_headers(
+            client, VALID_EMAIL_MALE, COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        await register_and_get_headers(
+            client, VALID_EMAIL_FEMALE, COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        res = await client.get(
+            DISCOVER_URL,
+            params={"gender": "female"},
+            headers=male_headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+
+        user = data["users"][0]
+        # Appearance fields
+        assert user["height"] == 165
+        assert user["weight"] == 60
+        assert user["body_type"] == "slim"
+        # Lifestyle fields
+        assert user["relationship_status"] == "single"
+        assert user["living_situation"] == "with_family"
+        assert user["children_status"] == "dont_have"
+        assert user["smoking"] == "never"
+        assert user["drinking"] == "never"
+        # Background fields
+        assert user["education"] == "master"
+        assert user["workplace"] == "Hospital"
+        assert user["religion"] == "islam"
+        assert user["ethnicity"] == "persian"
+        assert user["political_orientation"] == "moderate"
+        assert user["languages"] == ["persian", "english", "french"]
+        # Location fields
+        assert user["country"] == "Iran"
+        assert user["province"] == "Tehran"
+        assert user["city"] == "Tehran"
+        # Sexual orientation
+        assert user["sexual_orientation"] == "straight"
+
+    async def test_discover_returns_photos_and_interests_fields(
+        self,
+        client: AsyncClient,
+        mock_verification_code
+    ):
+        """Discover should return photos and interests fields."""
+        male_headers, _ = await register_and_get_headers(
+            client, VALID_EMAIL_MALE, COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        await register_and_get_headers(
+            client, VALID_EMAIL_FEMALE, COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        res = await client.get(
+            DISCOVER_URL,
+            params={"gender": "female"},
+            headers=male_headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+
+        user = data["users"][0]
+        # photos field should be present (None when no photos)
+        assert "photos" in user
+        assert user["photos"] is None or isinstance(user["photos"], list)
+        # interests field should be present
+        assert "interests" in user
+        assert user["interests"] is None or isinstance(user["interests"], list)
+        # prompts field should be present
+        assert "prompts" in user
+        assert user["prompts"] is None or isinstance(user["prompts"], list)
+
+    async def test_discover_returns_last_seen_at(
+        self,
+        client: AsyncClient,
+        mock_verification_code
+    ):
+        """Discover should return last_seen_at when not hidden."""
+        male_headers, _ = await register_and_get_headers(
+            client, VALID_EMAIL_MALE, COMPLETE_PROFILE_PAYLOAD_MALE, mock_verification_code
+        )
+        await register_and_get_headers(
+            client, VALID_EMAIL_FEMALE, COMPLETE_PROFILE_PAYLOAD_FEMALE, mock_verification_code
+        )
+
+        res = await client.get(
+            DISCOVER_URL,
+            params={"gender": "female"},
+            headers=male_headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+
+        user = data["users"][0]
+        # last_seen_at should be a string or None
+        assert user["last_seen_at"] is None or isinstance(user["last_seen_at"], str)
+        # is_online should be a bool or None
+        assert user["is_online"] is None or isinstance(user["is_online"], bool)

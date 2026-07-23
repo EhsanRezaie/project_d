@@ -154,25 +154,34 @@ async def get_admin_user(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> User:
-    """Verify admin access using X-Admin-Key header only (no JWT required)"""
+    """Verify admin access via JWT token or legacy X-Admin-Key header."""
+    from app.core.security import verify_admin_token
+
+    # Try JWT token first (Authorization: Bearer <token>)
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1]
+        payload = verify_admin_token(token)
+        if payload:
+            # Valid admin JWT — get admin user from database
+            result = await session.execute(
+                select(User).options(selectinload(User.profile)).where(User.email == "admin@test.com")
+            )
+            admin_user = result.scalar_one_or_none()
+            if admin_user:
+                return admin_user
+
+    # Fallback: legacy X-Admin-Key header
     admin_key = request.headers.get("X-Admin-Key")
-    
-    if not admin_key or admin_key != settings.ADMIN_SECRET_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+    if admin_key and admin_key == settings.ADMIN_SECRET_KEY:
+        result = await session.execute(
+            select(User).options(selectinload(User.profile)).where(User.email == "admin@test.com")
         )
-    
-    # Get existing admin user from database
-    result = await session.execute(
-        select(User).options(selectinload(User.profile)).where(User.email == "admin@test.com")
+        admin_user = result.scalar_one_or_none()
+        if admin_user:
+            return admin_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Admin access required"
     )
-    admin_user = result.scalar_one_or_none()
-    
-    if not admin_user:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Admin user not found in database. Please run setup."
-        )
-    
-    return admin_user

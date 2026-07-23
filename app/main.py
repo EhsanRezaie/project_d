@@ -12,6 +12,8 @@ from app.core.limiter import limiter
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.users import router as users_router
 from app.api.v1.endpoints.photos import router as photos_router  
+from app.api.v1.endpoints.verify import router as verify_router
+from app.api.v1.endpoints.test_face_verification import router as test_face_verification_router
 from app.api.v1.endpoints.discover import router as discover_router
 from app.api.v1.endpoints.swipes import router as swipes_router  
 from app.api.v1.endpoints.search import router as search_router
@@ -32,6 +34,7 @@ from app.api.v1.endpoints.locations import router as locations_router
 from app.api.v1.endpoints.interests import router as interests_router
 from app.api.v1.endpoints.prompts import router as prompts_router
 from app.api.v1.endpoints.admin_messages import router as admin_messages_router
+from app.api.v1.endpoints.admin_auth import router as admin_auth_router
 from app.api.v1.endpoints.system import router as admin_system_router
 
 
@@ -61,19 +64,24 @@ if settings.GLITCHTIP_DSN:
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,
+    docs_url="/api/docs" if settings.ENVIRONMENT == "development" else None,
+    redoc_url="/api/redoc" if settings.ENVIRONMENT == "development" else None,
+    openapi_url="/api/openapi.json" if settings.ENVIRONMENT == "development" else None,
 )
 
 # Rate limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS
+# CORS — mobile apps don't use CORS, but Swagger/Redoc UI does in dev
+# Set CORS_ORIGINS in .env for production (e.g. "https://yourapp.ir,https://api.yourapp.ir")
+_cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins or ["*"],
+    allow_credentials=bool(_cors_origins),
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # GZip
@@ -83,6 +91,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(photos_router, prefix="/api/v1")  
+app.include_router(verify_router, prefix="/api/v1")
+app.include_router(test_face_verification_router, prefix="/api/v1")
 app.include_router(discover_router, prefix="/api/v1")
 app.include_router(swipes_router, prefix="/api/v1")  
 app.include_router(search_router, prefix="/api/v1")
@@ -105,6 +115,7 @@ app.include_router(locations_router, prefix="/api/v1")
 app.include_router(interests_router, prefix="/api/v1")
 app.include_router(prompts_router, prefix="/api/v1")
 app.include_router(admin_messages_router, prefix="/api/v1")
+app.include_router(admin_auth_router, prefix="/api/v1")
 app.include_router(admin_system_router, prefix="/api/v1")
 
 # WebSocket Routers
