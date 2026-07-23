@@ -4,6 +4,7 @@ from uuid import UUID
 from typing import Optional, Tuple, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, update
+from sqlalchemy.dialects.postgresql import insert
 
 from app.core.config import settings
 from app.services.reward_service import RewardService
@@ -24,25 +25,21 @@ async def get_or_create_daily_limit(
     target_date: date
 ) -> DailyLimit:
     """Get or create daily limit record for a user"""
-    result = await session.execute(
-        select(DailyLimit).where(
-            DailyLimit.user_id == user_id,
-            DailyLimit.date == target_date
-        )
-    )
-    daily_limit = result.scalar_one_or_none()
+    stmt = insert(DailyLimit).values(
+        user_id=user_id,
+        date=target_date,
+        likes_used=0,
+        chats_used=0,
+        ad_likes_bonus=0,
+        ad_chats_bonus=0,
+    ).on_conflict_do_update(
+        constraint="uq_daily_limits_user_date",
+        set_={}
+    ).returning(DailyLimit)
 
-    if not daily_limit:
-        daily_limit = DailyLimit(
-            user_id=user_id,
-            date=target_date,
-            likes_used=0,
-            chats_used=0,
-            ad_likes_bonus=0,
-            ad_chats_bonus=0,
-        )
-        session.add(daily_limit)
-        await session.flush()
+    result = await session.execute(stmt)
+    daily_limit = result.scalar_one()
+    await session.flush()
 
     return daily_limit
 

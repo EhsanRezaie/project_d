@@ -1095,6 +1095,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 41 | **Redis perf — swipe deduplication + discover card stack cache** | ✅ |
 | 42 | **Security hardening — constant-time login, IP tracking, admin JWT + audit log** | ✅ |
 | 42+ | **NSFW photo moderation — skin-tone heuristic, quarantine, 12 tests** | ✅ |
+| 44 | **DailyLimit race condition fix + SQL logging cleanup** | ✅ |
 
 ---
 
@@ -1797,3 +1798,22 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | TestVerificationStatus | 4 | Not verified, already verified, cooldown active, no auth |
 | TestVideoSubmission | 12 | No challenge_id, expired, mismatch, too short, too large, already verified, no photos, liveness fail, low similarity, success, cooldown set, no auth |
 | TestFaceVerificationService | 6 | Cosine similarity (3 cases), EAR calculation, challenge types, config settings |
+
+### ✅ Session 44 Complete — DailyLimit Race Condition Fix + SQL Logging Cleanup
+
+| Feature | Status |
+|---------|--------|
+| `reward_service.get_or_create_daily_limit` — race condition fix using `INSERT ... ON CONFLICT DO UPDATE` | ✅ |
+| `chat_service.get_or_create_daily_limit` — same race condition fix | ✅ |
+| `session.py` — `echo=False` to suppress duplicate SQL query logs | ✅ |
+| Added `sqlalchemy.dialects.postgresql.insert` import to both services | ✅ |
+| Constraint name `uq_daily_limits_user_date` used in `on_conflict_do_update` | ✅ |
+
+**Root cause:** Two concurrent requests both SELECT (find nothing), both INSERT, second fails with `UniqueViolationError`. Fixed with PostgreSQL atomic upsert.
+
+**Files Modified:**
+| File | Change |
+|------|--------|
+| `app/services/reward_service.py` | Replaced SELECT-then-INSERT with upsert |
+| `app/services/chat_service.py` | Replaced SELECT-then-INSERT with upsert |
+| `app/db/session.py` | `echo=settings.DEBUG` → `echo=False` |

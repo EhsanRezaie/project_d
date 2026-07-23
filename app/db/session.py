@@ -6,7 +6,7 @@ logger = get_logger("db.session")
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=False,
     pool_pre_ping=True,
 )
 

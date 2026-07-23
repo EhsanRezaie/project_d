@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
 from app.core.config import settings
 from app.models.user import User
@@ -44,25 +45,21 @@ class RewardService:
                 ad_chats_bonus=cached.get("ad_chats_bonus", 0),
             )
 
-        result = await self.db.execute(
-            select(DailyLimit).where(
-                DailyLimit.user_id == user_id,
-                DailyLimit.date == target_date
-            )
-        )
-        daily_limit = result.scalar_one_or_none()
-        
-        if not daily_limit:
-            daily_limit = DailyLimit(
-                user_id=user_id,
-                date=target_date,
-                likes_used=0,
-                chats_used=0,
-                ad_likes_bonus=0,
-                ad_chats_bonus=0,
-            )
-            self.db.add(daily_limit)
-            await self.db.flush()
+        stmt = insert(DailyLimit).values(
+            user_id=user_id,
+            date=target_date,
+            likes_used=0,
+            chats_used=0,
+            ad_likes_bonus=0,
+            ad_chats_bonus=0,
+        ).on_conflict_do_update(
+            constraint="uq_daily_limits_user_date",
+            set_={}
+        ).returning(DailyLimit)
+
+        result = await self.db.execute(stmt)
+        daily_limit = result.scalar_one()
+        await self.db.flush()
 
         # Cache for the rest of the day
         await cache_set(redis_client, cache_key, {
