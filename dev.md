@@ -1096,6 +1096,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 42 | **Security hardening — constant-time login, IP tracking, admin JWT + audit log** | ✅ |
 | 42+ | **NSFW photo moderation — skin-tone heuristic, quarantine, 12 tests** | ✅ |
 | 44 | **DailyLimit race condition fix + SQL logging cleanup** | ✅ |
+| 45 | **DailyLimit upsert fix — `on_conflict_do_nothing` replaces broken `on_conflict_do_update(set_={})`** | ✅ |
 
 ---
 
@@ -1817,3 +1818,23 @@ Opens at `http://localhost:8081` — separate database and Redis namespace.
 | `app/services/reward_service.py` | Replaced SELECT-then-INSERT with upsert |
 | `app/services/chat_service.py` | Replaced SELECT-then-INSERT with upsert |
 | `app/db/session.py` | `echo=settings.DEBUG` → `echo=False` |
+
+### ✅ Session 45 Complete — DailyLimit Upsert Fix
+
+| Feature | Status |
+|---------|--------|
+| Fixed `get_or_create_daily_limit` — `on_conflict_do_update(set_={})` → `on_conflict_do_nothing()` | ✅ |
+| SQLAlchemy raises `ValueError: set parameter dictionary must not be empty` on empty `set_={}` | ✅ |
+| `/rewards/my-limits` endpoint now returns correct limits (20 likes / 10 chats) | ✅ |
+| `consume_like()` and `consume_chat()` no longer crash on upsert | ✅ |
+| Verified via live API call: `daily_likes_limit: 20`, `daily_chats_limit: 10` | ✅ |
+
+**Root cause:** Session 44 introduced `on_conflict_do_update(set_={})` to fix a race condition, but SQLAlchemy requires a non-empty `set_` dictionary. This caused a `ValueError` on every call to `get_or_create_daily_limit()`, crashing all daily limit operations.
+
+**Fix:** Single-line change in `app/services/reward_service.py:55-57` — replaced `on_conflict_do_update(constraint=..., set_={})` with `on_conflict_do_nothing(constraint=...)`.
+
+**Files Modified:**
+| File | Change |
+|------|--------|
+| `app/services/reward_service.py` | `on_conflict_do_update(set_={})` → `on_conflict_do_nothing()` |
+| `dev.md` | Session 45 documentation |
