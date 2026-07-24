@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, Float
@@ -48,7 +49,7 @@ async def discover(
     age_min: int = Query(18, ge=18, le=100),
     age_max: int = Query(100, ge=18, le=100),
     gender: str = Query(None, pattern="^(male|female)$"),
-    distance_km: int = Query(50, ge=1, le=500),
+    distance_km: Optional[int] = Query(None, ge=1, le=500),
     limit: int = Query(20, ge=1, le=50),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
@@ -132,7 +133,8 @@ async def discover(
             current_profile.lat, current_profile.lng,
             UserProfile.lat, UserProfile.lng
         )
-        query = query.where(distance_expr <= distance_km)
+        if distance_km is not None:
+            query = query.where(distance_expr <= distance_km)
         query = query.add_columns(distance_expr.label("distance_km"))
     else:
         query = query.add_columns(func.cast(None, Float).label("distance_km"))

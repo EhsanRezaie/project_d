@@ -912,7 +912,7 @@ Firebase Cloud Messaging for real-time push notifications on Android/iOS.
 - Age filter using `birth_date.between()` with `profile.age` for response
 - Excludes: swiped users (like/pass), blocked users, users who blocked you, already matched users
 - Pagination with `limit` and `offset`
-- Distance filter using Haversine formula
+- Distance filter using Haversine formula — `distance_km` is optional (default `None`); when omitted, returns all users regardless of distance. When provided, filters to that radius.
 
 **Search Endpoint (`/search`):**
 - Advanced filters: age, gender, height, weight, country, province, city, religion, ethnicity, relationship_status, body_type, education, smoking, drinking, political_orientation, languages, interests
@@ -1097,6 +1097,7 @@ Step 3: POST /auth/register/complete (Authenticated)
 | 42+ | **NSFW photo moderation — skin-tone heuristic, quarantine, 12 tests** | ✅ |
 | 44 | **DailyLimit race condition fix + SQL logging cleanup** | ✅ |
 | 45 | **DailyLimit upsert fix — `on_conflict_do_nothing` replaces broken `on_conflict_do_update(set_={})`** | ✅ |
+| 46 | **Discover distance fix — `distance_km` now optional (default None), no filter when omitted** | ✅ |
 
 ---
 
