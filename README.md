@@ -201,8 +201,9 @@ uvicorn app.main:app --reload
 After starting the server, open your browser:
 
 - **Health check:** http://localhost:8000/health → should return `{"status": "ok"}`
-- **API docs (Swagger):** http://localhost:8000/docs
-- **API docs (ReDoc):** http://localhost:8000/redoc
+- **API docs (Swagger):** http://localhost:8000/api/docs
+- **API docs (ReDoc):** http://localhost:8000/api/redoc
+- **OpenAPI JSON:** http://localhost:8000/api/openapi.json
 - **MinIO console:** http://localhost:9001 (login `minioadmin` / `minioadmin`) → browse uploaded photos, confirm `photos-public` and `photos-private` buckets exist
 - **GlitchTip dashboard:** http://localhost:8080 (login `admin@glitchtip.dev` / `admin123`) → error tracking dashboard
 
@@ -255,10 +256,10 @@ DEBUG=True
 Tests require the test infrastructure (Postgres, Redis, **and MinIO**) running first:
 
 ```bash
-docker compose -f docker-compose_test.yml up -d
+docker compose -f docker-compose.test.yml up -d
 
 # Confirm MinIO test buckets were created (should show "Test MinIO buckets ready")
-docker compose -f docker-compose_test.yml logs minio-test-init
+docker compose -f docker-compose.test.yml logs minio-test-init
 ```
 
 Then:
@@ -645,7 +646,7 @@ dating-app/
 ├── alembic/                # Database migrations
 ├── tests/                  # Unit and integration tests
 ├── docker-compose.yml      # db, redis, minio, minio-init
-├── docker-compose_test.yml # db_test, redis_test, minio-test, minio-test-init
+├── docker-compose.test.yml # db_test, redis_test, minio-test, minio-test-init
 ├── .env.example
 ├── requirements.txt
 ├── dev.md                  # Developer session documentation
